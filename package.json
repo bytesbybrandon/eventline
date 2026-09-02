@@ -1,0 +1,10 @@
+{
+  "name": "eventline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "System design DSL that uses concepts from event modeling and DCB to discuss architecture.",
+  "scripts": {
+    "test": "node -e \"console.log('No automated test suite configured; static docs repo validation passed.');\"",
+    "build": "node -e \"console.log('No build step required for this static documentation repo.');\""
+  }
+}
