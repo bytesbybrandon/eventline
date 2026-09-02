@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Design DSL - Interview Reference & Specification</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    code, pre, .font-mono {
+      font-family: 'Fira Code', monospace;
+    }
+    :where(.grid, .flex, .layout-grid, .layout-flex) > * {
+      min-width: 0;
+    }
+    :where(p, h1, h2, h3, h4, h5, h6, li, dd, blockquote, figcaption, td, th, .badge, .label) {
+      overflow-wrap: anywhere;
+    }
+    .dsl-keyword { color: #f43f5e; font-weight: 600; }
+    .dsl-actor { color: #38bdf8; font-weight: 600; }
+    .dsl-command { color: #fbbf24; font-weight: 600; }
+    .dsl-event { color: #34d399; font-weight: 600; }
+    .dsl-guard { color: #c084fc; font-weight: 600; }
+    .dsl-tag { color: #fb923c; font-weight: 500; }
+    .dsl-storage { color: #94a3b8; font-style: italic; }
+    .dsl-field { color: #e2e8f0; }
+    .dsl-symbol { color: #64748b; }
+  </style>
+</head>
+<body class="bg-base-300 text-base-content min-h-screen">
+
+  <!-- Top Navbar -->
+  <header class="navbar bg-base-200 border-b border-base-content/10 sticky top-0 z-40 px-4 lg:px-8 shadow-sm">
+    <div class="navbar-start gap-3">
+      <div class="avatar placeholder">
+        <div class="bg-primary text-primary-content rounded-lg w-9 h-9 font-bold font-mono text-lg">
+          SD
+        </div>
+      </div>
+      <div>
+        <span class="font-bold text-lg tracking-tight">System Design DSL</span>
+        <span class="badge badge-soft badge-primary text-xs ml-2">v0.2 Updated</span>
+      </div>
+    </div>
+    <div class="navbar-center hidden md:flex">
+      <ul class="menu menu-horizontal menu-sm gap-1">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#transitions">FR &rarr; NFR &rarr; DSL</a></li>
+        <li><a href="#grammar">4 Primitives</a></li>
+        <li><a href="#ratelimiter">Rate Limiter</a></li>
+        <li><a href="#patterns">System Patterns</a></li>
+        <li><a href="#syntax-options">Syntax Variations</a></li>
+      </ul>
+    </div>
+    <div class="navbar-end gap-2">
+      <span class="badge badge-outline text-xs">Interview Framework</span>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl p-4 md:p-8 space-y-10">
+
+    <!-- Hero / Purpose -->
+    <section id="overview" class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6 md:p-8">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <div class="space-y-2 max-w-3xl">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-primary badge-sm">DCB & Event Modeling</span>
+              <span class="badge badge-success badge-sm">Data-Driven Transitions</span>
+            </div>
+            <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight">
+              Rapid System Design Specification DSL
+            </h1>
+            <p class="text-base-content/80 text-sm md:text-base leading-relaxed">
+              Designed for live whiteboard & shared-doc system design interviews. Bridges Functional Requirements, Scale Calculations (QPS/Storage), and Architecture into pure Deciders, Dynamic Boundaries (DCB), Read Projections, and Async Policies.
+            </p>
+          </div>
+          <div class="stats stats-vertical sm:stats-horizontal shadow bg-base-200 border border-base-content/10">
+            <div class="stat py-3 px-4">
+              <div class="stat-title text-xs">Primitives</div>
+              <div class="stat-value text-primary text-2xl">4</div>
+              <div class="stat-desc text-xs">Command, View, Policy, Tag</div>
+            </div>
+            <div class="stat py-3 px-4">
+              <div class="stat-title text-xs">Interview Speed</div>
+              <div class="stat-value text-success text-2xl">10x</div>
+              <div class="stat-desc text-xs">Faster than prose & boxes</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW SECTION: Smooth Transition: FR -> NFR Math -> DSL -> Architecture -->
+    <section id="transitions" class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6 md:p-8 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">
+          <div>
+            <h2 class="card-title text-2xl">The 4-Step Transition: Requirements to Architecture</h2>
+            <p class="text-xs text-base-content/70">How to use math and data requirements to systematically drive the DSL and architectural decisions</p>
+          </div>
+          <span class="badge badge-secondary badge-soft text-xs">Interview Playbook</span>
+        </div>
+
+        <!-- 4 Step Pipeline Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          
+          <!-- Step 1 -->
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-primary badge-sm font-bold">Step 1</span>
+              <span class="text-xs text-base-content/50 font-mono">FRs &rarr; Invariants</span>
+            </div>
+            <h3 class="font-bold text-sm">FR &rarr; Commands & Events</h3>
+            <p class="text-xs text-base-content/70">
+              Map each functional capability directly to an <code>Actor -&gt; Command()</code> and its resulting immutable facts <code>[Events]</code>.
+            </p>
+            <div class="bg-base-300 rounded p-2 text-[11px] font-mono text-emerald-400">
+              user -> makeRequest()<br>&nbsp;-> [request-logged]
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-warning badge-sm font-bold">Step 2</span>
+              <span class="text-xs text-base-content/50 font-mono">NFR Math &rarr; Scale</span>
+            </div>
+            <h3 class="font-bold text-sm">Math &rarr; DCB Boundaries</h3>
+            <p class="text-xs text-base-content/70">
+              Use QPS and concurrency numbers to justify concurrency boundaries without global locks.
+            </p>
+            <div class="bg-base-300 rounded p-2 text-[11px] font-mono text-amber-400">
+              50k QPS &rarr; Partition<br>&nbsp;[$user, $window]
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-info badge-sm font-bold">Step 3</span>
+              <span class="text-xs text-base-content/50 font-mono">SLA &rarr; Sizing</span>
+            </div>
+            <h3 class="font-bold text-sm">Latency &rarr; View & Storage</h3>
+            <p class="text-xs text-base-content/70">
+              Use P99 latency (&lt;2ms) and data footprint math (640MB) to separate hot in-memory views from cold logs.
+            </p>
+            <div class="bg-base-300 rounded p-2 text-[11px] font-mono text-sky-400">
+              view Quota @bergcache<br>&nbsp;(RAM: 640MB, O(1))
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-error badge-sm font-bold">Step 4</span>
+              <span class="text-xs text-base-content/50 font-mono">Resilience &rarr; Sagas</span>
+            </div>
+            <h3 class="font-bold text-sm">Availability &rarr; Policies</h3>
+            <p class="text-xs text-base-content/70">
+              Offload secondary NFRs (WAF blocking, metrics, fraud alerts) onto async event-driven sagas.
+            </p>
+            <div class="bg-base-300 rounded p-2 text-[11px] font-mono text-rose-400">
+              rate-limit-exceeded<br>&nbsp;-> waf-bot -> block()
+            </div>
+          </div>
+
+        </div>
+
+    <!-- NEW SECTION: Event Modeling 4 Slices Mapping (eventmodeling.org) -->
+    <section id="event-modeling" class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6 md:p-8 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-accent badge-sm font-bold">eventmodeling.org</span>
+              <span class="badge badge-outline badge-sm">100% 1:1 Coverage</span>
+            </div>
+            <h2 class="card-title text-2xl mt-1">Full Event Modeling Slice Coverage</h2>
+            <p class="text-xs text-base-content/70">How this DSL maps to the 4 canonical slice patterns from Event Modeling</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <!-- Slice 1: State Change (Command Slice) -->
+          <div class="card bg-base-200 border-l-4 border-l-sky-500 border border-base-content/5 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-info badge-sm font-bold">1. State Change Slice</span>
+                <span class="text-xs font-mono text-sky-400">Blue &rarr; Orange</span>
+              </div>
+              <span class="text-[11px] text-base-content/50">UI &rarr; Command &rarr; Event</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              User or caller submits a command. Pure decider checks past facts and appends new domain event.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 p-0">
+              <pre data-prefix="1"><code><span class="dsl-actor">customer</span> <span class="dsl-symbol">-></span> <span class="dsl-command">registerUser</span>(email, hash) <span class="dsl-keyword">on</span> [<span class="dsl-event">user-registered*</span>]</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">emailNotTaken</span><span class="dsl-symbol">]--></span> [</code></pre>
+              <pre data-prefix="3"><code>    <span class="dsl-event">user-registered</span> { userId, email, hash }</code></pre>
+              <pre data-prefix="4"><code>  ]</code></pre>
+            </div>
+          </div>
+
+          <!-- Slice 2: State View (Read Model Slice) -->
+          <div class="card bg-base-200 border-l-4 border-l-emerald-500 border border-base-content/5 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-success badge-sm font-bold">2. State View Slice</span>
+                <span class="text-xs font-mono text-emerald-400">Orange &rarr; Green</span>
+              </div>
+              <span class="text-[11px] text-base-content/50">Events &rarr; Projection &rarr; Screen</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Domain facts projected into a read model / view queried by the client or API.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 p-0">
+              <pre data-prefix="1"><code><span class="dsl-keyword">view</span> <span class="dsl-command">UserProfileView</span>(userId) <span class="dsl-symbol">=</span> [</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-event">user-registered</span>, <span class="dsl-event">profile-updated*</span></code></pre>
+              <pre data-prefix="3"><code>] <span class="dsl-symbol">=&gt;</span> { email, name, avatarUrl } <span class="dsl-storage">@bergcache(ttl=1h)</span></code></pre>
+            </div>
+          </div>
+
+          <!-- Slice 3: Automation / Processor Slice -->
+          <div class="card bg-base-200 border-l-4 border-l-purple-500 border border-base-content/5 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-secondary badge-sm font-bold">3. Automation Slice</span>
+                <span class="text-xs font-mono text-purple-400">Orange &rarr; Purple &rarr; Blue</span>
+              </div>
+              <span class="text-[11px] text-base-content/50">Event &rarr; Policy &rarr; Command</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              An event triggers an automated process / policy that issues a subsequent command to another slice.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 p-0">
+              <pre data-prefix="1"><code><span class="dsl-event">user-registered</span> { userId, email }</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-symbol">-></span> <span class="dsl-actor">welcome-worker</span> <span class="dsl-symbol">-></span> <span class="dsl-command">sendWelcomeEmail</span>(userId, email)</code></pre>
+            </div>
+          </div>
+
+          <!-- Slice 4: Translation / External Integration Slice -->
+          <div class="card bg-base-200 border-l-4 border-l-amber-500 border border-base-content/5 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-warning badge-sm font-bold">4. Translation / Integration</span>
+                <span class="text-xs font-mono text-amber-400">External &harr; Domain</span>
+              </div>
+              <span class="text-[11px] text-base-content/50">Inbound & Outbound Adapters</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Inbound webhooks/polls translated into domain commands, or outbound domain events pushing to external APIs.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 p-0">
+              <pre data-prefix="1"><code><span class="text-slate-500">// Inbound Webhook Adapter</span></code></pre>
+              <pre data-prefix="2"><code><span class="dsl-actor">stripe-webhook</span> <span class="dsl-symbol">-></span> <span class="dsl-command">ingestStripeCharge</span>(chargePayload) <span class="dsl-symbol">-></span> [</code></pre>
+              <pre data-prefix="3"><code>  <span class="dsl-event">payment-captured</span> { invoiceId, stripeId, amount }</code></pre>
+              <pre data-prefix="4"><code>]</code></pre>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+
+    <!-- Architecture Visual Flow (Hand-authored SVG) -->
+    <section class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+          <div>
+            <h2 class="card-title text-xl">The Decider & Projection Flow</h2>
+            <p class="text-xs text-base-content/70">How commands, facts, DCB query boundaries, projections, and policies connect</p>
+          </div>
+          <span class="badge badge-info badge-soft text-xs">End-to-End Flow</span>
+        </div>
+
+        <div class="w-full bg-base-200 rounded-box p-4 border border-base-content/5 overflow-hidden">
+          <svg viewBox="0 0 920 220" width="100%" class="h-auto select-none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 8 5 L 0 9 z" fill="currentColor" opacity="0.7"/>
+              </marker>
+            </defs>
+
+            <!-- 1. Actor & Command -->
+            <g id="node-actor">
+              <rect x="20" y="30" width="140" height="70" rx="8" fill="#0284c7" fill-opacity="0.15" stroke="#38bdf8" stroke-width="2" />
+              <text x="90" y="60" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">ACTOR / CALLER</text>
+              <text x="90" y="80" text-anchor="middle" fill="#e2e8f0" font-size="11" font-family="monospace">makeRequest()</text>
+            </g>
+
+            <!-- Arrow Actor -> Decider -->
+            <line x1="160" y1="65" x2="220" y2="65" stroke="currentColor" stroke-width="2" marker-end="url(#arrow)" />
+            <text x="190" y="55" text-anchor="middle" fill="#94a3b8" font-size="9">Command</text>
+
+            <!-- 2. Decider & Guard -->
+            <g id="node-decider">
+              <rect x="225" y="20" width="210" height="90" rx="8" fill="#d97706" fill-opacity="0.15" stroke="#fbbf24" stroke-width="2" />
+              <text x="330" y="45" text-anchor="middle" fill="#fbbf24" font-size="12" font-weight="700">PURE DECIDER</text>
+              <text x="330" y="68" text-anchor="middle" fill="#c084fc" font-size="11" font-family="monospace">&lt;count &lt; limit&gt;</text>
+              <text x="330" y="90" text-anchor="middle" fill="#94a3b8" font-size="10">Given DCB Facts | Branch</text>
+            </g>
+
+            <!-- DCB Facts Input to Decider -->
+            <g id="node-dcb-input">
+              <rect x="245" y="150" width="170" height="50" rx="6" fill="#ea580c" fill-opacity="0.15" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="4" />
+              <text x="330" y="172" text-anchor="middle" fill="#fb923c" font-size="11" font-weight="600">DCB Tag Boundary</text>
+              <text x="330" y="188" text-anchor="middle" fill="#fed7aa" font-size="10" font-family="monospace">[$user: request-logged*]</text>
+            </g>
+            <line x1="330" y1="150" x2="330" y2="110" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="3" marker-end="url(#arrow)" />
+
+            <!-- Arrow Decider -> Events -->
+            <line x1="435" y1="65" x2="495" y2="65" stroke="currentColor" stroke-width="2" marker-end="url(#arrow)" />
+            <text x="465" y="55" text-anchor="middle" fill="#94a3b8" font-size="9">Append</text>
+
+            <!-- 3. Emitted Domain Events -->
+            <g id="node-events">
+              <rect x="500" y="20" width="180" height="90" rx="8" fill="#059669" fill-opacity="0.15" stroke="#34d399" stroke-width="2" />
+              <text x="590" y="45" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700">DOMAIN EVENTS</text>
+              <text x="590" y="68" text-anchor="middle" fill="#a7f3d0" font-size="10" font-family="monospace">request-logged</text>
+              <text x="590" y="88" text-anchor="middle" fill="#fca5a5" font-size="10" font-family="monospace">rate-limit-exceeded</text>
+            </g>
+
+            <!-- Split from Events to Read Model & Policy -->
+            <path d="M 680 45 L 730 45 L 730 50 L 740 50" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow)" />
+            <path d="M 680 85 L 730 85 L 730 150 L 740 150" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow)" />
+
+            <!-- 4A. Read Model / View -->
+            <g id="node-view">
+              <rect x="745" y="15" width="160" height="70" rx="8" fill="#6366f1" fill-opacity="0.15" stroke="#818cf8" stroke-width="2" />
+              <text x="825" y="42" text-anchor="middle" fill="#818cf8" font-size="12" font-weight="700">PROJECTION / VIEW</text>
+              <text x="825" y="62" text-anchor="middle" fill="#c7d2fe" font-size="10" font-family="monospace">UserQuotaBucket</text>
+              <text x="825" y="76" text-anchor="middle" fill="#94a3b8" font-size="9">@bergcache</text>
+            </g>
+
+            <!-- 4B. Policy / Reactor -->
+            <g id="node-policy">
+              <rect x="745" y="125" width="160" height="70" rx="8" fill="#e11d48" fill-opacity="0.15" stroke="#f43f5e" stroke-width="2" />
+              <text x="825" y="152" text-anchor="middle" fill="#f43f5e" font-size="12" font-weight="700">POLICY / SAGA</text>
+              <text x="825" y="172" text-anchor="middle" fill="#fecdd3" font-size="10" font-family="monospace">AbuseProtection</text>
+              <text x="825" y="186" text-anchor="middle" fill="#94a3b8" font-size="9">&gt; 100 violations</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- The 4 Core Primitives -->
+    <section id="grammar" class="space-y-4">
+      <div>
+        <h2 class="text-2xl font-bold tracking-tight">The 4 Grammar Primitives</h2>
+        <p class="text-sm text-base-content/70">Every system design requirement can be mapped to one of these four components.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- 1. Command -->
+        <div class="card bg-base-100 border border-base-content/10 shadow-sm">
+          <div class="card-body p-5">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-warning badge-soft font-bold">1. Command (Decider / Write)</span>
+              <span class="text-xs text-base-content/50 font-mono">Actor -> Command on [Events] from [Views] -> [Events]</span>
+            </div>
+            <p class="text-xs text-base-content/80 mt-1">
+              Represents an intention to change state. Pure decider evaluates given facts and guards to emit zero or more new immutable events.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 mt-3 p-0">
+              <pre data-prefix="1"><code><span class="dsl-actor">user</span> <span class="dsl-symbol">-></span> <span class="dsl-command">transferFunds</span>(toUser, amount)</code></pre>
+              <pre data-prefix="2"><code><span class="dsl-keyword">on</span> [<span class="dsl-event">account-opened</span>(fromUser), <span class="dsl-event">funds-deposited*</span>(fromUser)]</code></pre>
+              <pre data-prefix="3"><code><span class="dsl-keyword">from</span> [<span class="dsl-command">AccountBalance</span>(fromUser) <span class="dsl-keyword">as</span> balance]</code></pre>
+              <pre data-prefix="4"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">balance.currentBalance &gt;= amount</span><span class="dsl-symbol">]--></span> [</code></pre>
+              <pre data-prefix="5"><code>    <span class="dsl-event">funds-transferred</span> { fromUser, toUser, amount }</code></pre>
+              <pre data-prefix="6"><code>  ]</code></pre>
+              <pre data-prefix="7"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">default</span><span class="dsl-symbol">]--></span> [ <span class="dsl-event">transfer-rejected</span> { reason: <span class="text-emerald-400">"insufficient_funds"</span> } ]</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. View / Read Model -->
+        <div class="card bg-base-100 border border-base-content/10 shadow-sm">
+          <div class="card-body p-5">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-primary badge-soft font-bold">2. View (Projection / Query)</span>
+              <span class="text-xs text-base-content/50 font-mono">view Name = [Events] -> { State }</span>
+            </div>
+            <p class="text-xs text-base-content/80 mt-1">
+              Deterministic read-model projection aggregated from domain facts. Annotated with storage layer, key format, and caching strategy.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 mt-3 p-0">
+              <pre data-prefix="1"><code><span class="dsl-keyword">view</span> <span class="dsl-command">AccountBalance</span>(userId) <span class="dsl-symbol">=</span> [<span class="dsl-event">funds-transferred*</span>, <span class="dsl-event">funds-deposited*</span>] <span class="dsl-symbol">-></span> {</code></pre>
+              <pre data-prefix="2"><code>  currentBalance,</code></pre>
+              <pre data-prefix="3"><code>  lastTransactionAt,</code></pre>
+              <pre data-prefix="4"><code>  status</code></pre>
+              <pre data-prefix="5"><code>} <span class="dsl-storage">@bergcache(key="balance:{userId}", ttl=15m)</span></code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Policy / Saga -->
+        <div class="card bg-base-100 border border-base-content/10 shadow-sm">
+          <div class="card-body p-5">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-secondary badge-soft font-bold">3. Policy (Reactor / Saga)</span>
+              <span class="text-xs text-base-content/50 font-mono">event {payload} --[Guard]--> worker -> Command()</span>
+            </div>
+            <p class="text-xs text-base-content/80 mt-1">
+              Event-driven automations. When an event occurs, an asynchronous worker or service executes a subsequent command.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 mt-3 p-0">
+              <pre data-prefix="1"><code><span class="dsl-event">funds-transferred</span> { fromUser, toUser, amount }</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">amount &gt; 10000</span><span class="dsl-symbol">]--></span> <span class="dsl-actor">fraud-service</span> <span class="dsl-symbol">-></span> <span class="dsl-command">flagSuspiciousTransfer</span>(fromUser, amount)</code></pre>
+              <pre data-prefix="4"><code></code></pre>
+              <pre data-prefix="5"><code><span class="dsl-event">funds-transferred</span></code></pre>
+              <pre data-prefix="6"><code>  <span class="dsl-symbol">-></span> <span class="dsl-actor">notification-worker</span> <span class="dsl-symbol">-></span> <span class="dsl-command">sendReceipt</span>(toUser)</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Boundary / DCB Tags -->
+        <div class="card bg-base-100 border border-base-content/10 shadow-sm">
+          <div class="card-body p-5">
+            <div class="flex items-center justify-between">
+              <span class="badge badge-accent badge-soft font-bold">4. Boundary (DCB Tags & Sharding)</span>
+              <span class="text-xs text-base-content/50 font-mono">boundary Name(key) @partition(shardKey="...")</span>
+            </div>
+            <p class="text-xs text-base-content/80 mt-1">
+              Dynamic Consistency Boundaries (DCB). Specifies metadata tags used to load fact streams and partition data without rigid aggregates.
+            </p>
+            <div class="mockup-code text-xs bg-base-300 mt-3 p-0">
+              <pre data-prefix="1"><code><span class="dsl-keyword">boundary</span> <span class="dsl-command">TenantAccountBoundary</span>(tenantId, userId)</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-storage">@partition(shardKey="tenantId")</span></code></pre>
+              <pre data-prefix="3"><code>  <span class="dsl-storage">@owner("accounting-svc")</span></code></pre>
+              <pre data-prefix="4"><code>  <span class="dsl-storage">@replication(mode="async", lag_sla="&lt;2s")</span></code></pre>
+              <pre data-prefix="5"><code></code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="card bg-base-100 border border-base-content/10 shadow-sm">
+      <div class="card-body p-5">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="text-lg font-bold">Architecture is inferred, not bolted on</h3>
+          <span class="badge badge-ghost badge-soft text-xs">Same primitives, different view</span>
+        </div>
+        <p class="text-xs text-base-content/80 mt-2">
+          This language does not need a separate "architecture" grammar to be useful. The same model tells you architecture when you add annotations like <code>@bergcache</code>, <code>@partition</code>, <code>@time</code>, <code>@confidence</code>, <code>@cost</code>, and <code>@ops</code>. Those declarations reveal read path behavior, trust boundary, certainty level, resource envelope, and operating ownership without bloating the core syntax.
+        </p>
+      </div>
+    </section>
+
+    <!-- Deep Dive: Rate Limiter Example -->
+    <section id="ratelimiter" class="card bg-base-100 border border-base-content/10 shadow-lg">
+      <div class="card-body p-6 md:p-8 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">
+          <div>
+            <h2 class="card-title text-2xl">Rate Limiter Specification (Refined)</h2>
+            <p class="text-xs text-base-content/70">Your original design transformed into complete interview-ready DSL</p>
+          </div>
+          <span class="badge badge-success badge-soft font-mono text-xs">Sliding Window Token Bucket</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Left: Code representation -->
+          <div class="lg:col-span-2 space-y-3">
+            <div class="text-xs font-semibold uppercase tracking-wider text-base-content/60">DSL Specification</div>
+            <div class="mockup-code bg-base-300 text-xs sm:text-sm p-0 leading-relaxed overflow-x-auto">
+              <pre data-prefix="1"><code><span class="text-slate-500">// 1. AUTHENTICATION DECIDER</span></code></pre>
+              <pre data-prefix="2"><code><span class="dsl-actor">user</span> <span class="dsl-symbol">-></span> <span class="dsl-command">authenticate</span>(username, password)</code></pre>
+              <pre data-prefix="3"><code><span class="dsl-keyword">on</span> [<span class="dsl-event">user-created</span>(email)]</code></pre>
+              <pre data-prefix="4"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">credentialsValid</span><span class="dsl-symbol">]--></span> [ <span class="dsl-event">user-authenticated</span> { userId, tierId } ]</code></pre>
+              <pre data-prefix="5"><code></code></pre>
+              <pre data-prefix="6"><code><span class="text-slate-500">// 2. RATE LIMITER DECIDER (DCB Boundary: $user + $window)</span></code></pre>
+              <pre data-prefix="7"><code><span class="dsl-actor">user</span> <span class="dsl-symbol">-></span> <span class="dsl-command">makeRequest</span>(resourceId, data)</code></pre>
+              <pre data-prefix="8"><code><span class="dsl-keyword">on</span> [</code></pre>
+              <pre data-prefix="9"><code>  <span class="dsl-event">user-authenticated</span>(userId),</code></pre>
+              <pre data-prefix="10"><code>  <span class="dsl-event">request-logged*</span>(userId, window: currentMinute)</code></pre>
+              <pre data-prefix="11"><code>]</code></pre>
+              <pre data-prefix="12"><code><span class="dsl-keyword">from</span> [<span class="dsl-command">UserTierCache</span>(userId) @fresh&lt;24h&gt; <span class="dsl-keyword">as</span> tier]</code></pre>
+              <pre data-prefix="13"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">count(request-logged) &lt; tier.limit</span><span class="dsl-symbol">]--></span> [</code></pre>
+              <pre data-prefix="14"><code>    <span class="dsl-event">request-logged</span> { userId, resourceId, requestMinute, requestAt: clock.wall() }</code></pre>
+              <pre data-prefix="15"><code>  ]</code></pre>
+              <pre data-prefix="16"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">count(request-logged) &gt;= tier.limit</span><span class="dsl-symbol">]--></span> [</code></pre>
+              <pre data-prefix="17"><code>    <span class="dsl-event">rate-limit-exceeded</span> { userId, resourceId, retryAfter: window.end(currentMinute,1m)-clock.wall() }</code></pre>
+              <pre data-prefix="18"><code>  ]</code></pre>
+              <pre data-prefix="19"><code></code></pre>
+              <pre data-prefix="20"><code><span class="text-slate-500">// 3. FAST-PATH CACHE PROJECTION</span></code></pre>
+              <pre data-prefix="21"><code><span class="dsl-keyword">view</span> <span class="dsl-command">UserQuota</span>(userId) <span class="dsl-symbol">=</span> [<span class="dsl-event">tier-assigned*</span>(userId), <span class="dsl-event">request-logged*</span>(userId)] <span class="dsl-symbol">-></span> {</code></pre>
+              <pre data-prefix="22"><code>  tier, limit, remaining, resetAt</code></pre>
+              <pre data-prefix="23"><code>} <span class="dsl-storage">@bergcache(key="quota:{userId}", ttl=60s)</span> <span class="dsl-storage">@cost(memory="~6MB/region")</span></code></pre>
+              <pre data-prefix="24"><code></code></pre>
+              <pre data-prefix="25"><code><span class="text-slate-500">// 4. SECURITY ABUSE POLICY</span></code></pre>
+              <pre data-prefix="26"><code><span class="dsl-event">rate-limit-exceeded</span> { userId }</code></pre>
+              <pre data-prefix="27"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">scoreBy("quota-anomaly-v2", userId) &gt; 0.7</span><span class="dsl-symbol">]--></span> <span class="dsl-actor">waf-bot</span> <span class="dsl-symbol">-></span> <span class="dsl-command">applyTemporaryBan</span>(userId, duration=15m)</code></pre>
+            </div>
+          </div>
+
+          <!-- Right: Interviewer Explanation Card -->
+          <div class="space-y-4">
+            <div class="text-xs font-semibold uppercase tracking-wider text-base-content/60">What this signals in interview</div>
+            
+            <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-sm badge-success">Consistency</span>
+                <span class="font-bold text-xs">Dynamic Boundary</span>
+              </div>
+              <p class="text-xs text-base-content/80">
+                You explicitly bounded concurrency to <code>$user</code> and <code>currentMinute</code>. No global database lock or monolithic aggregate root needed.
+              </p>
+            </div>
+
+            <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-sm badge-primary">Architecture</span>
+                <span class="font-bold text-xs">Inferred from metadata</span>
+              </div>
+              <p class="text-xs text-base-content/80">
+                The same model implies architecture: <code>@bergcache</code> suggests read optimization, <code>@partition</code> suggests sharding, and <code>@owner</code>/<code>@service</code> describe service boundaries without inventing a second language.
+              </p>
+            </div>
+
+            <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-sm badge-primary">Performance</span>
+                <span class="font-bold text-xs">Read/Write Separation</span>
+              </div>
+              <p class="text-xs text-base-content/80">
+                The decider defines the authoritative write path, while the <code>UserQuota</code> view gives an O(1) in-memory cache read path via Bergcache.
+              </p>
+            </div>
+
+            <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="badge badge-sm badge-secondary">Extensibility</span>
+                <span class="font-bold text-xs">Zero Coupling</span>
+              </div>
+              <p class="text-xs text-base-content/80">
+                WAF abuse defense is hooked up purely via an asynchronous reactor policy on <code>rate-limit-exceeded</code> without touching the request handler.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Additional System Design Patterns -->
+    <section id="patterns" class="space-y-4">
+      <div>
+        <h2 class="text-2xl font-bold tracking-tight">More System Design Patterns in this DSL</h2>
+        <p class="text-sm text-base-content/70">Examples of standard interview questions codified with this notation.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Pattern 1: URL Shortener -->
+        <div class="card bg-base-100 border border-base-content/10 shadow-sm">
+          <div class="card-body p-5 space-y-2">
+            <div class="flex justify-between items-center">
+              <h3 class="font-bold text-base">URL Shortener (Bitly)</h3>
+              <span class="badge badge-xs badge-neutral font-mono">High Read / Write Scale</span>
+            </div>
+            <div class="mockup-code text-xs bg-base-300 p-0">
+              <pre data-prefix="1"><code><span class="dsl-actor">user</span> <span class="dsl-symbol">-></span> <span class="dsl-command">shortenUrl</span>(originalUrl, customAlias?) <span class="dsl-keyword">on</span> [<span class="dsl-event">alias-reserved*</span>]</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">aliasAvailable</span><span class="dsl-symbol">]--></span> [</code></pre>
+              <pre data-prefix="3"><code>    <span class="dsl-event">url-shortened</span> { shortCode, originalUrl, ownerId, createdAt }</code></pre>
+              <pre data-prefix="4"><code>  ]</code></pre>
+              <pre data-prefix="5"><code></code></pre>
+              <pre data-prefix="6"><code><span class="dsl-keyword">view</span> <span class="dsl-command">UrlRouting</span>(shortCode) <span class="dsl-symbol">=</span> [<span class="dsl-event">url-shortened</span>, <span class="dsl-event">url-expired*</span>(shortCode)] <span class="dsl-symbol">=&gt;</span> {</code></pre>
+              <pre data-prefix="7"><code>  originalUrl, isExpired</code></pre>
+              <pre data-prefix="8"><code>} <span class="dsl-storage">@bergcache(key="url:{shortCode}", ttl=30d)</span></code></pre>
+              <pre data-prefix="9"><code></code></pre>
+              <pre data-prefix="10"><code><span class="dsl-actor">visitor</span> <span class="dsl-symbol">-></span> <span class="dsl-command">visitShortUrl</span>(shortCode, ip, userAgent) <span class="dsl-symbol">-></span> [</code></pre>
+              <pre data-prefix="11"><code>  <span class="dsl-event">url-clicked</span> { shortCode, ip, timestamp, referer }</code></pre>
+              <pre data-prefix="12"><code>]</code></pre>
+              <pre data-prefix="13"><code></code></pre>
+              <pre data-prefix="14"><code><span class="dsl-event">url-clicked</span> <span class="dsl-symbol">-></span> <span class="dsl-actor">analytics-worker</span> <span class="dsl-symbol">-></span> <span class="dsl-command">incrementClickCount</span>(shortCode)</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pattern 2: E-Commerce Checkout / Payment Saga -->
+        <div class="card bg-base-100 border border-base-content/10 shadow-sm">
+          <div class="card-body p-5 space-y-2">
+            <div class="flex justify-between items-center">
+              <h3 class="font-bold text-base">Order Checkout & Payment Saga</h3>
+              <span class="badge badge-xs badge-neutral font-mono">Distributed Consistency</span>
+            </div>
+            <div class="mockup-code text-xs bg-base-300 p-0">
+              <pre data-prefix="1"><code><span class="dsl-actor">customer</span> <span class="dsl-symbol">-></span> <span class="dsl-command">placeOrder</span>(cartId, items, paymentMethod) <span class="dsl-symbol">-></span> [</code></pre>
+              <pre data-prefix="2"><code>  <span class="dsl-event">order-placed</span> { orderId, customerId, items, totalAmount }</code></pre>
+              <pre data-prefix="3"><code>]</code></pre>
+              <pre data-prefix="4"><code></code></pre>
+              <pre data-prefix="5"><code><span class="dsl-event">order-placed</span> <span class="dsl-symbol">-></span> <span class="dsl-actor">inventory-svc</span> <span class="dsl-symbol">-></span> <span class="dsl-command">reserveStock</span>(orderId, items) <span class="dsl-keyword">on</span> [stock-counted*(skuId)]</code></pre>
+              <pre data-prefix="6"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">inStock</span><span class="dsl-symbol">]--></span> [ <span class="dsl-event">stock-reserved</span> { orderId } ]</code></pre>
+              <pre data-prefix="7"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">outOfStock</span><span class="dsl-symbol">]--></span> [ <span class="dsl-event">stock-reservation-failed</span> { orderId, reason } ]</code></pre>
+              <pre data-prefix="8"><code></code></pre>
+              <pre data-prefix="9"><code><span class="dsl-event">stock-reserved</span> <span class="dsl-symbol">-></span> <span class="dsl-actor">payment-svc</span> <span class="dsl-symbol">-></span> <span class="dsl-command">chargeCard</span>(orderId, totalAmount)</code></pre>
+              <pre data-prefix="10"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">chargeSuccess</span><span class="dsl-symbol">]--></span> [ <span class="dsl-event">payment-captured</span> { orderId, txnId } ]</code></pre>
+              <pre data-prefix="11"><code>  <span class="dsl-symbol">--[</span><span class="dsl-guard">chargeFailed</span><span class="dsl-symbol">]--></span> [ <span class="dsl-event">payment-failed</span> { orderId, error } ]</code></pre>
+              <pre data-prefix="12"><code></code></pre>
+              <pre data-prefix="13"><code><span class="text-slate-500">// Compensating transaction</span></code></pre>
+              <pre data-prefix="14"><code><span class="dsl-event">payment-failed</span> <span class="dsl-symbol">-></span> <span class="dsl-actor">inventory-svc</span> <span class="dsl-symbol">-></span> <span class="dsl-command">releaseStock</span>(orderId) <span class="dsl-symbol">-></span> [</code></pre>
+              <pre data-prefix="15"><code>  <span class="dsl-event">stock-released</span> { orderId }</code></pre>
+              <pre data-prefix="16"><code>]</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer sm:footer-horizontal bg-base-200 text-base-content p-6 border-t border-base-content/10 text-xs justify-between">
+    <div>
+      <p class="font-mono">System Design DSL &bull; ByteQuilt / Sash Architecture</p>
+    </div>
+    <div>
+      <p>Editable & annotatable via Lavish Editor</p>
+    </div>
+  </footer>
+
+</body>
+</html>
