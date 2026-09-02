@@ -114,7 +114,9 @@ view UserQuota(userId) = [user-authenticated(userId), request-logged*(userId)] =
 ### Primitive 3: Policies (Reactors / Sagas / Automations)
 
 An event-driven trigger.
-When a domain event occurs, an asynchronous worker or service executes a subsequent command.
+When a domain event occurs, an asynchronous worker or service reacts by evaluating a guard and then emitting the next step in the event flow.
+
+A policy may emit either a command or a domain event. In most operational workflows, the policy resolves to a command, which then becomes the next decider input.
 
 ```text
 event-name { payload }

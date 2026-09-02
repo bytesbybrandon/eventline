@@ -142,10 +142,11 @@ A **Policy** is an automated reaction to events.
 
 Policies:
 - Listen for events.
-- Apply guards to decide actions (other events, side effects, or control-plane operations).
+- Apply guards to decide actions.
+- May emit a command or another domain event.
 - Are eventually consistent (may observe events out-of-order or with delay).
 
-Policies are the primary mechanism for resilience, monitoring, and cross-boundary coordination.
+In most operational workflows, the policy resolves to a command, which then becomes the next step in the same event-driven chain. Policies are the primary mechanism for resilience, monitoring, and cross-boundary coordination.
 
 **Example:**
 ```text

@@ -554,6 +554,7 @@ user -> makeRequest(resourceId) on [
 ```
 
 This conflates:
+
 - **Causal events** (what happened in the past)
 - **Current facts** (projections and cached values)
 - **Temporal windows** (historical aggregation)
@@ -575,15 +576,18 @@ from [
 ```
 
 **Semantics:**
+
 - `on [...]`: events only. Causal history, must-have-happened facts, event windows.
 - `from [...]`: views only. Read-model lookups, projections, cached values with stated freshness.
 
 **Why this matters:**
+
 - A reader instantly knows which data is authoritative (events) vs optimized (views).
 - Runtime can attach different consistency contracts: `on` = "event-consistent within boundary", `from` = "projection with X staleness".
 - Candidates naturally think this way in interviews: "what events must have happened?" then "what current state do I need?"
 
 **Impact on the DSL:**
+
 - All command examples in this simulation have been updated to use explicit `on/from`.
 - Linters can now validate: events in `on`, views in `from`, no mixing.
 - Freshness policies can be declared on view references if needed: `from [ UserTierCache(userId) @fresh<60s> as tier ]`.
@@ -595,6 +599,7 @@ All events follow this shape:
 `{aggregate}[-fragments]*-{verb}`
 
 Examples:
+
 - `payment-applied`
 - `package-delivery-stalled`
 - `request-logged`
