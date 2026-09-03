@@ -181,17 +181,40 @@ This DSL completely covers all four canonical slice patterns from Event Modeling
 ## 5. The 4-Step Interview Transition Framework
 
 ```
+[System Context] --> Step 0: Actors & External Dependencies
 [Functional Reqs]  -->  Step 1: Commands & Events (Event Model)
 [Scale Math / QPS] -->  Step 2: Tag Boundaries (DCB Partitioning)
 [Latency Budgets]  -->  Step 3: Views & Storage Annotations (Hot Caches)
 [Availability SLA] -->  Step 4: Policies & Sagas (Async Offloading)
 ```
 
+## 5a. Actors & System Context (Step 0)
+
+Before modeling commands, declare your actors and system context.
+
+**Actors** are the people, services, and systems that interact with your domain. See [ACTORS.md](./ACTORS.md).
+
+**System Context** is the top-level block that names external dependencies, global SLAs, regions, and data classification. See [SYSTEM-CONTEXT.md](./SYSTEM-CONTEXT.md).
+
+These declarations make the "who can do what" and "what happens if X fails" questions impossible to ignore.
+
 ---
 
 ## 6. Complete Interview Case Study: Rate Limiter
 
 ```text
+// 0. Actors & System Context
+system RateLimiterAPI {
+  external: stripe (payment-gateway), sentry (monitoring)
+  slo: 99.99% uptime, p99 < 2ms
+  region: us-primary, eu-secondary
+  data-classification: pii
+}
+
+actor User { auth: session, tier: free|pro }
+actor Admin { auth: oauth, mfa: required }
+actor Visitor { auth: none }
+
 // 1. Concurrency Boundary
 boundary UserRateLimit(userId, currentMinute)
   @partition(shardKey="userId")
@@ -422,3 +445,13 @@ Why this scenario matters:
 1. Confidence metadata works for fallback behavior unrelated to rate limiting.
 2. Time semantics work with larger windows and webhook timing.
 3. Cost/ops metadata remain first-class without introducing a second architecture language.
+
+---
+
+## 10. Companion Documents
+
+- [ACTORS.md](./ACTORS.md) - Actor declarations and why they matter
+- [SYSTEM-CONTEXT.md](./SYSTEM-CONTEXT.md) - System context blocks, external dependencies, and SLAs
+- [THINKING-GUIDE.md](./THINKING-GUIDE.md) - Question vocabulary for debugging designs
+- [INTERVIEW_SIMULATION.md](./INTERVIEW_SIMULATION.md) - Full interview walkthrough with the rate limiter
+- [GLOSSARY.md](./GLOSSARY.md) - Canonical terminology reference

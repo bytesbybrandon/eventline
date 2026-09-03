@@ -462,6 +462,45 @@ user-upgraded-to-pro { userId }
 | **Command** | Intent decider | Actor (client) | No; only emits events | Atomic within boundary |
 | **Boundary** | Consistency scope | Configuration | No | Defines isolation and atomicity |
 | **Policy** | Automated reaction | Event listener | No; only emits new events | Eventually consistent |
+| **Actor** | System user/service | Declaration | No | N/A |
+| **System Context** | System environment | Declaration | No | N/A |
+
+---
+
+## System-Level Concepts
+
+### Actor
+
+An **Actor** is a person, service, or system that interacts with the domain. Actors are declared explicitly and used in commands to model who can do what.
+
+Actors have attributes: `auth` (authentication method), `tier` (access level), `scope` (permissions), and `rateLimit` (implicit limits).
+
+**Example:**
+```text
+actor User { auth: session, tier: free|pro }
+actor Admin { auth: oauth, mfa: required }
+actor Visitor { auth: none }
+```
+
+Actors make the "who can do what" question impossible to ignore. Without explicit actors, commands like `user -> makeRequest()` hide authentication, authorization, and abuse patterns.
+
+---
+
+### System Context
+
+A **System Context** is a top-level declaration of the system's external dependencies, global SLAs, regions, data classification, and constraints.
+
+**Example:**
+```text
+system RateLimiterAPI {
+  external: stripe (payment-gateway), sentry (monitoring)
+  slo: 99.99% uptime, p99 < 2ms
+  region: us-primary, eu-secondary
+  data-classification: pii
+}
+```
+
+System context grounds the numbers in the model (`@cost`, `@ops`, `@slo`) in real constraints. It also makes external dependencies and failure modes visible.
 
 ---
 
@@ -470,4 +509,7 @@ user-upgraded-to-pro { userId }
 - **System Design DSL:** README.md
 - **Interview Simulation:** INTERVIEW_SIMULATION.md
 - **ADR (Events vs Views):** ADR-EVENTS-VS-VIEWS.md
+- **Actors:** ACTORS.md
+- **System Context:** SYSTEM-CONTEXT.md
+- **Thinking Guide:** THINKING-GUIDE.md
 

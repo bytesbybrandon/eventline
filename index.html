@@ -54,7 +54,10 @@
       <ul class="menu menu-horizontal menu-sm gap-1">
         <li><a href="#overview">Overview</a></li>
         <li><a href="#transitions">FR &rarr; NFR &rarr; DSL</a></li>
+        <li><a href="#actors">Actors</a></li>
+        <li><a href="#system-context">System Context</a></li>
         <li><a href="#grammar">4 Primitives</a></li>
+        <li><a href="#thinking-guide">Thinking Guide</a></li>
         <li><a href="#ratelimiter">Rate Limiter</a></li>
         <li><a href="#patterns">System Patterns</a></li>
         <li><a href="#syntax-options">Syntax Variations</a></li>
@@ -175,7 +178,170 @@
 
         </div>
 
-    <!-- NEW SECTION: Event Modeling 4 Slices Mapping (eventmodeling.org) -->
+    <!-- NEW SECTION: Actors -->
+    <section id="actors" class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6 md:p-8 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">
+          <div>
+            <h2 class="card-title text-2xl">Actors</h2>
+            <p class="text-xs text-base-content/70">Declare who interacts with your system. Makes the "who can do what" question impossible to ignore.</p>
+          </div>
+          <span class="badge badge-primary badge-soft text-xs">Step 0</span>
+        </div>
+
+        <div class="mockup-code text-xs bg-base-300 p-4 leading-relaxed">
+          <pre><code><span class="dsl-keyword">actor</span> <span class="dsl-actor">User</span> { <span class="dsl-field">auth</span>: session, <span class="dsl-field">tier</span>: free|pro }
+<span class="dsl-keyword">actor</span> <span class="dsl-actor">Admin</span> { <span class="dsl-field">auth</span>: oauth, <span class="dsl-field">mfa</span>: required }
+<span class="dsl-keyword">actor</span> <span class="dsl-actor">Visitor</span> { <span class="dsl-field">auth</span>: none }</code></pre>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-sm badge-success">Why</span>
+              <span class="font-bold text-xs">Surface auth & permissions</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Without actors, commands like <code>user -> makeRequest()</code> hide authentication, authorization, and abuse patterns. Declaring actors makes these visible.
+            </p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-sm badge-primary">Attributes</span>
+              <span class="font-bold text-xs">auth, tier, scope, rateLimit</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Each actor declares authentication method, access tier, permission scope, and implicit rate limits. This drives guard logic and boundary design.
+            </p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-sm badge-secondary">In Interviews</span>
+              <span class="font-bold text-xs">Signal full-system thinking</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Opening with actors shows you're thinking about the full system: not just the happy path, but who can trigger it, what they can do, and what abuse looks like.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW SECTION: System Context -->
+    <section id="system-context" class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6 md:p-8 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">
+          <div>
+            <h2 class="card-title text-2xl">System Context</h2>
+            <p class="text-xs text-base-content/70">Declare external dependencies, SLAs, regions, and data classification. The "why" behind the numbers.</p>
+          </div>
+          <span class="badge badge-accent badge-soft text-xs">Step 0</span>
+        </div>
+
+        <div class="mockup-code text-xs bg-base-300 p-4 leading-relaxed">
+          <pre><code><span class="dsl-keyword">system</span> <span class="dsl-actor">RateLimiterAPI</span> {
+  <span class="dsl-field">external</span>: stripe (payment-gateway), sentry (monitoring)
+  <span class="dsl-field">slo</span>: 99.99% uptime, p99 < 2ms
+  <span class="dsl-field">region</span>: us-primary, eu-secondary
+  <span class="dsl-field">data-classification</span>: pii
+}</code></pre>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-sm badge-error">Why</span>
+              <span class="font-bold text-xs">Ground the numbers</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              <code>@cost(writeRpsPeak=50000)</code> is arbitrary without context. System context explains where the number comes from and what constraints drive it.
+            </p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-sm badge-warning">External Deps</span>
+              <span class="font-bold text-xs">Every dep is a failure point</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Each <code>external</code> declaration implies a failure mode. If Stripe is down, what happens to <code>processPayment</code>? The system context forces you to model that.
+            </p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-sm badge-info">In Interviews</span>
+              <span class="font-bold text-xs">Set the constraints</span>
+            </div>
+            <p class="text-xs text-base-content/80">
+              Open with the system context so the interviewer knows the constraints you're working within. This signals you think about the full system, not just the happy path.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW SECTION: Thinking Guide -->
+    <section id="thinking-guide" class="card bg-base-100 shadow-lg border border-base-content/10">
+      <div class="card-body p-6 md:p-8 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-secondary badge-sm font-bold">Debug Skill</span>
+              <span class="badge badge-outline badge-sm">Human-Learned</span>
+            </div>
+            <h2 class="card-title text-2xl mt-1">Thinking Guide</h2>
+            <p class="text-xs text-base-content/70">The question vocabulary for inspecting designs. Use this to find what's missing.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+            <h3 class="font-bold text-sm">When you see...</h3>
+            <p class="text-xs text-base-content/80 font-mono">actor -> command()</p>
+            <p class="text-xs text-base-content/70">Ask: Who else could be this actor? What permissions do they have? What happens if they're not authenticated?</p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+            <h3 class="font-bold text-sm">When you see...</h3>
+            <p class="text-xs text-base-content/80 font-mono">boundary ... @cost(writeRpsPeak=X)</p>
+            <p class="text-xs text-base-content/70">Ask: What's the failure mode if we exceed X? What's the recovery strategy?</p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+            <h3 class="font-bold text-sm">When you see...</h3>
+            <p class="text-xs text-base-content/80 font-mono">from [View(...) @eventual]</p>
+            <p class="text-xs text-base-content/70">Ask: What's the maximum staleness the business can tolerate? What breaks if the view is 5 minutes old?</p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+            <h3 class="font-bold text-sm">When you see...</h3>
+            <p class="text-xs text-base-content/80 font-mono">policy ... -> external-svc</p>
+            <p class="text-xs text-base-content/70">Ask: What happens if external-svc is down? Do we retry? Fallback? Fail?</p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+            <h3 class="font-bold text-sm">When you see...</h3>
+            <p class="text-xs text-base-content/80 font-mono">--[guard]--> with complex logic</p>
+            <p class="text-xs text-base-content/70">Ask: Is this guard evaluated in the hot path? Can it be cached? What's the latency budget?</p>
+          </div>
+
+          <div class="card bg-base-200 border border-base-content/5 p-4 space-y-3">
+            <h3 class="font-bold text-sm">When you see...</h3>
+            <p class="text-xs text-base-content/80 font-mono">Multiple actors in the same boundary</p>
+            <p class="text-xs text-base-content/70">Ask: Do they share a partition key? Could one actor's traffic starve another's?</p>
+          </div>
+        </div>
+
+        <div class="text-center">
+          <a href="THINKING-GUIDE.md" class="btn btn-primary btn-sm">Read the full Thinking Guide</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- The 4 Core Primitives -->
     <section id="event-modeling" class="card bg-base-100 shadow-lg border border-base-content/10">
       <div class="card-body p-6 md:p-8 space-y-6">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-base-content/10 pb-4">

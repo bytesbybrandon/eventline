@@ -15,6 +15,31 @@ A live walkthrough showing how the DSL guides a complete interview, from functio
 - 99.99% uptime SLA
 - Multi-region (3 regions, US primary)"
 
+## Step 0: Actors & System Context
+
+### Interviewee
+
+> "Before I model the event flow, let me name the actors and set the system context."
+
+```text
+system RateLimiterAPI {
+  external: stripe (payment-gateway), sentry (monitoring)
+  slo: 99.99% uptime, p99 < 2ms
+  region: us-primary, eu-secondary
+  data-classification: pii
+}
+
+actor User { auth: session, tier: free|pro }
+actor Admin { auth: oauth, mfa: required }
+actor Visitor { auth: none }
+```
+
+> "This gives us the constraints: 99.99% uptime means <44s downtime/month, PII means we need encryption and audit logging, and multi-region means we need a replication strategy."
+
+### Interviewer
+
+> "Good. Now let's see the event model."
+
 ---
 
 ## Step 1: Commands & Events (Functional Requirements)
@@ -400,6 +425,18 @@ from [
 // RATE LIMITER: Complete System Design DSL
 // ============================================
 
+// 0. ACTORS & SYSTEM CONTEXT
+system RateLimiterAPI {
+  external: stripe (payment-gateway), sentry (monitoring)
+  slo: 99.99% uptime, p99 < 2ms
+  region: us-primary, eu-secondary
+  data-classification: pii
+}
+
+actor User { auth: session, tier: free|pro }
+actor Admin { auth: oauth, mfa: required }
+actor Visitor { auth: none }
+
 // 1. BOUNDARIES & PARTITIONING (Step 2: Scale Math)
 boundary UserRateLimit(userId, currentMinute)
   @partition(shardKey="userId", fanout=100000)
@@ -619,9 +656,12 @@ Examples:
 - Resolved: derived fields moved out of primary request event payload.
 - Resolved: formal time primitives (`clock.wall`, `window.floor`, `window.end`).
 - Resolved: cost and operations metadata (`@cost`, `@ops`) on hot paths.
+- Resolved: actor declarations make auth and permission models explicit.
+- Resolved: system context blocks ground SLAs and external dependencies.
 
 ### ✅ What Worked Well
 
+- **Step 0 (Actors & System Context):** Naming actors and external dependencies upfront forced auth, permissions, and failure-mode questions that would have been missed otherwise.
 - **Step 1 (Commands):** Easy to express the core logic. The `--[guard]-->` format made branch decisions clear.
 - **Step 2 (Boundaries):** Partitioning strategy was obvious once scale math came up. The DSL forced the question "what's your shard key?"
 - **Step 3 (Caching):** Separating reads (views) from writes (commands) made storage strategy explicit. The `@bergcache` annotation tied latency SLA to storage choice.
@@ -640,6 +680,7 @@ Examples:
 1. **Consistency quantification:** We still do not force explicit worst-case math for async replication (for example over-quota leak bounds during failover windows).
 2. **Policy calibration process:** Confidence thresholds and model cutoffs are represented, but environment-specific calibration workflow is not formalized in DSL yet.
 3. **Operational maturity depth:** `@ops(...)` captures ownership and runbooks, but rollout strategy and change-management policies remain conventions rather than first-class grammar.
+4. **Actor-to-boundary mapping:** Actors are declared, but the DSL doesn't enforce which actors can touch which boundaries. This is a convention, not a grammar rule.
 
 ---
 
@@ -647,10 +688,11 @@ Examples:
 
 If you're using this DSL in a real interview, flag these spots:
 
-1. **After Step 1:** "Which preconditions are event facts (`on`) versus view facts (`from`), and what freshness do your view reads require?"
-2. **After Step 2:** "If a shard goes down, how do you detect it? How fast can you failover?" (This naturally leads to policies in Step 4.)
-3. **After Step 3:** "At 50k RPS, your cache gets ~3M events per minute. How do you evict? What's your LRU/TTL strategy?" (Pushes on memory management.)
-4. **After Step 4:** "You have a fallback to stale quota. Quantify the risk: how many users will over-quota during a failover? How long until you detect it?" (Ties policies back to SLA.)
+1. **After Step 0:** "Did I name all actors? What external services does this depend on? What's the blast radius if each one fails?"
+2. **After Step 1:** "Which preconditions are event facts (`on`) versus view facts (`from`), and what freshness do your view reads require?"
+3. **After Step 2:** "If a shard goes down, how do you detect it? How fast can you failover?" (This naturally leads to policies in Step 4.)
+4. **After Step 3:** "At 50k RPS, your cache gets ~3M events per minute. How do you evict? What's your LRU/TTL strategy?" (Pushes on memory management.)
+5. **After Step 4:** "You have a fallback to stale quota. Quantify the risk: how many users will over-quota during a failover? How long until you detect it?" (Ties policies back to SLA.)
 
 ---
 
