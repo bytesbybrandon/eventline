@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eventline DSL Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .toolbar {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 12px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .toolbar h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #58a6ff;
+      margin-right: 16px;
+    }
+    .btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .btn:hover { background: #30363d; }
+    .btn.primary { background: #238636; border-color: #238636; color: #fff; }
+    .btn.primary:hover { background: #2ea043; }
+    input[type="file"] { display: none; }
+    .examples-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .example-chip {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #9ca3af;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .example-chip:hover { border-color: #58a6ff; color: #58a6ff; }
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    .panel {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+    }
+    .panel-left {
+      border-right: 1px solid #30363d;
+      max-width: 50%;
+    }
+    .panel-header {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8b949e;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    pre {
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .tok-keyword { color: #ff7b72; font-weight: 600; }
+    .tok-actor { color: #58a6ff; }
+    .tok-system { color: #d2a8ff; }
+    .tok-command { color: #ffa657; }
+    .tok-event { color: #3fb950; }
+    .tok-guard { color: #d2a8ff; }
+    .tok-view { color: #79c0ff; }
+    .tok-policy { color: #ff7b72; }
+    .tok-boundary { color: #ffa657; }
+    .tok-tag { color: #ffa657; font-style: italic; }
+    .tok-storage { color: #8b949e; font-style: italic; }
+    .tok-string { color: #a5d6ff; }
+    .tok-number { color: #79c0ff; }
+    .tok-comment { color: #8b949e; font-style: italic; }
+    .tok-symbol { color: #c9d1d9; }
+    .tok-punctuation { color: #c9d1d9; }
+    .parsed-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .parsed-section h3 {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #58a6ff;
+    }
+    .parsed-item {
+      font-size: 12px;
+      color: #c9d1d9;
+      padding: 4px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .parsed-item:last-child { border-bottom: none; }
+    .parsed-item .label { color: #8b949e; }
+    .parsed-item .value { color: #c9d1d9; }
+    .empty-state {
+      color: #8b949e;
+      text-align: center;
+      padding: 40px;
+      font-size: 13px;
+    }
+    .drop-zone {
+      border: 2px dashed #30363d;
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      color: #8b949e;
+      margin-bottom: 16px;
+    }
+    .drop-zone.dragover {
+      border-color: #58a6ff;
+      background: rgba(88, 166, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>Eventline DSL Viewer</h1>
+    <button class="btn primary" onclick="document.getElementById('fileInput').click()">Open .dsl file</button>
+    <input type="file" id="fileInput" accept=".dsl,.txt,.md">
+    <div class="examples-list" id="examplesList"></div>
+  </div>
+
+  <div class="main">
+    <div class="panel panel-left">
+      <div class="panel-header">Source</div>
+      <div id="dropZone" class="drop-zone">
+        Drop a .dsl file here, or click "Open .dsl file" above.
+      </div>
+      <pre id="sourceView"><div class="empty-state">No file loaded</div></pre>
+    </div>
+    <div class="panel panel-right">
+      <div class="panel-header">Parsed Structure</div>
+      <div id="parsedView"><div class="empty-state">Load a file to see parsed structure</div></div>
+    </div>
+  </div>
+
+  <script>
+    const sourceView = document.getElementById('sourceView');
+    const parsedView = document.getElementById('parsedView');
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const examplesList = document.getElementById('examplesList');
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function highlightLine(line) {
+      let text = escapeHtml(line);
+
+      // Comments
+      if (text.trim().startsWith('//')) {
+        return `<span class="tok-comment">${text}</span>`;
+      }
+
+      // Keywords
+      text = text.replace(/\b(system|actor|boundary|view|policy|on|from|as|default)\b/g, '<span class="tok-keyword">$1</span>');
+
+      // System block
+      text = text.replace(/(system)\s+(\w+)/g, '<span class="tok-keyword">$1</span> <span class="tok-system">$2</span>');
+
+      // Actor declarations
+      text = text.replace(/(actor)\s+(\w+)/g, '<span class="tok-keyword">$1</span> <span class="tok-actor">$2</span>');
+
+      // Boundary
+      text = text.replace(/(boundary)\s+(\w+)/g, '<span class="tok-keyword">$1</span> <span class="tok-boundary">$2</span>');
+
+      // View
+      text = text.replace(/(view)\s+(\w+)/g, '<span class="tok-keyword">$1</span> <span class="tok-view">$2</span>');
+
+      // Arrow operators
+      text = text.replace(/(->)/g, '<span class="tok-symbol">$1</span>');
+      text = text.replace(/(--\[)/g, '<span class="tok-symbol">$1</span>');
+      text = text.replace(/(\]-->)/g, '<span class="tok-symbol">$1</span>');
+
+      // @annotations
+      text = text.replace(/(@\w+)/g, '<span class="tok-tag">$1</span>');
+
+      // Strings in quotes
+      text = text.replace(/("(?:[^"\\]|\\.)*")/g, '<span class="tok-string">$1</span>');
+
+      // Numbers
+      text = text.replace(/\b(\d+)\b/g, '<span class="tok-number">$1</span>');
+
+      // Punctuation
+      text = text.replace(/([{}()\[\];,])/g, '<span class="tok-punctuation">$1</span>');
+
+      return text;
+    }
+
+    function highlightDsl(text) {
+      const lines = text.split('\n');
+      return lines.map(line => highlightLine(line)).join('\n');
+    }
+
+    function parseDsl(text) {
+      const result = {
+        system: null,
+        actors: [],
+        boundaries: [],
+        views: [],
+        commands: [],
+        policies: []
+      };
+
+      const lines = text.split('\n');
+      let currentBlock = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line || line.startsWith('//')) continue;
+
+        // System block
+        if (line.startsWith('system ')) {
+          const match = line.match(/system\s+(\w+)\s*\{/);
+          if (match) {
+            result.system = { name: match[1], line: i + 1 };
+            currentBlock = 'system';
+            continue;
+          }
+        }
+
+        // Actor
+        if (line.startsWith('actor ')) {
+          const match = line.match(/actor\s+(\w+)\s*\{?\s*(.*)/);
+          if (match) {
+            result.actors.push({ name: match[1], attrs: match[2] || '', line: i + 1 });
+            continue;
+          }
+        }
+
+        // Boundary
+        if (line.startsWith('boundary ')) {
+          const match = line.match(/boundary\s+(\w+)\(([^)]+)\)/);
+          if (match) {
+            result.boundaries.push({ name: match[1], keys: match[2], line: i + 1 });
+            currentBlock = 'boundary';
+            continue;
+          }
+        }
+
+        // View
+        if (line.startsWith('view ')) {
+          const match = line.match(/view\s+(\w+)\(([^)]*)\)/);
+          if (match) {
+            result.views.push({ name: match[1], keys: match[2] || '', line: i + 1 });
+            currentBlock = 'view';
+            continue;
+          }
+        }
+
+        // Command
+        if (line.includes('->') && !line.startsWith('//')) {
+          const match = line.match(/(\w+)\s+->\s+(\w+)\(([^)]*)\)/);
+          if (match) {
+            result.commands.push({ actor: match[1], name: match[2], args: match[3], line: i + 1 });
+            currentBlock = 'command';
+            continue;
+          }
+        }
+
+        // Policy
+        if (line.includes('->') && !line.startsWith('//') && !line.includes('on [')) {
+          const match = line.match(/(\w+.*?)\s+->\s+(\w+)\s+->\s+(\w+)\(/);
+          if (match) {
+            result.policies.push({ trigger: match[1].trim(), worker: match[2], command: match[3], line: i + 1 });
+            currentBlock = 'policy';
+            continue;
+          }
+        }
+      }
+
+      return result;
+    }
+
+    function renderParsed(parsed) {
+      let html = '';
+
+      if (parsed.system) {
+        html += `<div class="parsed-section">
+          <h3>System: ${parsed.system.name}</h3>
+        </div>`;
+      }
+
+      if (parsed.actors.length) {
+        html += `<div class="parsed-section">
+          <h3>Actors (${parsed.actors.length})</h3>
+          ${parsed.actors.map(a => `<div class="parsed-item"><span class="label">${a.name}</span> <span class="value">${escapeHtml(a.attrs)}</span></div>`).join('')}
+        </div>`;
+      }
+
+      if (parsed.boundaries.length) {
+        html += `<div class="parsed-section">
+          <h3>Boundaries (${parsed.boundaries.length})</h3>
+          ${parsed.boundaries.map(b => `<div class="parsed-item"><span class="label">${b.name}</span> <span class="value">keys: ${escapeHtml(b.keys)}</span></div>`).join('')}
+        </div>`;
+      }
+
+      if (parsed.views.length) {
+        html += `<div class="parsed-section">
+          <h3>Views (${parsed.views.length})</h3>
+          ${parsed.views.map(v => `<div class="parsed-item"><span class="label">${v.name}</span> <span class="value">keys: ${escapeHtml(v.keys)}</span></div>`).join('')}
+        </div>`;
+      }
+
+      if (parsed.commands.length) {
+        html += `<div class="parsed-section">
+          <h3>Commands (${parsed.commands.length})</h3>
+          ${parsed.commands.map(c => `<div class="parsed-item"><span class="label">${c.actor} -> ${c.name}</span> <span class="value">${escapeHtml(c.args)}</span></div>`).join('')}
+        </div>`;
+      }
+
+      if (parsed.policies.length) {
+        html += `<div class="parsed-section">
+          <h3>Policies (${parsed.policies.length})</h3>
+          ${parsed.policies.map(p => `<div class="parsed-item"><span class="label">${p.trigger}</span> <span class="value">-> ${p.worker} -> ${p.command}</span></div>`).join('')}
+        </div>`;
+      }
+
+      if (!html) {
+        html = '<div class="empty-state">Could not parse any primitives from this file.</div>';
+      }
+
+      return html;
+    }
+
+    function loadFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        sourceView.innerHTML = `<pre>${highlightDsl(text)}</pre>`;
+        const parsed = parseDsl(text);
+        parsedView.innerHTML = renderParsed(parsed);
+        dropZone.style.display = 'none';
+      };
+      reader.readAsText(file);
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) loadFile(e.target.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+    });
+
+    // Load example files
+    async function loadExamples() {
+      try {
+        const res = await fetch('examples/');
+        // If that fails, we'll just show the known example
+      } catch (e) {
+        // ignore
+      }
+
+      const examples = [
+        { name: 'twitter.dsl', path: 'examples/twitter.dsl' }
+      ];
+
+      examples.forEach(ex => {
+        const chip = document.createElement('button');
+        chip.className = 'example-chip';
+        chip.textContent = ex.name;
+        chip.onclick = async () => {
+          try {
+            const res = await fetch(ex.path);
+            const text = await res.text();
+            sourceView.innerHTML = `<pre>${highlightDsl(text)}</pre>`;
+            const parsed = parseDsl(text);
+            parsedView.innerHTML = renderParsed(parsed);
+            dropZone.style.display = 'none';
+          } catch (err) {
+            sourceView.innerHTML = `<div class="empty-state">Could not load ${ex.path}. Make sure you're serving this directory via HTTP.</div>`;
+          }
+        };
+        examplesList.appendChild(chip);
+      });
+    }
+
+    loadExamples();
+  </script>
+</body>
+</html>
