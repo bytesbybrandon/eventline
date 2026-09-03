@@ -256,9 +256,9 @@
 
         // Actor
         if (line.startsWith('actor ')) {
-          const match = line.match(/actor\s+(\w+)\s*\{?\s*(.*)/);
+          const match = line.match(/actor\s+(\w+)\s*\{?\s*(.*?)\s*\}?$/);
           if (match) {
-            result.actors.push({ name: match[1], attrs: match[2] || '', line: i + 1 });
+            result.actors.push({ name: match[1], attrs: (match[2] || '').trim(), line: i + 1 });
             continue;
           }
         }
