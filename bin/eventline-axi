@@ -1,0 +1,176 @@
+#!/usr/bin/env node
+'use strict';
+
+const { program } = require('commander');
+const fs = require('fs');
+const path = require('path');
+
+program
+  .name('eventline-axi')
+  .description('Agent-ergonomic CLI for System Design DSL')
+  .version('1.0.0');
+
+program
+  .argument('[file]', 'DSL file to load')
+  .option('-f, --format <fmt>', 'Output format (toon|json|text)', 'toon')
+  .option('--fields <cols>', 'Comma-separated fields for list output')
+  .action((file, opts) => {
+    const model = loadModel(file);
+    if (!model) {
+      printHelp();
+      return;
+    }
+    printHome(model, opts, file);
+  });
+
+program
+  .command('parse <file>')
+  .description('Parse a DSL file and show structure')
+  .option('-f, --format <fmt>', 'Output format (toon|json|text)', 'toon')
+  .action((file, opts) => {
+    const model = loadModel(file);
+    if (!model) return;
+    const cmd = require(path.join(__dirname, '..', 'lib', 'commands', 'parse'));
+    cmd.run(model, opts);
+  });
+
+program
+  .command('actors <file>')
+  .description('List actors in the loaded model')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('actors', file, opts));
+
+program
+  .command('commands <file>')
+  .description('List commands in the loaded model')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('commands', file, opts));
+
+program
+  .command('events <file>')
+  .description('List events referenced in the model')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('events', file, opts));
+
+program
+  .command('views <file>')
+  .description('List views/projections in the model')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('views', file, opts));
+
+program
+  .command('boundaries <file>')
+  .description('List boundaries in the model')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('boundaries', file, opts));
+
+program
+  .command('policies <file>')
+  .description('List policies in the model')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('policies', file, opts));
+
+program
+  .command('deps <file> <entity>')
+  .description('Show dependencies for an entity (event|view|command)')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, entity, opts) => runSubcommand('deps', file, opts, entity));
+
+program
+  .command('validate <file>')
+  .description('Validate DSL against checklist')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => {
+    const model = loadModel(file);
+    if (!model) return;
+    const cmd = require(path.join(__dirname, '..', 'lib', 'commands', 'validate'));
+    cmd.run(model, opts);
+  });
+
+program
+  .command('graph <file>')
+  .description('Output dependency graph as DOT')
+  .option('-f, --format <fmt>', 'Output format', 'dot')
+  .action((file, opts) => runSubcommand('graph', file, opts));
+
+program
+  .command('help [cmd]')
+  .description('Show help for a command')
+  .action((cmd) => {
+    if (cmd) {
+      program.commands.find(c => c.name() === cmd)?.help();
+    } else {
+      program.help();
+    }
+  });
+
+function loadModel(file) {
+  if (!file || !fs.existsSync(file)) {
+    if (file) {
+      console.error(`error: file not found: ${file}`);
+      process.exit(1);
+    }
+    return null;
+  }
+  const Parser = require(path.join(__dirname, '..', 'lib', 'parser'));
+  const content = fs.readFileSync(file, 'utf8');
+  try {
+    return Parser.parse(content);
+  } catch (err) {
+    console.error(`error: parse failed: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+function runSubcommand(name, file, opts, ...args) {
+  const model = loadModel(file);
+  if (!model) {
+    printHelp();
+    return;
+  }
+  const cmd = require(path.join(__dirname, '..', 'lib', 'commands', name));
+  cmd.run(model, opts, ...args);
+}
+
+function printHome(model, opts, file) {
+  const Formatter = require(path.join(__dirname, '..', 'lib', 'output'));
+  const fmt = new Formatter(opts.format);
+  const lines = [];
+  lines.push(`bin: ${process.argv[1]}`);
+  lines.push(`description: System Design DSL inspector`);
+  lines.push(`file: ${file || '(none)'}`);
+  lines.push('');
+  lines.push(`counts[6]:`);
+  lines.push(`  actors: ${model.actors.length}`);
+  lines.push(`  commands: ${model.commands.length}`);
+  lines.push(`  events: ${model.events.size}`);
+  lines.push(`  views: ${model.views.length}`);
+  lines.push(`  boundaries: ${model.boundaries.length}`);
+  lines.push(`  policies: ${model.policies.length}`);
+  lines.push('');
+  if (model.system) {
+    lines.push(`system:`);
+    lines.push(`  name: ${model.system.name}`);
+    if (model.system.externals.length) lines.push(`  external: ${model.system.externals.join(', ')}`);
+    if (model.system.slo) lines.push(`  slo: ${model.system.slo}`);
+    if (model.system.region) lines.push(`  region: ${model.system.region}`);
+    if (model.system.dataClassification) lines.push(`  data-classification: ${model.system.dataClassification}`);
+    lines.push('');
+  }
+  lines.push(`help[5]:`);
+  lines.push(`  Run \`eventline-axi parse <file>\` to inspect structure`);
+  lines.push(`  Run \`eventline-axi actors <file>\` to list actors`);
+  lines.push(`  Run \`eventline-axi commands <file>\` to list commands`);
+  lines.push(`  Run \`eventline-axi validate <file>\` to check DSL`);
+  lines.push(`  Run \`eventline-axi deps <file> <entity>\` to trace dependencies`);
+  console.log(lines.join('\n'));
+}
+
+function printHelp() {
+  console.log(`error: no DSL file loaded. Usage: eventline-axi <file>`);
+  console.log(`help[2]:`);
+  console.log(`  Run \`eventline-axi examples/twitter-pure.dsl\` to inspect a model`);
+  console.log(`  Run \`eventline-axi --help\` for all commands`);
+}
+
+program.parse();

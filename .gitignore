@@ -1,9 +1,17 @@
 .remember/
 .env
 .env.*
+.env.local
 node_modules/
 dist/
 build/
+out/
 *.log
 *.tmp
 *.tgz
+*.swp
+*~
+.DS_Store
+Thumbs.db
+coverage/
+.nyc_output/
