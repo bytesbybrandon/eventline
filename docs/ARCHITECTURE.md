@@ -43,6 +43,7 @@ node scripts/build-site.js
 
 The playground on the landing page runs `site/eventline.js`, which is `lib/index.js` bundled for the browser, so it uses the same parser, checks and board renderer as the CLI.
 The board SVG tags every node and edge with `data-id`, `data-from` and `data-to`, which the page uses to light a box's lineage.
+Command, view and policy nodes also carry `data-lines`, the source lines the parser recorded (`line` to `endLine`), so a click on a box finds its text in the playground editor and the caret finds its box.
 `test/site.test.js` fails when the page's counts, DSL listing, board, bundle or example copies drift from `examples/`.
 A model can be shared as `/eventline/#play=<base64url of the text>`; the docs use the same link.
 

@@ -93,3 +93,9 @@ test('errors say what was expected and on which line', () => {
   assert.throws(() => parse('user -> go() on [a-b]\n'), (e) => /needs at least one/.test(e.message));
   assert.throws(() => parse('a-b { x } \n'), (e) => /needs a rule/.test(e.message));
 });
+
+test('commands, views and policies know where their block ends, without the comments after it', () => {
+  const m = parse(['view A(id) = [a-done*(id)] => {', '  n', '}', '', '// next block', 'user -> go(id)', 'on [a-done(id)]', '  --[default]--> [', '    went { id }', '  ]', '', '// trailing note', ''].join('\n'));
+  assert.deepEqual([m.views[0].line, m.views[0].endLine], [1, 3]);
+  assert.deepEqual([m.commands[0].line, m.commands[0].endLine], [6, 10]);
+});

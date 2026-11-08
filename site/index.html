@@ -212,8 +212,9 @@
 
     <div class="pg__grid" id="pg" data-state="idle">
       <div class="pg__ed">
-        <div class="pg__bar"><span class="sc-label">model.dsl</span><span class="pg__hint">Editable</span></div>
+        <div class="pg__bar"><span class="sc-label">model.dsl</span><span class="pg__hint">Click a box to find its lines</span></div>
         <div class="pg__code">
+          <div class="pg__hl" aria-hidden="true"><div class="pg__hl-in" id="pg-hl"></div></div>
           <pre class="pg__mirror" id="pg-mirror" aria-hidden="true"><code></code></pre>
           <textarea id="pg-text" class="pg__area" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="eventline model, editable. The board beside it updates as you type." aria-describedby="pg-status"></textarea>
         </div>
@@ -222,7 +223,11 @@
         <div class="pg__bar">
           <span class="sc-label">Event Modeling board</span>
           <span class="pg__tools">
-            <button type="button" class="btn btn--quiet" id="pg-fit" aria-pressed="true">Fit to panel</button>
+            <span class="pg__hint pg__hint--pan">Ctrl + scroll to zoom, drag to pan</span>
+            <button type="button" class="btn btn--quiet pg__z" id="pg-zout" aria-label="Zoom out">&minus;</button>
+            <output class="pg__zv" id="pg-zv" aria-live="polite">Fit</output>
+            <button type="button" class="btn btn--quiet pg__z" id="pg-zin" aria-label="Zoom in">+</button>
+            <button type="button" class="btn btn--quiet" id="pg-fit" aria-pressed="true">Fit</button>
           </span>
         </div>
         <div class="pg__board is-fit" id="pg-board"><p class="pg__empty">The board appears here. Scroll this section into view and it loads.</p></div>
