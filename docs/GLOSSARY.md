@@ -134,6 +134,15 @@ boundary UserRateLimit(userId, currentMinute)
   @replication(mode="async", lag_sla="<5s")
 ```
 
+**Stating the boundary on a command:** a command names the boundary it decides in with `in BoundaryName(key)` after its parameters.
+
+```text
+user -> postTweet(content, media?) in UserTimeline(userId)
+```
+
+Tools use the clause to bracket the command and its events on an Event Modeling board.
+Without it a model still parses, and `eventline-axi validate` notes that the command does not say which boundary it is in.
+
 ---
 
 ### Policy
