@@ -73,6 +73,19 @@ A command a policy calls but nobody declared is drawn dashed and marked "not mod
 The model does not say which container calls an outside service, so no arrow is drawn into one.
 The deployment view needs `region:` in the system block and assumes each region runs the whole stack unless a boundary says `@cost(regions=n)`.
 
+## Use as a library
+
+```js
+import { parse, check, render, ParseError, KINDS } from 'eventline-axi';
+
+const model = parse(text);              // throws ParseError with .line on bad input
+const issues = check(model);            // same rules as `validate`
+const svg = render(model, 'contextmap'); // kinds: KINDS; formats: svg (default), mermaid, dot
+```
+
+These are pure functions with no I/O, no Node built-ins and no dependencies, so they bundle for a browser.
+`render` throws an error with `code` `NO_REGIONS` or `NO_CONTEXTS` when there is nothing to draw.
+
 ## Output Formats
 
 - `toon` (default) - Token-efficient structured output

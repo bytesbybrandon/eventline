@@ -15,9 +15,10 @@ A short map of the code, for people changing it.
 | Model | `lib/model.js` | Holds the statements and, after `finalize()`, an event index: who emits each event, who reads it, which facts nobody emits. |
 | Commands | `lib/commands/*.js` | One file per CLI command. They read the model and print. |
 | Board | `lib/diagram/board.js` | Builds the Event Modeling board: lanes, columns, slices, boundary brackets. |
-| System diagrams | `lib/diagram/system.js` | Builds context, containers, data flow and deployment as one generic graph. |
+| System diagrams | `lib/diagram/system.js` | Builds context, containers, data flow, deployment and the context map as one generic graph. |
 | Layout | `lib/diagram/layout.js` | Layering shared by the diagrams. Edges that close a loop are set aside, so loops never break placement. |
 | Renderers | `lib/diagram/svg.js`, `export.js` | SVG with no dependencies. Mermaid and DOT from the same graph. |
+| Library entry | `lib/index.js`, `lib/diagram/index.js` | The public API: `parse`, `check`, `render`. Nothing in this path touches the file system. |
 
 ## One rule
 
