@@ -29,7 +29,6 @@ export const PAGES = {
   'docs/TWITTER-TRANSLATION.md': 'twitter-translation',
   'docs/INTERVIEW_SIMULATION.md': 'interview-simulation',
   'docs/ARCHITECTURE.md': 'architecture',
-  'docs/DYAD-BRIEF.md': 'dyad-brief',
   'EVENTLINE-AXI.md': 'eventline-axi',
   'CONTRIBUTING.md': 'contributing',
 };
@@ -63,7 +62,6 @@ export const LABELS = {
   'interview-simulation': 'Interview simulation',
   architecture: 'Architecture',
   contributing: 'Contributing',
-  'dyad-brief': 'Brief for Dyad',
 };
 
 export const titleOf = (source, from) => {

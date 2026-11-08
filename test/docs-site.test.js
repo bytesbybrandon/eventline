@@ -26,7 +26,7 @@ test('links between docs become site routes, and links to other repo files becom
   assert.equal(rewriteLink('./LANGUAGE.md', 'docs/README.md'), '/eventline/docs/language/');
   assert.equal(rewriteLink('../EVENTLINE-AXI.md#derived-diagrams', 'docs/README.md'), '/eventline/docs/eventline-axi/#derived-diagrams');
   assert.equal(rewriteLink('./docs/README.md', 'CONTRIBUTING.md'), '/eventline/docs/');
-  assert.equal(rewriteLink('./dyad/slicerm.dsl', 'docs/DYAD-BRIEF.md'), 'https://github.com/bytesbybrandon/eventline/blob/main/docs/dyad/slicerm.dsl');
+  assert.equal(rewriteLink('../examples/billing.dsl', 'docs/EXAMPLES.md'), 'https://github.com/bytesbybrandon/eventline/blob/main/examples/billing.dsl');
   assert.equal(rewriteLink('../examples', 'docs/EXAMPLES.md'), 'https://github.com/bytesbybrandon/eventline/tree/main/examples');
   for (const same of ['https://eventmodeling.org', '#section', 'mailto:a@b.c']) assert.equal(rewriteLink(same, 'docs/README.md'), null);
 });
