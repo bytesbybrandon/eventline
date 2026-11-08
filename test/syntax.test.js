@@ -169,3 +169,49 @@ test('triggers command lists each screen, endpoint or other trigger with who use
     ['AuditingScreen', '', '', 'view V'],
   ]);
 });
+
+test('strings: \\" \\\\ and \\n are unescaped, and a quote or comma inside a string does not end the value', () => {
+  const m = parse('user -> go() @note("say \\"hi, there\\" and \\\\ back\\nnext") @story("a \\"b\\"")\n  --[default]--> [a-b]\n');
+  assert.deepEqual(m.commands[0].notes, ['say "hi, there" and \\ back\nnext']);
+  assert.equal(m.commands[0].annotations.story._[0], 'a "b"');
+});
+
+test('comments: // starts one after a space or at a line start, never inside a URL', () => {
+  const m = parse('context A {\n  description: See https://x.dev/y for more // a comment\n  infrastructure: db://host\n  user -> go() @note("http://x") // trailing\n    --[default]--> [a-b]\n}\n');
+  assert.equal(m.contexts[0].description, 'See https://x.dev/y for more');
+  assert.equal(m.contexts[0].attrs.infrastructure, 'db://host');
+  assert.deepEqual(m.commands[0].notes, ['http://x']);
+});
+
+test('@source names where a translation comes from, and validate wants a system', () => {
+  const src = (a) => `system S { external: carrier (translator) }\ncarrier -> accept() ${a}\n  --[default]--> [a-b]\n`;
+  assert.deepEqual(parse(src('@source(system="Carrier", version="v2")')).commands[0].source, { system: 'Carrier', version: 'v2' });
+  assert.equal(parse(src('')).commands[0].source, null);
+  assert.ok(rules(src('@source(version="v2")')).includes('warn:source-system'));
+  assert.ok(!rules(src('@source(system="Carrier", version="v2")')).includes('warn:source-system'));
+  const b = buildBoard(parse(src('@source(system="Carrier", version="v2")')));
+  assert.ok(b.nodes.find((n) => n.id === 'cmd:accept').notes.includes('translates from Carrier v2'));
+});
+
+test('@query says how a view is read, and validate wants one, list or page', () => {
+  const v = (q) => `view V(id) = [a-b] => { x } ${q}\n`;
+  assert.deepEqual(parse(v('@query(returns=list, spec="the open ones")')).views[0].query, { returns: 'list', spec: 'the open ones' });
+  assert.equal(parse(v('')).views[0].query, null);
+  assert.ok(rules(v('@query(returns=many)')).includes('warn:query-returns'));
+  assert.ok(!rules(v('@query(returns=page)')).includes('warn:query-returns'));
+});
+
+test('@projection with a @trigger is contradictory', () => {
+  const v = (a) => `view V(id) = [a-b] => { x } ${a}\n`;
+  assert.ok(rules(v('@projection @trigger(type=ui, name="X")')).includes('warn:projection-trigger'));
+  assert.ok(!rules(v('@projection')).includes('warn:projection-trigger'));
+  assert.equal(parse(v('@projection')).views[0].annotations.projection, true);
+});
+
+test('from [...] can mark a read @optional, shown on the board; on [...] cannot', () => {
+  const m = parse('user -> go()\n  from [V(id) @optional @fresh<5s>]\n  --[default]--> [a-b]\nuser -> two()\n  on [x-y @optional]\n  --[default]--> [c-d]\n');
+  assert.deepEqual([m.commands[0].from[0].optional, m.commands[0].from[0].freshness], [true, '5s']);
+  assert.equal(m.commands[0].from[0].name, 'V');
+  assert.ok(check(m).some((i) => i.rule === 'optional-on' && /two/.test(i.message)));
+  assert.equal(buildBoard(m).edges.find((e) => e.kind === 'reads').label, 'fresh 5s, may be empty');
+});

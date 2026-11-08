@@ -79,7 +79,7 @@ Use the CLI only for scripts and CI.
 | Story text | `@story("As a ...")` | One line |
 | Evidence events | `on [Event, ...]` | |
 | Read-model slice, query params, fields | `view Name(p: type) = [Events] => { f: type }` | |
-| Translation slice, translator source | command with the translator as actor, `external: Name (translator)` in `system`, `@note("translates from System vN")` | |
+| Translation slice, translator source | command with the translator as actor, `external: Name (translator)` in `system`, `@source(system="Carrier", version="v2")` | |
 | Automation, interval schedule | `every N unit` then `from [ReadModel]` then `-> Worker -> command()` | |
 | Automation reads a read model | `from [View]` | |
 
@@ -97,7 +97,7 @@ Export may write them as a sidecar file or leave them out, and import must keep 
 | Review scores, draft elements, agents, personas, audit log | Collaboration state |
 | Board layout: lanes order, beats, placements, parked lanes | Derived; eventline lays the board out itself |
 | Named types and field definitions | Types are free text; definitions are not carried |
-| Read-model query `returns` cardinality (3 cases) | No place for it yet |
+| Read-model query specification | Carried by `@query(returns, spec)`; only the shape of results beyond that is not |
 | Read models used by an automation but with no view slice (2) | `validate` flags them as `from-facts`; declare a view for each |
 
 ## 6. Candidate SliceRM features
@@ -162,7 +162,7 @@ It carries what F1 currently writes as `@note("Lane uses ScreenName")` and count
 - Import: each `@trigger` becomes a trigger element with that type, its parts as trigger views, and the route as the use's exposure.
 - Automations and translators are not triggers.
   An automation stays a timer policy.
-  A translator stays an external actor with its `@note("translates from ...")`.
+  A translator stays an external actor, with `@source(system, version)` for where it translates from.
 - Acceptance: the "trigger types and routes" and "what a trigger reads" counts drop to what the language cannot hold.
 - Acceptance: `eventline-axi triggers` on the export lists every screen with its parts and routes.
 - Acceptance: export, import, export is byte identical for a model with several parts and routes on one screen.

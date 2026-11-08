@@ -399,3 +399,46 @@ The usual choices are `text`, `number`, `id`, `datetime`, `yesno`, `list[T]` and
 `kebab` is the default and means `{aggregate}-{verb}`.
 `pascal` accepts `AccountCreated`.
 `none` turns the check off.
+
+### Translation source
+
+```text
+carrier -> acceptShipment(shipmentId: id) @source(system="Carrier", version="v2")
+  --[default]--> [shipment-accepted]
+```
+
+`@source(system, version)` on a command says which outside system, and which version of its contract, the command translates from.
+The actor is the translator, declared in `system { external: carrier (translator) }`.
+`validate` warns when `system` is missing.
+
+### Reading a view
+
+```text
+view OpenInvoices(accountId: id) = [invoice-opened*(accountId)] => { invoiceId: id } @query(returns=list, spec="the open invoices of an account")
+view Totals(accountId: id) = [invoice-opened*(accountId)] => { sum: number } @projection
+```
+
+`@query(returns, spec)` says how a view is read: `returns` is `one`, `list` or `page`, and `spec` is a line of plain words.
+`@projection` marks a view that other parts of the model read and no screen ever shows.
+`validate` warns when a `@projection` view has a `@trigger`, or a `@query` has another `returns` value.
+
+A read that can find nothing the first time, such as a duplicate check before the first record, is marked `from [Existing(id) @optional]`.
+`@optional` only belongs in `from`, never in `on`.
+
+### Strings, comments and repeated blocks
+
+- Inside a string, `\"` is a quote, `\\` is a backslash and `\n` is a line break.
+- A comment starts at `//` when it begins a line or follows a space, so `https://example.com` and `db://host` are safe in values.
+- A command written twice with the same actor and name is one command with more branches and facts.
+  Each block keeps its own annotations, such as its own `@slice`, and the board draws one command.
+
+### Conventions that need no syntax
+
+These are plain attributes or annotations that tools can rely on.
+
+- `ports: a, b` and `implements: a` on a context keep the ports a core declares and the ports an adapter implements.
+  `validate` does not check them yet.
+- `language: 1.2` in the `system` block records which version of the language wrote the file.
+  A tool can refuse a file that names a newer one than it knows.
+- `@description("...")` on a command or view holds free text.
+  Events have no place for one.
