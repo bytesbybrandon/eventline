@@ -1,0 +1,56 @@
+/* The landing page's tokens: two faces, one accent, a deep navy canvas. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/eventline/docs/fonts/bricolage-grotesque.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/eventline/docs/fonts/jetbrains-mono.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+:root {
+  --sl-font: "Bricolage Grotesque", system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root,
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #3b3200;
+  --sl-color-accent: #b89a00;
+  --sl-color-accent-high: #ffd400;
+  --sl-color-white: #f3f5fa;
+  --sl-color-gray-1: #e4e8f3;
+  --sl-color-gray-2: #c2cadd;
+  --sl-color-gray-3: #98a3c0;
+  --sl-color-gray-4: #5b6688;
+  --sl-color-gray-5: #232c47;
+  --sl-color-gray-6: #121a2e;
+  --sl-color-black: #0a0e1a;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #fff1a6;
+  --sl-color-accent: #8a6f00;
+  --sl-color-accent-high: #5e4a00;
+  --sl-color-white: #0a0e1a;
+  --sl-color-gray-1: #1c233b;
+  --sl-color-gray-2: #38425f;
+  --sl-color-gray-3: #59627d;
+  --sl-color-gray-4: #8a93ab;
+  --sl-color-gray-5: #cfd6e6;
+  --sl-color-gray-6: #eef2f8;
+  --sl-color-gray-7: #f7f9fc;
+  --sl-color-black: #ffffff;
+}
+
+h1, h2, h3 { font-weight: 650; }
+
+/* Diagrams come in a light and a dark drawing. Show the one that matches the theme. */
+.sl-markdown-content img.only-light,
+.sl-markdown-content img.only-dark { display: none; max-width: 100%; height: auto; }
+:root[data-theme="light"] .sl-markdown-content img.only-light { display: block; }
+:root:not([data-theme="light"]) .sl-markdown-content img.only-dark { display: block; }

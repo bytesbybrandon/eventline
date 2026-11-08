@@ -1,0 +1,6 @@
+dist/
+.astro/
+src/content/docs/
+public/diagrams/
+public/fonts/
+node_modules/

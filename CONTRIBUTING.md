@@ -23,6 +23,7 @@ Contributions should stay focused on clarity, correctness and examples.
 - After changing an example or the diagram code, run `node scripts/build-site.js`. The site tests fail if you forget.
 - Write documentation with one sentence per line.
 - Keep local machine paths, secrets and session artifacts out of the repo.
+- A new file in `docs/` also needs a page entry for the docs site; see [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md). The tests tell you what is missing.
 
 ## Where things are
 
