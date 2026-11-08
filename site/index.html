@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>eventline · Design systems as events</title>
+<meta name="description" content="eventline describes any system as commands, events, and views, built on Event Modeling and DCB. Fire a few commands and watch the timeline fill.">
+<link rel="canonical" href="https://bytesbybrandon.github.io/eventline/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="eventline">
+<meta property="og:title" content="eventline · Design systems as events">
+<meta property="og:description" content="Every system is a series of events. Describe yours with commands, events, and views.">
+<meta property="og:url" content="https://bytesbybrandon.github.io/eventline/">
+<meta property="og:image" content="https://bytesbybrandon.github.io/eventline/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="eventline, with a line of events streaming left to right">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0a0e1a">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"eventline","description":"A system design notation based on Event Modeling and Dynamic Consistency Boundaries, with a CLI that inspects and validates models.","applicationCategory":"DeveloperApplication","url":"https://bytesbybrandon.github.io/eventline/","license":"https://opensource.org/licenses/MIT"}</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/bricolage-grotesque.woff2" crossorigin>
+<link rel="stylesheet" href="frontstage.css">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<a class="sc-skip" href="#top">Skip to content</a>
+
+<header class="bar">
+  <a class="bar__mark" href="#spark" aria-label="eventline, back to the top">
+    <svg width="28" height="18" viewBox="0 0 28 18" aria-hidden="true" focusable="false"><path d="M1 13h6l4-9 5 12 4-8h4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="8" r="2.2" fill="var(--sc-accent)"/></svg>
+    <span>eventline</span>
+  </a>
+  <nav class="bar__nav" aria-label="Scenes">
+    <a href="#premise">Why events</a>
+    <a href="#model">Model</a>
+    <a href="#proof">Proof</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <span class="bar__ev" id="rail-ev" aria-hidden="true">page-opened</span>
+  <button class="bar__log" id="log-open" type="button" aria-haspopup="dialog">Event log</button>
+  <a class="cta cta--bar" href="#run">Run it</a>
+</header>
+
+<main id="top">
+
+  <!-- 1 · SPARK: pointer. The hero is the surface already in a state. -->
+  <section id="spark" class="scene scene--dark pf-hero" data-scene="spark" aria-labelledby="spark-h">
+    <div class="pf-hero__copy sc-stack">
+      <h1 id="spark-h" class="sc-display sc-display--xl" elementtiming="hero">Design systems the way they happen.</h1>
+      <p class="sc-lede">eventline describes any system as commands, events, and views. Fire a few and watch the timeline fill.</p>
+      <a class="cta" href="#run">Run it</a>
+    </div>
+
+    <div class="pf-console" role="group" aria-labelledby="console-h">
+      <p id="console-h" class="sc-label">Try it. Sample data, running in your browser.</p>
+      <div class="pf-console__btns">
+        <button type="button" class="btn" data-fire="postTweet">postTweet</button>
+        <button type="button" class="btn" data-fire="likeTweet">likeTweet</button>
+        <button type="button" class="btn" data-fire="followUser">followUser</button>
+      </div>
+      <div class="pf-console__code">
+        <pre class="code pf-code" data-cmd="postTweet" tabindex="0" aria-label="postTweet in eventline"><code><span class="ln" data-n="34">user -&gt; <span class="t-cmd">postTweet</span>(content, media?)</span><span class="ln" data-n="35"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln" data-n="36">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln" data-n="37">  --[default]--&gt; [</span><span class="ln" data-n="38">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln" data-n="39">  ]</span></code></pre>
+        <pre class="code pf-code" data-cmd="likeTweet" hidden tabindex="0" aria-label="likeTweet in eventline"><code><span class="ln" data-n="48">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId)</span><span class="ln" data-n="49"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln" data-n="50">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln" data-n="51">  --[default]--&gt; [</span><span class="ln" data-n="52">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln" data-n="53">  ]</span></code></pre>
+        <pre class="code pf-code" data-cmd="followUser" hidden tabindex="0" aria-label="followUser in eventline"><code><span class="ln" data-n="41">user -&gt; <span class="t-cmd">followUser</span>(targetUserId)</span><span class="ln" data-n="42"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln" data-n="43">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln" data-n="44">  --[default]--&gt; [</span><span class="ln" data-n="45">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln" data-n="46">  ]</span></code></pre>
+      </div>
+      <p class="pf-status" id="hero-status" role="status">Pick a command. The guard on each line decides which events it emits.</p>
+      <dl class="pf-views" aria-label="Views folded from the stream">
+        <div><dt>UserTimeline</dt><dd id="v-tweets">0 tweets</dd></div>
+        <div><dt>Likes</dt><dd id="v-likes">0</dd></div>
+        <div><dt>Follows</dt><dd id="v-follows">0</dd></div>
+      </dl>
+    </div>
+
+    <div class="pf-lane">
+      <div class="pf-lane__head">
+        <span class="sc-label">Event stream, sample traffic plus yours</span>
+        <button type="button" class="btn btn--quiet" id="lane-pause" aria-pressed="false">Pause stream</button>
+      </div>
+      <div class="pf-lane__view" id="lane-view" aria-hidden="true"><div class="pf-lane__track" id="lane-track"></div></div>
+    </div>
+  </section>
+
+  <!-- 2 · PREMISE: reveal. A wipe is a change of state. -->
+  <section id="premise" class="scene scene--light" data-scene="premise" data-sc-act="pin" data-sc-span="1.7" aria-labelledby="premise-h">
+    <div data-sc-stage class="pf-premise">
+      <div class="pf-premise__copy sc-stack">
+        <h2 id="premise-h" class="sc-display sc-display--lg" data-sc-cue="0 0.94 0">Boxes show where. Events show what happened.</h2>
+        <p class="sc-body" data-sc-cue="0 0.94 0">Draw a rate limiter as services and it looks like nothing else you have drawn. Write it as events and it looks like every other system.</p>
+      </div>
+      <figure class="pf-swap" aria-label="The same rate limiter, drawn as boxes and then written as events">
+        <div class="pf-swap__a">
+          <p class="sc-label">Drawn as boxes</p>
+          <ol class="pf-chain">
+            <li><span class="node node--box">Client</span></li>
+            <li><span class="node node--box">API gateway</span></li>
+            <li><span class="node node--box">Rate limiter</span></li>
+            <li><span class="node node--box">Redis</span></li>
+          </ol>
+        </div>
+        <div class="pf-swap__b" data-sc-reveal="left" data-sc-reveal-at="0.2 0.68">
+          <p class="sc-label">Written as events</p>
+          <ol class="pf-chain">
+            <li><span class="node node--ev">user-authenticated</span><code>{ userId }</code></li>
+            <li><span class="node node--ev">request-logged</span><code>{ userId, resourceId }</code></li>
+            <li><span class="node node--ev">rate-limit-reached</span><code>{ userId, retryAfter: 60s }</code></li>
+            <li><span class="node node--view">UserQuota(userId)</span><code>a view folded from the events</code></li>
+          </ol>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 3 · MODEL: pan. An Event Modeling board, with DCB drawn on it. -->
+  <section id="model" class="scene scene--mid" data-scene="model" data-sc-act="pan" data-sc-span="2.2" aria-labelledby="model-h">
+    <div data-sc-stage class="pf-board">
+      <div class="pf-board__grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="pf-board__lanes" aria-hidden="true"><span>Command</span><span>Event</span><span>View</span><span>Policy</span></div>
+      <div class="pf-board__rail" data-sc-pan="0.04">
+        <div class="pf-board__lead sc-stack">
+          <h2 id="model-h" class="sc-display sc-display--md">Four slices, one timeline.</h2>
+          <p class="sc-body">eventline maps one to one onto the four slice patterns of Event Modeling. Read the board left to right and you are reading time.</p>
+        </div>
+
+        <article class="slice slice--change">
+          <span class="item item--cmd">postTweet(content)</span>
+          <span class="item item--ev">tweet-created</span>
+          <div class="slice__cap"><h3>State change</h3><p>A command checks the facts and decides. The decision is recorded as events.</p></div>
+        </article>
+
+        <article class="slice slice--view">
+          <span class="item item--ev">tweet-created</span>
+          <span class="item item--view">UserTimeline(userId)</span>
+          <div class="slice__cap"><h3>State view</h3><p>A view folds events into exactly the shape a screen needs.</p></div>
+        </article>
+
+        <article class="slice slice--auto">
+          <span class="item item--cmd">sendLikeNotification</span>
+          <span class="item item--ev">tweet-liked</span>
+          <span class="item item--pol">notification-worker</span>
+          <div class="slice__cap"><h3>Automation</h3><p>An event wakes a worker, and the worker issues the next command.</p></div>
+        </article>
+
+        <article class="slice slice--xlate">
+          <span class="item item--cmd">ingestCharge(invoiceId, ...)</span>
+          <span class="item item--ev">payment-captured</span>
+          <div class="slice__cap"><h3>Translation</h3><p>A webhook from the outside enters as a command and leaves as an event.</p></div>
+        </article>
+
+        <article class="slice slice--dcb">
+          <span class="item item--ev">tweet-created</span>
+          <span class="item item--ev item--ev2">user-followed</span>
+          <span class="item item--bound">UserTimeline(userId)</span>
+          <div class="slice__cap"><h3>Consistency boundary</h3><p>A decision reads only the events behind its key. No giant aggregate, no global lock.</p></div>
+        </article>
+
+        <div class="pf-board__end sc-stack">
+          <p class="sc-lede">Boundaries can also carry time, cost, and ops notes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · PROOF: pin. The peak. A whole API held on screen while its events fire. -->
+  <section id="proof" class="scene scene--deep" data-scene="proof" data-sc-act="pin" data-sc-span="4" aria-labelledby="proof-h">
+    <div data-sc-stage class="pf-proof" id="proof-stage" data-final="0">
+      <h2 id="proof-h" class="sc-display sc-display--md pf-proof__title" data-sc-cue="0 0.8 0">A whole API in 75 lines.</h2>
+
+      <div class="pf-proof__code" role="region" aria-label="twitter-pure.dsl" tabindex="0">
+        <div class="pf-code__inner" id="proof-code">
+          <div class="blk" data-blk="sys"><span class="ln"><span class="t-kw">system</span> TwitterAPI {</span><span class="ln">  <span class="t-kw">external</span>: stripe (payments), sentry (monitoring), cloudfront (cdn)</span><span class="ln">  <span class="t-kw">slo</span>: 99.95% uptime, p99 &lt; 100ms</span><span class="ln">  <span class="t-kw">region</span>: us-primary, eu-secondary, ap-southeast</span><span class="ln">  <span class="t-kw">data-classification</span>: public, pii</span><span class="ln">}</span></div>
+          <div class="blk" data-blk="actors"><span class="ln"><span class="t-kw">actor</span> User { <span class="t-kw">auth</span>: session, <span class="t-kw">tier</span>: free|pro|enterprise }</span><span class="ln"><span class="t-kw">actor</span> Admin { <span class="t-kw">auth</span>: oauth, mfa: required }</span><span class="ln"><span class="t-kw">actor</span> Visitor { <span class="t-kw">auth</span>: none }</span></div>
+          <div class="blk" data-blk="bounds"><span class="ln"><span class="t-kw">boundary</span> TweetFeed(tweetId) <span class="t-an">@partition</span>(shardKey=<span class="t-str">"tweetId"</span>)</span><span class="ln"><span class="t-kw">boundary</span> UserTimeline(userId) <span class="t-an">@partition</span>(shardKey=<span class="t-str">"userId"</span>)</span><span class="ln"><span class="t-kw">boundary</span> UserFollows(userId) <span class="t-an">@partition</span>(shardKey=<span class="t-str">"userId"</span>)</span></div>
+          <div class="blk" data-blk="v1"><span class="ln"><span class="t-kw">view</span> UserTimeline(userId) = [</span><span class="ln">  <span class="t-ev">user-followed*</span>(userId, targetUserId),</span><span class="ln">  <span class="t-ev">tweet-created*</span>(targetUserId),</span><span class="ln">  <span class="t-ev">tweet-retweeted*</span>(targetUserId)</span><span class="ln">] =&gt; {</span><span class="ln">  tweetId, userId, content, media, createdAt,</span><span class="ln">  likes: count(<span class="t-ev">tweet-liked*</span>(tweetId)),</span><span class="ln">  retweets: count(<span class="t-ev">tweet-retweeted*</span>(tweetId))</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"timeline:{userId}"</span>, ttl=5m)</span></div>
+          <div class="blk" data-blk="v2"><span class="ln"><span class="t-kw">view</span> TweetDetails(tweetId) = [<span class="t-ev">tweet-created</span>(tweetId)] =&gt; {</span><span class="ln">  content, media, createdAt, likes, retweets</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"tweet:{tweetId}"</span>, ttl=1h)</span></div>
+          <div class="blk" data-blk="v3"><span class="ln"><span class="t-kw">view</span> UserProfile(userId) = [<span class="t-ev">user-created</span>(userId), <span class="t-ev">user-updated*</span>(userId)] =&gt; {</span><span class="ln">  name, handle, bio, followers, following</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"profile:{userId}"</span>, ttl=24h)</span></div>
+          <div class="blk" data-blk="postTweet"><span class="ln">user -&gt; <span class="t-cmd">postTweet</span>(content, media?)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="followUser"><span class="ln">user -&gt; <span class="t-cmd">followUser</span>(targetUserId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="likeTweet"><span class="ln">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="retweet"><span class="ln">user -&gt; <span class="t-cmd">retweet</span>(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyRetweeted]--&gt; [<span class="t-ev">retweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-retweeted</span> { userId, tweetId, retweetedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="deleteTweet"><span class="ln">user -&gt; <span class="t-cmd">deleteTweet</span>(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-created</span>(tweetId, userId)]</span><span class="ln">  --[!isOwner]--&gt; [<span class="t-ev">delete-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-deleted</span> { tweetId, deletedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="pol1"><span class="ln"><span class="t-ev">tweet-created</span> { content, hashtags }</span><span class="ln">  --[count(<span class="t-ev">tweet-created*</span>(hashtag, window: 1h)) &gt; 10000]--&gt; <span class="t-ev">trending-analyzer</span> -&gt; [</span><span class="ln">    <span class="t-ev">trend-detected</span> { hashtag, volume, window: <span class="t-str">"1h"</span>, detectedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="pol2"><span class="ln"><span class="t-ev">tweet-liked</span> { userId, tweetId }</span><span class="ln">  -&gt; <span class="t-ev">notification-worker</span> -&gt; <span class="t-cmd">sendLikeNotification</span>(tweetId, userId)
+</span></div>
+        </div>
+      </div>
+      <div class="pf-proof__final">
+        <p class="sc-display sc-display--lg" id="final-h">Every system is a series of events.</p>
+        <p class="sc-lede">Commands decide. Events remember. Views answer.</p>
+      </div>
+
+      <div class="pf-proof__out">
+        <div class="pf-out__head">
+          <span class="sc-label">Event stream</span>
+          <button type="button" class="btn btn--quiet" id="proof-fire" disabled>Fire a command</button>
+        </div>
+        <dl class="pf-views pf-views--proof" aria-label="Views folded from the stream">
+          <div><dt>UserTimeline(u1)</dt><dd id="pv-timeline">empty</dd></div>
+          <div><dt>TweetDetails(t1)</dt><dd id="pv-tweet">not created</dd></div>
+          <div><dt>UserProfile(u2)</dt><dd id="pv-profile">0 followers</dd></div>
+        </dl>
+        <ol class="pf-stream" id="proof-stream" aria-label="Events fired so far"></ol>
+        <p class="pf-status" id="proof-status" role="status">Scroll to read the model. Each command runs as you reach it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · ANSWERS: flow. -->
+  <section id="faq" class="scene scene--light pf-faq" data-scene="faq" aria-labelledby="faq-h">
+    <div class="sc-wrap pf-faq__wrap">
+      <h2 id="faq-h" class="sc-display sc-display--lg" data-sc-in>Questions, answered plainly.</h2>
+      <div class="pf-faq__list" data-sc-in data-sc-stagger="60">
+        <details name="faq">
+          <summary>Is eventline something I run in production?</summary>
+          <p>No. It is a notation for describing a system, plus a CLI that reads your model files and reports on them. The demos on this page run a small stand-in for a real system, in your browser, so you can see what a model means.</p>
+        </details>
+        <details name="faq">
+          <summary>Do I need to know Event Modeling first?</summary>
+          <p>No. If you do, the mapping is direct: state change, state view, automation, and translation slices each have a line shape in eventline. If you do not, start with a command, the events it can produce, and a view that reads them.</p>
+        </details>
+        <details name="faq">
+          <summary>What is a Dynamic Consistency Boundary?</summary>
+          <p>It scopes a decision by a key, such as <code>userId</code>, instead of by an aggregate. A command reads only the events inside its boundary, so two users never contend for the same lock.</p>
+        </details>
+        <details name="faq">
+          <summary>Can I use it in a system design interview?</summary>
+          <p>That is what it was written for. Introduce it as a quick event model: write the commands, events, boundaries, and views before you draw infrastructure boxes. Interviewers get a precise picture of state changes, invariants, and concurrency in a few lines.</p>
+        </details>
+        <details name="faq">
+          <summary>Do I need Kafka or event sourcing infrastructure?</summary>
+          <p>No. eventline describes behavior, not infrastructure. Views name their cache or partition key as annotations, and you decide what stores the events.</p>
+        </details>
+        <details name="faq">
+          <summary>What does the eventline-axi CLI do?</summary>
+          <p>It parses a <code>.dsl</code> file and lists its actors, commands, events, views, boundaries, and policies. It traces dependencies, validates a model against the checklist, and exports the dependency graph as toon, JSON, or plain text.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · COMMIT: count. The last element on the page. -->
+  <section id="run" class="scene scene--hit pf-run" data-scene="run" aria-labelledby="run-h">
+    <div class="sc-wrap pf-run__wrap">
+      <div class="pf-run__copy sc-stack" data-sc-in data-sc-stagger="70">
+        <h2 id="run-h" class="sc-display sc-display--lg">Run it on a real model.</h2>
+        <p class="sc-lede">Download the example from this page, point the CLI at it, and get the whole model back.</p>
+        <div class="pf-cmd">
+          <input id="cmd" type="text" readonly aria-label="Command to run" value="npx -y eventline-axi twitter-pure.dsl" spellcheck="false">
+          <button type="button" class="btn btn--ink" id="copy">Copy</button>
+        </div>
+        <p class="pf-run__hint" id="copy-status" role="status"><a href="twitter-pure.dsl" download>Download twitter-pure.dsl</a> first, then run the command in the same folder.</p>
+      </div>
+      <figure class="pf-cli" data-sc-in>
+        <figcaption class="sc-label">Output, abridged</figcaption>
+<pre class="pf-cli__out" aria-label="eventline-axi output for twitter-pure.dsl"><code>counts[6]:
+  actors: <span data-sc-count="0 3">3</span>
+  commands: <span data-sc-count="0 5">5</span>
+  events: <span data-sc-count="0 10">10</span>
+  views: <span data-sc-count="0 3">3</span>
+  boundaries: <span data-sc-count="0 3">3</span>
+  policies: <span data-sc-count="0 2">2</span>
+
+system:
+  name: TwitterAPI</code></pre>
+      </figure>
+    </div>
+    <footer class="pf-foot">
+      <p>eventline is MIT licensed. The live demos on this page run sample data in your browser.</p>
+      <p><a href="https://github.com/bytesbybrandon/eventline">Source on GitHub</a></p>
+    </footer>
+  </section>
+
+</main>
+
+<dialog id="log" class="pf-log" aria-labelledby="log-h">
+  <form method="dialog" class="pf-log__bar">
+    <h2 id="log-h">Event log</h2>
+    <button class="btn btn--quiet" autofocus>Close</button>
+  </form>
+  <p class="pf-log__note">Scrolling into a scene and every command you fire is appended here. The highlighted link in the top bar is a view folded from this log.</p>
+  <ol class="pf-log__list" id="log-list"></ol>
+</dialog>
+
+<script src="frontstage.js"></script>
+<script src="site.js"></script>
+</body>
+</html>
