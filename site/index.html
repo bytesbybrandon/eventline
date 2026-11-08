@@ -220,17 +220,26 @@
         </div>
       </div>
       <div class="pg__bd">
-        <div class="pg__bar">
-          <span class="sc-label">Event Modeling board</span>
+        <div class="pg__bar pg__bar--kinds">
+          <div class="pg__kinds" role="tablist" aria-label="Diagram, all derived from the model on the left">
+            <button type="button" role="tab" class="pg__kind" data-kind="eventmodel" aria-selected="true">Event model</button>
+            <button type="button" role="tab" class="pg__kind" data-kind="context" aria-selected="false" tabindex="-1">Context</button>
+            <button type="button" role="tab" class="pg__kind" data-kind="containers" aria-selected="false" tabindex="-1">Containers</button>
+            <button type="button" role="tab" class="pg__kind" data-kind="dataflow" aria-selected="false" tabindex="-1">Data flow</button>
+            <button type="button" role="tab" class="pg__kind" data-kind="deployment" aria-selected="false" tabindex="-1">Deployment</button>
+            <button type="button" role="tab" class="pg__kind" data-kind="contextmap" aria-selected="false" tabindex="-1">Context map</button>
+          </div>
           <span class="pg__tools">
-            <span class="pg__hint pg__hint--pan">Ctrl + scroll to zoom, drag to pan</span>
-            <button type="button" class="btn btn--quiet pg__z" id="pg-zout" aria-label="Zoom out">&minus;</button>
-            <output class="pg__zv" id="pg-zv" aria-live="polite">Fit</output>
-            <button type="button" class="btn btn--quiet pg__z" id="pg-zin" aria-label="Zoom in">+</button>
-            <button type="button" class="btn btn--quiet" id="pg-fit" aria-pressed="true">Fit</button>
+            <button type="button" class="btn btn--quiet" id="pg-links" aria-pressed="false" title="Each box that leads somewhere links to the same thing in another diagram">Links</button>
           </span>
         </div>
-        <div class="pg__board is-fit" id="pg-board"><p class="pg__empty">The board appears here. Scroll this section into view and it loads.</p></div>
+        <div class="pg__board is-fit" id="pg-board" role="tabpanel"><p class="pg__empty">The board appears here. Scroll this section into view and it loads.</p></div>
+        <div class="pg__zoom" role="group" aria-label="Zoom">
+          <button type="button" class="pg__z" id="pg-zout" aria-label="Zoom out">&minus;</button>
+          <output class="pg__zv" id="pg-zv" aria-live="polite">Fit</output>
+          <button type="button" class="pg__z" id="pg-zin" aria-label="Zoom in">+</button>
+          <button type="button" class="pg__z pg__z--fit" id="pg-fit" aria-pressed="true">Fit</button>
+        </div>
       </div>
     </div>
 
@@ -243,7 +252,7 @@
       <div class="pg__out">
         <button type="button" class="btn" id="pg-share">Copy share link</button>
         <button type="button" class="btn" id="pg-dsl">Download .dsl</button>
-        <button type="button" class="btn" id="pg-svg">Download board.svg</button>
+        <button type="button" class="btn" id="pg-svg">Download event-model.svg</button>
       </div>
     </div>
   </section>

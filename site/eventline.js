@@ -8,9 +8,10 @@ function (module, exports, __r) {
 /* Public API: parse a model, check it, draw it. Pure functions, no I/O, safe to bundle for a browser. */
 const { parse, ParseError } = __r(1);
 const { check } = __r(3);
-const { render, KINDS } = __r(5);
+const { render, KINDS } = __r(9);
+const { linkMap } = __r(4);
 
-module.exports = { parse, ParseError, check, render, KINDS };
+module.exports = { parse, ParseError, check, render, linkMap, KINDS };
 
 },
 function (module, exports, __r) {
@@ -647,6 +648,8 @@ module.exports = Model;
 function (module, exports, __r) {
 'use strict';
 
+const { linkIssues } = __r(4);
+
 const NAMING = {
   kebab: { re: /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/, hint: '{aggregate}-{verb}' },
   pascal: { re: /^[A-Z][A-Za-z0-9]*$/, hint: 'PascalCase, like AccountCreated' },
@@ -752,13 +755,14 @@ function check(model) {
   if (assumed.length) add('info', 'assumed-events', `No command or policy emits: ${assumed.join(', ')}. The model assumes these facts.`);
 
   if (model.boundaries.length === 0 && model.commands.length) add('info', 'boundaries', 'No boundary declared; commands have no stated consistency scope');
+  for (const i of linkIssues(model)) add(i.severity, i.rule, i.message, i.line);
   return issues;
 }
 
 module.exports = {
   check,
   run(model, opts) {
-    const Formatter = __r(4);
+    const Formatter = __r(8);
     const fmt = new Formatter(opts.format);
     const issues = check(model);
     if (opts.format === 'json') { console.log(fmt.json(issues)); return; }
@@ -773,94 +777,202 @@ module.exports = {
 function (module, exports, __r) {
 'use strict';
 
-class Formatter {
-  constructor(format = 'toon') {
-    this.format = format;
-  }
+/*
+ * Links between the diagrams of one model.
+ *
+ * Each diagram names its boxes its own way, but they share a vocabulary: cmd:Name, view:Name,
+ * worker:Name (pol:Name on the board), actor:slug. So a box can lead to the same thing seen from
+ * another level: the system context opens the containers, a container opens its data flow or its
+ * place on the event model board, a shard opens the boundary it holds.
+ *
+ * Those links are derived, so they cannot drift. An @link annotation on a command, view, policy or
+ * boundary replaces the derived links of that element:
+ *
+ *   @link(to="containers", node="view:Orders", label="Where Orders is stored")
+ *   @link(url="https://wiki.example.com/runbooks/orders")
+ *
+ * linkMap() returns { diagram: { boxId: [ { diagram, node, label, url } ] } }. A target that does not
+ * exist in this model (no regions, no contexts, a box that is not drawn) is dropped.
+ */
 
-  toon(header, rows, fields) {
-    if (!rows || rows.length === 0) {
-      return `${header}: 0 results\n`;
-    }
-    const cols = fields || Object.keys(rows[0]);
-    let out = `${header}[${rows.length}]{${cols.join(',')}}:\n`;
-    for (const row of rows) {
-      out += '  ' + cols.map(c => this._cell(row[c])).join(',') + '\n';
-    }
-    return out;
-  }
+const { KINDS, NAMES } = __r(5);
+const { buildBoard } = __r(6);
+const { BUILDERS } = __r(7);
 
-  json(data) {
-    return JSON.stringify(data, null, 2) + '\n';
-  }
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const SKIPPED = new Set(['NO_REGIONS', 'NO_CONTEXTS']);
 
-  text(header, rows, fields) {
-    if (!rows || rows.length === 0) return `${header}: (empty)\n`;
-    const cols = fields || Object.keys(rows[0]);
-    let out = `${header}:\n`;
-    for (const row of rows) {
-      out += cols.map(c => `${c}: ${row[c]}`).join(', ') + '\n';
-    }
-    return out;
-  }
-
-  _cell(val) {
-    if (val === null || val === undefined) return '';
-    const s = String(val);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  }
-
-  formatOutput(header, rows, fields) {
-    switch (this.format) {
-      case 'json': return this.json(rows);
-      case 'text': return this.text(header, rows, fields);
-      default: return this.toon(header, rows, fields);
+/* Every box and group id of every diagram that can be drawn for this model. */
+function inventory(model) {
+  const out = {};
+  for (const kind of KINDS) {
+    try {
+      const g = kind === 'eventmodel' ? buildBoard(model) : BUILDERS[kind](model);
+      out[kind] = { labels: new Map([...g.nodes, ...(g.groups || [])].map((n) => [n.id, n.label])), kinds: new Map(g.nodes.map((n) => [n.id, n.kind])) };
+    } catch (err) {
+      if (!SKIPPED.has(err.code)) throw err;
     }
   }
-
-  formatObject(header, data) {
-    if (this.format === 'json') return this.json(data);
-    if (this.format === 'text') return this.text(header, [data]);
-    const lines = [`${header}:`];
-    for (const [k, v] of Object.entries(data)) {
-      lines.push(`  ${k}: ${v}`);
-    }
-    return lines.join('\n') + '\n';
-  }
+  return out;
 }
 
-module.exports = Formatter;
+/* What each box leads to by default: [diagram, boxId?] pairs, most useful first. */
+function derive(model, inv, kind, id) {
+  const r = [];
+  const worker = (prefix) => id.slice(prefix.length);
+  switch (kind) {
+    case 'context':
+      r.push(['containers', id]);
+      break;
+    case 'containers':
+      if (id === 'sys' || /^(actor|ext):/.test(id)) r.push(['context', id]);
+      else if (id === 'api') r.push(['eventmodel']);
+      else if (id === 'store') r.push(['dataflow', 'log']);
+      else if (id.startsWith('view:')) r.push(['dataflow', id], ['eventmodel', id]);
+      else if (id.startsWith('worker:')) r.push(['dataflow', id], ['eventmodel', `pol:${worker('worker:')}`]);
+      break;
+    case 'dataflow':
+      if (id === 'log') r.push(['containers', 'store']);
+      else if (/^(actor|ext):/.test(id)) r.push(['context', id]);
+      else if (id.startsWith('cmd:')) r.push(['eventmodel', id]);
+      else if (id.startsWith('view:')) r.push(['eventmodel', id], ['containers', id]);
+      else if (id.startsWith('worker:')) r.push(['eventmodel', `pol:${worker('worker:')}`], ['containers', id]);
+      break;
+    case 'deployment': {
+      if (id.startsWith('region:')) { r.push(['containers', 'sys']); break; }
+      const m = /^[^:]+:(api|shard:.+|view:.+|worker:.+)$/.exec(id);
+      if (!m) break;
+      if (m[1] === 'api') r.push(['containers', 'api']);
+      else if (m[1].startsWith('shard:')) r.push(['eventmodel', `bnd:${m[1].slice(6)}`]);
+      else r.push(['containers', m[1]]);
+      break;
+    }
+    case 'contextmap': {
+      const name = id.slice(4);
+      const cmd = model.commands.find((c) => c.context === name);
+      const view = model.views.find((v) => v.context === name);
+      if (cmd) r.push(['eventmodel', `cmd:${cmd.name}`]);
+      else if (view) r.push(['eventmodel', `view:${view.name}`]);
+      break;
+    }
+    case 'eventmodel': {
+      const nodeKind = inv.eventmodel.kinds.get(id);
+      const label = inv.eventmodel.labels.get(id) || '';
+      if (id.startsWith('cmd:')) r.push(['dataflow', id]);
+      else if (id.startsWith('view:')) r.push(['containers', id], ['dataflow', id]);
+      else if (id.startsWith('pol:')) r.push(['containers', `worker:${id.slice(4)}`]);
+      else if (id.startsWith('evt:')) r.push(['containers', 'store']);
+      else if (id.startsWith('bnd:') && model.system && model.system.regions.length) r.push(['deployment', `${slug(model.system.regions[0])}:shard:${id.slice(4)}`]);
+      else if (nodeKind === 'actor') r.push(['context', `actor:${slug(label)}`]);
+      else if (nodeKind === 'external') r.push(['context', `ext:${slug(label)}`]);
+      break;
+    }
+    default:
+  }
+  return r;
+}
+
+/* The @link annotations of one element, as written. */
+const linksOf = (annotations) => [].concat((annotations && annotations.link) || []).filter((l) => l && typeof l === 'object');
+
+/* Every element that can carry @link, with the boxes it appears as in each diagram. */
+function elements(model, inv) {
+  const out = [];
+  const ids = (kind, test) => (inv[kind] ? [...inv[kind].labels.keys()].filter(test) : []);
+  for (const c of model.commands) out.push({ what: `command ${c.name}`, line: c.line, ranges: [[c.line, c.endLine]], links: linksOf(c.annotations), boxes: { eventmodel: [`cmd:${c.name}`], dataflow: [`cmd:${c.name}`] } });
+  for (const v of model.views) {
+    out.push({ what: `view ${v.name}`, line: v.line, ranges: [[v.line, v.endLine]], links: linksOf(v.annotations), boxes: { eventmodel: [`view:${v.name}`], containers: [`view:${v.name}`], dataflow: [`view:${v.name}`], deployment: ids('deployment', (id) => id.endsWith(`:view:${v.name}`)) } });
+  }
+  for (const p of model.policies) {
+    const names = [...new Set(p.rules.map((r) => r.worker).filter(Boolean))];
+    out.push({ what: `policy ${p.trigger.event || p.trigger.schedule}`, line: p.line, ranges: [[p.line, p.endLine]], links: linksOf(p.annotations), boxes: {
+      eventmodel: names.map((w) => `pol:${w}`), containers: names.map((w) => `worker:${w}`), dataflow: names.map((w) => `worker:${w}`),
+      deployment: names.flatMap((w) => ids('deployment', (id) => id.endsWith(`:worker:${w}`))),
+    } });
+  }
+  for (const b of model.boundaries) out.push({ what: `boundary ${b.name}`, line: b.line, ranges: [[b.line, b.line]], links: linksOf(b.annotations), boxes: { eventmodel: [`bnd:${b.name}`], deployment: ids('deployment', (id) => id.endsWith(`:shard:${b.name}`)) } });
+  return out;
+}
+
+const targetOf = (link) => ({ diagram: link.to || null, node: link.node || null, url: link.url || null, label: link.label || null });
+
+function linkMap(model) {
+  const inv = inventory(model);
+  const map = {};
+  const describe = (diagram, node) => {
+    const name = NAMES[diagram];
+    const label = node && inv[diagram].labels.get(node);
+    return label ? `${name}: ${label}` : name;
+  };
+  const resolve = (from, fromId, t) => {
+    if (t.url) return { diagram: null, node: null, label: t.label || t.url, url: t.url };
+    if (!t.diagram || !inv[t.diagram]) return null;
+    if (t.node && !inv[t.diagram].labels.has(t.node)) return null;
+    if (t.diagram === from && t.node === fromId) return null;
+    return { diagram: t.diagram, node: t.node || null, label: t.label || describe(t.diagram, t.node), url: null };
+  };
+  for (const kind of Object.keys(inv)) {
+    map[kind] = {};
+    for (const id of inv[kind].labels.keys()) {
+      const targets = derive(model, inv, kind, id).map(([diagram, node]) => resolve(kind, id, { diagram, node })).filter(Boolean);
+      if (targets.length) map[kind][id] = targets;
+    }
+  }
+  for (const el of elements(model, inv)) {
+    if (!el.links.length) continue;
+    for (const [kind, ids] of Object.entries(el.boxes)) {
+      if (!inv[kind]) continue;
+      for (const id of ids) {
+        const targets = el.links.map((l) => resolve(kind, id, targetOf(l))).filter(Boolean);
+        if (targets.length) map[kind][id] = targets; else delete map[kind][id];
+      }
+    }
+  }
+  return map;
+}
+
+/* Which lines of the source each box of a diagram stands for: Map of boxId to [[from, to], ...]. The board knows its own. */
+function sourceRanges(model, kind) {
+  const inv = inventory(model);
+  const out = new Map();
+  if (!inv[kind]) return out;
+  for (const el of elements(model, inv)) {
+    for (const id of el.boxes[kind] || []) out.set(id, [...(out.get(id) || []), ...el.ranges]);
+  }
+  return out;
+}
+
+/* Problems with the @link annotations a model carries: what check() reports. */
+function linkIssues(model) {
+  const inv = inventory(model);
+  const issues = [];
+  for (const el of elements(model, inv)) {
+    for (const l of el.links) {
+      const t = targetOf(l);
+      const where = `${el.what} has an @link`;
+      if (t.url) {
+        if (!/^(https?:|\/|\.\.?\/|#)/.test(t.url)) issues.push({ severity: 'warn', rule: 'link-url', message: `${where} with url "${t.url}". Use an http(s) address or a path.`, line: el.line });
+      } else if (!t.diagram) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} with neither to="..." nor url="...".`, line: el.line });
+      else if (!KINDS.includes(t.diagram)) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} to "${t.diagram}", which is not a diagram. Choose one of: ${KINDS.join(', ')}.`, line: el.line });
+      else if (!inv[t.diagram]) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} to the ${NAMES[t.diagram]}, which this model cannot draw yet.`, line: el.line });
+      else if (t.node && !inv[t.diagram].labels.has(t.node)) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} to "${t.node}", which is not a box on the ${NAMES[t.diagram]}.`, line: el.line });
+    }
+  }
+  return issues;
+}
+
+module.exports = { linkMap, linkIssues, sourceRanges };
 
 },
 function (module, exports, __r) {
 'use strict';
 
-const { buildBoard, boardToGraph } = __r(6);
-const { renderBoard, renderGraph } = __r(7);
-const { toMermaid, toDot } = __r(9);
-const { BUILDERS } = __r(10);
-
 const KINDS = ['eventmodel', 'context', 'containers', 'dataflow', 'deployment', 'contextmap'];
 const FORMATS = { svg: 'svg', mermaid: 'mmd', dot: 'dot' };
+/* How a diagram is named to a person, in a link's tooltip. */
+const NAMES = { eventmodel: 'event model', context: 'system context', containers: 'containers', dataflow: 'data flow', deployment: 'deployment', contextmap: 'context map' };
 
-/* Returns the diagram as text. Throws an Error with .code NO_REGIONS or NO_CONTEXTS when there is nothing to draw. */
-function render(model, kind, format = 'svg', theme = 'light') {
-  if (!KINDS.includes(kind)) throw new Error(`Unknown diagram "${kind}". Choose one of: ${KINDS.join(', ')}`);
-  if (!FORMATS[format]) throw new Error(`Unknown format "${format}". Choose one of: ${Object.keys(FORMATS).join(', ')}`);
-  if (kind === 'eventmodel') {
-    const board = buildBoard(model);
-    if (format === 'svg') return renderBoard(board, { theme });
-    return (format === 'mermaid' ? toMermaid : toDot)(boardToGraph(board));
-  }
-  const graph = BUILDERS[kind](model);
-  if (format === 'svg') return renderGraph(graph, { theme });
-  return (format === 'mermaid' ? toMermaid : toDot)(graph);
-}
-
-module.exports = { KINDS, FORMATS, render };
+module.exports = { KINDS, FORMATS, NAMES };
 
 },
 function (module, exports, __r) {
@@ -1111,480 +1223,6 @@ function boardToGraph(board) {
 }
 
 module.exports = { buildBoard, boardToGraph, LANES };
-
-},
-function (module, exports, __r) {
-'use strict';
-
-const { layering } = __r(8);
-const { LANES } = __r(6);
-
-/*
- * Dependency-free SVG output. Two renderers:
- *   renderBoard  the Event Modeling swimlane board
- *   renderGraph  a layered left-to-right graph, for the system diagrams
- * Text is monospace so box widths can be computed without a browser.
- */
-
-const THEMES = {
-  light: { bg: '#ffffff', ink: '#0a0e1a', soft: '#465170', line: '#7d87a3', band: '#f4f6fb', accent: '#ffd400', accentInk: '#0a0e1a', surface: '#e9eef7' },
-  dark: { bg: '#0a0e1a', ink: '#f3f5fa', soft: '#c2cadd', line: '#8892ad', band: '#0f1630', accent: '#ffd400', accentInk: '#0a0e1a', surface: '#17244a' },
-};
-const MONO = "ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace";
-const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
-const CW = 7.3; // monospace advance at 12px
-
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const n1 = (n) => Math.round(n * 10) / 10;
-const textW = (s, size = 12) => s.length * CW * (size / 12);
-
-function nodeSize(n, minW = 96) {
-  const w = Math.max(minW, textW(n.label) + 28, n.sub ? textW(n.sub, 10) * 0.9 + 28 : 0);
-  return { w: Math.ceil(w), h: n.sub ? 50 : 40 };
-}
-
-/* One shape per kind. Shape and outline carry the meaning, colour only reinforces it. */
-function shape(n, g, t) {
-  const { x, y, w, h } = g;
-  const dashed = n.declared === false || n.assumed || n.planned ? ' stroke-dasharray="5 3"' : '';
-  const onAccent = n.kind === 'system' || (n.kind === 'event' && !n.assumed);
-  const label = `<text x="${n1(x + w / 2)}" y="${n1(y + (n.sub ? h / 2 - 4 : h / 2 + 4))}" text-anchor="middle" font-family="${MONO}" font-size="12" font-weight="${n.kind === 'event' ? 600 : 500}" fill="${onAccent ? t.accentInk : t.ink}">${esc(n.label)}</text>`;
-  const sub = n.sub ? `<text x="${n1(x + w / 2)}" y="${n1(y + h / 2 + 12)}" text-anchor="middle" font-family="${SANS}" font-size="10" fill="${onAccent ? t.accentInk : t.soft}">${esc(n.sub)}</text>` : '';
-  let body;
-  switch (n.kind) {
-    case 'event':
-      body = n.assumed
-        ? `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="5 3"/>`
-        : `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.accent}" stroke="${t.ink}" stroke-width="1"/>`;
-      break;
-    case 'command':
-    case 'process':
-      body = `<rect x="${n1(x + 3)}" y="${n1(y + 3)}" width="${w}" height="${h}" rx="6" fill="none" stroke="${t.line}" stroke-width="1"/><rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5"${dashed}/>`;
-      break;
-    case 'view':
-    case 'store':
-    case 'cache':
-      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.surface}" stroke="${t.ink}" stroke-width="1.5"${dashed}/><line x1="${n1(x + 4)}" y1="${n1(y + h - 5)}" x2="${n1(x + w - 4)}" y2="${n1(y + h - 5)}" stroke="${t.ink}" stroke-width="1"/>`;
-      break;
-    case 'policy':
-    case 'worker':
-      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
-      break;
-    case 'timer':
-      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="1 3"/>`;
-      break;
-    case 'external':
-      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="2 3"/>`;
-      break;
-    case 'system':
-      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="10" fill="${t.accent}" stroke="${t.ink}" stroke-width="2.5"/>`;
-      break;
-    default: // actor and anything else
-      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.surface}" stroke="${t.ink}" stroke-width="1.5"/>`;
-  }
-  return body + label + sub;
-}
-
-function defs(t) {
-  return `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="${t.line}"/></marker></defs>`;
-}
-
-function edgePath(a, b, back, bump = 0) {
-  if (back) {
-    const sx = a.x + a.w / 2;
-    const tx = b.x + b.w / 2;
-    const sy = a.y + a.h;
-    const ty = b.y + b.h;
-    const d = 44 + bump;
-    return { d: `M${n1(sx)} ${n1(sy)} C${n1(sx)} ${n1(sy + d)} ${n1(tx)} ${n1(ty + d)} ${n1(tx)} ${n1(ty)}`, mx: (sx + tx) / 2, my: (sy + ty) / 2 + d * 0.75 };
-  }
-  if (b.x > a.x + a.w - 1) {
-    const x1 = a.x + a.w;
-    const y1 = a.y + a.h / 2;
-    const x2 = b.x;
-    const y2 = b.y + b.h / 2;
-    const dx = Math.max(24, (x2 - x1) / 2);
-    return { d: `M${n1(x1)} ${n1(y1)} C${n1(x1 + dx)} ${n1(y1)} ${n1(x2 - dx)} ${n1(y2)} ${n1(x2)} ${n1(y2)}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
-  }
-  // same column: connect top and bottom
-  const down = b.y > a.y;
-  const x1 = a.x + a.w / 2;
-  const x2 = b.x + b.w / 2;
-  const y1 = down ? a.y + a.h : a.y;
-  const y2 = down ? b.y : b.y + b.h;
-  return { d: `M${n1(x1)} ${n1(y1)} C${n1(x1)} ${n1((y1 + y2) / 2)} ${n1(x2)} ${n1((y1 + y2) / 2)} ${n1(x2)} ${n1(y2)}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
-}
-
-function edgeSvg(e, p, t) {
-  const dash = e.style === 'dashed' ? ' stroke-dasharray="5 4"' : '';
-  const path = `<path d="${p.d}" fill="none" stroke="${t.line}" stroke-width="1.4"${dash} marker-end="url(#arr)"/>`;
-  const label = e.label
-    ? `<text x="${n1(p.mx)}" y="${n1(p.my - 4)}" text-anchor="middle" font-family="${SANS}" font-size="10" fill="${t.soft}" stroke="${t.bg}" stroke-width="3" paint-order="stroke">${esc(e.label)}</text>`
-    : '';
-  return path + label;
-}
-
-function wrap(width, height, title, desc, t, inner) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.ceil(width)} ${Math.ceil(height)}" width="${Math.ceil(width)}" height="${Math.ceil(height)}" role="img" aria-labelledby="t d">
-<title id="t">${esc(title)}</title><desc id="d">${esc(desc)}</desc>
-<rect width="100%" height="100%" fill="${t.bg}"/>
-${defs(t)}
-${inner}
-</svg>
-`;
-}
-
-function renderBoard(board, opts = {}) {
-  const t = THEMES[opts.theme] || THEMES.light;
-  const M = 28;
-  const LABEL_W = 84;
-  const GAP = 48;
-  const TOP = 56;
-  const ROW_H = 78;
-
-  const size = new Map(board.nodes.map((n) => [n.id, nodeSize(n)]));
-  const colW = Array(board.cols).fill(0);
-  for (const n of board.nodes) colW[n.col] = Math.max(colW[n.col], (n.indent || 0) + size.get(n.id).w, ...(n.notes || []).map((t) => textW(t, 9.5)));
-  const colX = [];
-  let x = M + LABEL_W + 16;
-  for (let c = 0; c < board.cols; c++) { colX.push(x); x += colW[c] + GAP; }
-  const width = x - GAP + M;
-  const rowsIn = Object.fromEntries(LANES.map((l) => [l, 1]));
-  for (const n of board.nodes) rowsIn[n.lane] = Math.max(rowsIn[n.lane], n.row + 1);
-  const laneH = (l) => 30 + rowsIn[l] * ROW_H;
-  const laneTop = {};
-  let ty = TOP;
-  for (const l of LANES) { laneTop[l] = ty; ty += laneH(l); }
-  const lanesTop = (l) => laneTop[l];
-  const height = ty + 52;
-
-  const geo = new Map();
-  for (const n of board.nodes) {
-    const s = size.get(n.id);
-    geo.set(n.id, { x: colX[n.col] + (n.indent || 0), y: lanesTop(n.lane) + 14 + n.row * ROW_H, w: s.w, h: s.h });
-  }
-
-  let inner = '';
-  inner += `<text x="${M}" y="30" font-family="${SANS}" font-size="16" font-weight="700" fill="${t.ink}">${esc(board.title)} · event model</text>`;
-  LANES.forEach((lane, i) => {
-    const y = lanesTop(lane);
-    if (i % 2 === 0) inner += `<rect x="${M}" y="${y}" width="${n1(width - 2 * M)}" height="${laneH(lane)}" fill="${t.band}"/>`;
-    inner += `<text x="${M + 10}" y="${y + laneH(lane) / 2 + 4}" font-family="${MONO}" font-size="10" letter-spacing="1" fill="${t.soft}">${lane.toUpperCase()}</text>`;
-  });
-
-  board.groups.forEach((g, i) => {
-    const boxes = g.members.map((id) => geo.get(id)).filter(Boolean);
-    if (!boxes.length) return;
-    const pad = 9 + i * 5;
-    const x1 = Math.min(...boxes.map((b) => b.x)) - pad;
-    const y1 = Math.min(...boxes.map((b) => b.y)) - pad;
-    const x2 = Math.max(...boxes.map((b) => b.x + b.w)) + pad;
-    const y2 = Math.max(...boxes.map((b) => b.y + b.h)) + pad;
-    inner += `<rect x="${n1(x1)}" y="${n1(y1)}" width="${n1(x2 - x1)}" height="${n1(y2 - y1)}" rx="10" fill="${t.accent}" fill-opacity="0.12" stroke="${t.ink}" stroke-width="1.3" stroke-dasharray="7 4"/>`;
-    inner += `<text x="${n1(x1 + 8)}" y="${n1(y1 - 5)}" font-family="${MONO}" font-size="10.5" font-weight="700" fill="${t.ink}" stroke="${t.bg}" stroke-width="3" paint-order="stroke">${esc(g.label)}${g.sub ? ` · ${esc(g.sub)}` : ''}</text>`;
-  });
-
-  let bump = 0;
-  const byId = new Map(board.nodes.map((n) => [n.id, n]));
-  for (const e of board.edges) {
-    const a = geo.get(e.from);
-    const b = geo.get(e.to);
-    let seg;
-    if (e.kind === 'tree') {
-      const sx = a.x + 12;
-      seg = `<path d="M${n1(sx)} ${n1(a.y + a.h)} V${n1(b.y + b.h / 2)} H${n1(b.x)}" fill="none" stroke="${t.line}" stroke-width="1.4" marker-end="url(#arr)"/>`;
-    } else if (e.kind === 'reads') {
-      const toLeft = a.x + a.w / 2 < b.x;
-      const ex = toLeft ? b.x : b.x + b.w;
-      const ey = b.y + b.h / 2;
-      const vx = a.x + a.w / 2;
-      seg = `<path d="M${n1(vx)} ${n1(a.y)} V${n1(ey)} H${n1(ex)}" fill="none" stroke="${t.line}" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>`;
-      if (e.label) seg += `<text x="${n1(vx + 4)}" y="${n1(ey - 5)}" font-family="${SANS}" font-size="10" fill="${t.soft}" stroke="${t.bg}" stroke-width="3" paint-order="stroke">${esc(e.label)}</text>`;
-    } else {
-      const back = byId.get(e.to).col < byId.get(e.from).col;
-      seg = edgeSvg({ label: e.label, style: e.kind === 'given' || e.kind === 'reads' ? 'dashed' : 'solid' }, edgePath(a, b, back, back ? (bump += 6) : 0), t);
-    }
-    inner += `<g class="ed" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${seg}</g>`;
-  }
-  for (const n of board.nodes) {
-    const g = geo.get(n.id);
-    const tip = n.fullNotes && n.fullNotes.length ? `<title>${esc(n.fullNotes.join(' | '))}</title>` : '';
-    inner += `<g class="nd" data-id="${esc(n.id)}" data-kind="${esc(n.kind)}" data-label="${esc(n.label)}"${n.ranges && n.ranges.length ? ` data-lines="${n.ranges.map(([a, b]) => `${a}-${b}`).join(',')}"` : ''}>${tip}${shape(n, g, t)}</g>`;
-    (n.notes || []).forEach((line, i) => { inner += `<text x="${n1(g.x)}" y="${n1(g.y + g.h + 12 + i * 11)}" font-family="${SANS}" font-size="9.5" fill="${t.soft}">${esc(line)}</text>`; });
-  }
-
-  const ly = ty + 26;
-  const legend = [
-    ['command', 'command'], ['event', 'event'], ['view', 'view'], ['policy', 'policy / worker'], ['assumed', 'assumed event (nobody emits it)'],
-  ];
-  let lx = M;
-  for (const [kind, text] of legend) {
-    const n = kind === 'assumed' ? { kind: 'event', assumed: true, label: '' } : { kind, label: '' };
-    inner += shape(n, { x: lx, y: ly - 9, w: 26, h: 16 }, t);
-    inner += `<text x="${lx + 34}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">${esc(text)}</text>`;
-    lx += 34 + textW(text, 11) * 0.88 + 26;
-  }
-  inner += `<text x="${lx}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">dashed arrow = fact or view the command reads</text>`;
-
-  const counts = ['command', 'event', 'view', 'policy'].map((k) => `${board.nodes.filter((n) => n.lane === k).length} ${k}`).join(', ');
-  return wrap(Math.max(width, lx + 330), height, `${board.title} event model`, `Event Modeling board with lanes for actor, command, event, view and policy. ${counts} nodes, ${board.edges.length} links, ${board.groups.length} consistency boundaries.`, t, inner);
-}
-
-/* Places nodes in layers, left to right. Coordinates start at 0,0.
-   A node outside every group but inside a group's layer span would be swallowed by the
-   dashed box, so it moves past the group (if the group feeds it) or before it. */
-function layoutLayered(nodes, edges, groups) {
-  const LGAP = 150;
-  const VGAP = 26;
-  const GAP_GROUP = 44;
-  const size = new Map(nodes.map((n) => [n.id, nodeSize(n, 110)]));
-  const groupOf = new Map();
-  groups.forEach((g, i) => g.members.forEach((id) => groupOf.set(id, i)));
-  const gi = (id) => (groupOf.has(id) ? groupOf.get(id) : -1);
-
-  const { col, back, preds, succs } = layering(nodes.map((n) => n.id), edges);
-  groups.forEach((g) => {
-    const cols = g.members.map((id) => col.get(id)).filter((c) => c !== undefined);
-    if (!cols.length) return;
-    const lo = Math.min(...cols);
-    const hi = Math.max(...cols);
-    const right = Math.max(...col.values()) + 1;
-    let usedRight = false;
-    for (const n of nodes) {
-      const c = col.get(n.id);
-      if (gi(n.id) !== -1 || c < lo || c > hi) continue;
-      if (preds.get(n.id).some((p) => g.members.includes(p))) { col.set(n.id, right); usedRight = true; } else col.set(n.id, 0);
-    }
-    return usedRight;
-  });
-
-  const rightmost = (skipSide) => Math.max(0, ...nodes.filter((n) => !skipSide || n.side !== 'right').map((n) => col.get(n.id)));
-  for (const n of nodes) if (n.side === 'right') col.set(n.id, rightmost(true) + 1);
-  const layerCount = Math.max(...col.values()) + 1;
-  const layers = Array.from({ length: layerCount }, () => []);
-  nodes.forEach((n) => layers[col.get(n.id)].push(n.id));
-
-  const pos = new Map();
-  const reindex = () => layers.forEach((l) => l.forEach((id, i) => pos.set(id, i)));
-  reindex();
-  const bary = (id, nbrs) => {
-    const ps = nbrs.get(id).filter((p) => pos.has(p));
-    return ps.length ? ps.reduce((s, p) => s + pos.get(p), 0) / ps.length : pos.get(id);
-  };
-  for (let iter = 0; iter < 4; iter++) {
-    for (let l = 1; l < layerCount; l++) { layers[l].sort((a, b) => gi(a) - gi(b) || bary(a, preds) - bary(b, preds)); reindex(); }
-    for (let l = layerCount - 2; l >= 0; l--) { layers[l].sort((a, b) => gi(a) - gi(b) || bary(a, succs) - bary(b, succs)); reindex(); }
-  }
-
-  const layerW = layers.map((l) => Math.max(0, ...l.map((id) => size.get(id).w)));
-  const layerH = layers.map((l) => l.reduce((s, id, i) => s + size.get(id).h + (i ? VGAP + (gi(l[i - 1]) !== gi(id) ? GAP_GROUP : 0) : 0), 0));
-  const maxH = Math.max(0, ...layerH);
-  const geo = new Map();
-  let x = 0;
-  layers.forEach((l, li) => {
-    let y = (maxH - layerH[li]) / 2;
-    l.forEach((id, i) => {
-      const s = size.get(id);
-      if (i) y += VGAP + (gi(l[i - 1]) !== gi(id) ? GAP_GROUP : 0);
-      geo.set(id, { x: x + (layerW[li] - s.w) / 2, y, w: s.w, h: s.h });
-      y += s.h;
-    });
-    x += layerW[li] + LGAP;
-  });
-  return { geo, back, width: x - LGAP, height: maxH };
-}
-
-/* Layered left-to-right graph. Groups are dashed boxes; with graph.stack each group is
-   laid out on its own and the groups are stacked top to bottom (regions). */
-function renderGraph(graph, opts = {}) {
-  const t = THEMES[opts.theme] || THEMES.light;
-  const M = 28;
-  const nodes = graph.nodes;
-  const groups = graph.groups || [];
-  const GROUP_PAD_TOP = 34;
-  const GROUP_PAD_BOTTOM = 18;
-  const geo = new Map();
-  const back = new Set();
-  let width = 0;
-  let height = 0;
-
-  if (graph.stack) {
-    let y = 0;
-    for (const g of groups) {
-      const set = new Set(g.members);
-      const sub = layoutLayered(nodes.filter((n) => set.has(n.id)), graph.edges.filter((e) => set.has(e.from) && set.has(e.to)), []);
-      for (const [id, r] of sub.geo) geo.set(id, { ...r, y: r.y + y + GROUP_PAD_TOP });
-      sub.back.forEach((k) => back.add(k));
-      width = Math.max(width, sub.width);
-      y += GROUP_PAD_TOP + sub.height + GROUP_PAD_BOTTOM + 28;
-    }
-    height = y;
-  } else {
-    const l = layoutLayered(nodes, graph.edges, groups);
-    l.geo.forEach((r, id) => geo.set(id, r));
-    l.back.forEach((k) => back.add(k));
-    width = l.width;
-    height = l.height + GROUP_PAD_TOP;
-  }
-  const dx = M + 28;
-  const dy = 96;
-  for (const [id, r] of geo) geo.set(id, { ...r, x: r.x + dx, y: r.y + dy });
-
-  let inner = `<text x="${M}" y="32" font-family="${SANS}" font-size="16" font-weight="700" fill="${t.ink}">${esc(graph.title)}</text>`;
-  if (graph.subtitle) inner += `<text x="${M}" y="50" font-family="${SANS}" font-size="11" fill="${t.soft}">${esc(graph.subtitle)}</text>`;
-
-  groups.forEach((g) => {
-    const boxes = g.members.map((id) => geo.get(id)).filter(Boolean);
-    if (!boxes.length) return;
-    const x1 = Math.min(...boxes.map((b) => b.x)) - 20;
-    const y1 = Math.min(...boxes.map((b) => b.y)) - GROUP_PAD_TOP;
-    const x2 = Math.max(...boxes.map((b) => b.x + b.w)) + 20;
-    const y2 = Math.max(...boxes.map((b) => b.y + b.h)) + GROUP_PAD_BOTTOM;
-    inner += `<rect x="${n1(x1)}" y="${n1(y1)}" width="${n1(x2 - x1)}" height="${n1(y2 - y1)}" rx="12" fill="${t.band}" stroke="${t.line}" stroke-width="1.3" stroke-dasharray="7 4"/>`;
-    inner += `<text x="${n1(x1 + 12)}" y="${n1(y1 + 20)}" font-family="${SANS}" font-size="12" font-weight="700" fill="${t.ink}">${esc(g.label)}</text>`;
-  });
-
-  let bump = 0;
-  for (const e of graph.edges) {
-    if (!geo.has(e.from) || !geo.has(e.to)) continue;
-    const isBack = back.has(`${e.from}>${e.to}`);
-    inner += edgeSvg(e, edgePath(geo.get(e.from), geo.get(e.to), isBack, isBack ? (bump += 6) : 0), t);
-  }
-  for (const n of nodes) inner += shape(n, geo.get(n.id), t);
-
-  const w = Math.max(dx + width + M + 28, M + (graph.subtitle ? textW(graph.subtitle, 11) * 0.82 : 0) + M);
-  const h = dy + height + 60;
-  return wrap(w, h, graph.title, graph.desc || `${graph.title}: ${nodes.length} elements, ${graph.edges.length} flows.`, t, inner);
-}
-
-module.exports = { renderBoard, renderGraph, THEMES };
-
-},
-function (module, exports, __r) {
-'use strict';
-
-/*
- * Layering shared by every diagram.
- *
- * Models contain real loops (a command reads a view fed by its own events, a
- * policy calls the command that triggered it). Layering needs a DAG, so edges
- * that close a loop are set aside as "back" edges: still drawn, never used to
- * place nodes. The choice is deterministic: roots are tried in the given order.
- */
-function layering(ids, edges) {
-  const out = new Map(ids.map((id) => [id, []]));
-  const indeg = new Map(ids.map((id) => [id, 0]));
-  const back = new Set();
-  for (const e of edges) {
-    if (!out.has(e.from) || !out.has(e.to) || e.from === e.to) continue;
-    // A weak edge is known feedback (a worker calling back into the API). It never places nodes.
-    if (e.weak) { back.add(`${e.from}>${e.to}`); continue; }
-    out.get(e.from).push(e.to);
-    indeg.set(e.to, indeg.get(e.to) + 1);
-  }
-
-  const state = new Map();
-  // (back is filled above for weak edges and below for cycle-closing edges)
-  const post = [];
-  const visit = (id) => {
-    state.set(id, 1);
-    for (const next of [...out.get(id)].reverse()) {
-      if (state.get(next) === 1) back.add(`${id}>${next}`);
-      else if (!state.has(next)) visit(next);
-    }
-    state.set(id, 2);
-    post.push(id);
-  };
-  // Roots and children are walked in reverse so that reversing the post-order restores source order.
-  for (const id of [...ids.filter((i) => indeg.get(i) === 0), ...ids].reverse()) if (!state.has(id)) visit(id);
-
-  const topo = post.reverse();
-  const forward = edges.filter((e) => e.from !== e.to && out.has(e.from) && out.has(e.to) && !back.has(`${e.from}>${e.to}`));
-  const preds = new Map(ids.map((id) => [id, []]));
-  const succs = new Map(ids.map((id) => [id, []]));
-  for (const e of forward) { preds.get(e.to).push(e.from); succs.get(e.from).push(e.to); }
-
-  const col = new Map();
-  for (const id of topo) col.set(id, preds.get(id).reduce((m, p) => Math.max(m, col.get(p) + 1), 0));
-  return { col, back, topo, preds, succs };
-}
-
-module.exports = { layering };
-
-},
-function (module, exports, __r) {
-'use strict';
-
-/* Mermaid and Graphviz DOT from the generic graph form. */
-
-const SHAPES = {
-  actor: { dot: 'ellipse', fill: '#e9eef7' },
-  external: { dot: 'ellipse', fill: '#ffffff', style: 'dashed' },
-  command: { dot: 'box', fill: '#ffffff' },
-  process: { dot: 'box', fill: '#ffffff' },
-  event: { dot: 'box', fill: '#ffd400' },
-  view: { dot: 'box', fill: '#e9eef7' },
-  store: { dot: 'cylinder', fill: '#e9eef7' },
-  cache: { dot: 'box', fill: '#e9eef7' },
-  policy: { dot: 'box', fill: '#ffffff', style: 'dashed,rounded' },
-  worker: { dot: 'box', fill: '#ffffff', style: 'dashed,rounded' },
-  system: { dot: 'box', fill: '#ffd400' },
-};
-
-const ids = (graph) => new Map(graph.nodes.map((n, i) => [n.id, `n${i}`]));
-const q = (s) => String(s).replace(/"/g, '#quot;');
-
-function toMermaid(graph) {
-  const id = ids(graph);
-  const lines = [`flowchart ${graph.direction || 'LR'}`];
-  const inGroup = new Set((graph.groups || []).flatMap((g) => g.members));
-  const decl = (n, pad) => `${pad}${id.get(n.id)}["${q(n.label)}${n.sub ? `<br/><i>${q(n.sub)}</i>` : ''}"]`;
-  for (const n of graph.nodes) if (!inGroup.has(n.id)) lines.push(decl(n, '  '));
-  (graph.groups || []).forEach((g, i) => {
-    lines.push(`  subgraph g${i}["${q(g.label)}"]`);
-    for (const m of g.members) { const n = graph.nodes.find((x) => x.id === m); if (n) lines.push(decl(n, '    ')); }
-    lines.push('  end');
-  });
-  for (const e of graph.edges) {
-    if (!id.has(e.from) || !id.has(e.to)) continue;
-    const arrow = e.style === 'dashed' ? '-.->' : '-->';
-    lines.push(`  ${id.get(e.from)} ${arrow}${e.label ? `|"${q(e.label)}"|` : ''} ${id.get(e.to)}`);
-  }
-  const kinds = [...new Set(graph.nodes.map((n) => n.kind))];
-  for (const k of kinds) {
-    const s = SHAPES[k] || SHAPES.actor;
-    lines.push(`  classDef ${k} fill:${s.fill},stroke:#0a0e1a,color:#0a0e1a${s.style && s.style.includes('dashed') ? ',stroke-dasharray:5 3' : ''}`);
-    lines.push(`  class ${graph.nodes.filter((n) => n.kind === k).map((n) => id.get(n.id)).join(',')} ${k}`);
-  }
-  return lines.join('\n') + '\n';
-}
-
-function toDot(graph) {
-  const id = ids(graph);
-  const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const lines = ['digraph eventline {', `  label="${esc(graph.title)}"; labelloc=t; fontname="Helvetica";`, `  rankdir=${graph.direction || 'LR'};`, '  node [fontname="Courier" fontsize=11];', '  edge [fontname="Helvetica" fontsize=9];'];
-  const inGroup = new Set((graph.groups || []).flatMap((g) => g.members));
-  const decl = (n, pad) => {
-    const s = SHAPES[n.kind] || SHAPES.actor;
-    const style = `filled${s.style ? ',' + s.style : ''}`;
-    return `${pad}${id.get(n.id)} [label="${esc(n.label)}${n.sub ? `\\n${esc(n.sub)}` : ''}" shape=${s.dot} style="${style}" fillcolor="${s.fill}"];`;
-  };
-  for (const n of graph.nodes) if (!inGroup.has(n.id)) lines.push(decl(n, '  '));
-  (graph.groups || []).forEach((g, i) => {
-    lines.push(`  subgraph cluster_${i} { label="${esc(g.label)}"; style=dashed;`);
-    for (const m of g.members) { const n = graph.nodes.find((x) => x.id === m); if (n) lines.push(decl(n, '    ')); }
-    lines.push('  }');
-  });
-  for (const e of graph.edges) {
-    if (!id.has(e.from) || !id.has(e.to)) continue;
-    const attrs = [e.label ? `label="${esc(e.label)}"` : '', e.style === 'dashed' ? 'style=dashed' : ''].filter(Boolean).join(' ');
-    lines.push(`  ${id.get(e.from)} -> ${id.get(e.to)}${attrs ? ` [${attrs}]` : ''};`);
-  }
-  lines.push('}');
-  return lines.join('\n') + '\n';
-}
-
-module.exports = { toMermaid, toDot };
 
 },
 function (module, exports, __r) {
@@ -1857,6 +1495,610 @@ function contextMap(model) {
 const BUILDERS = { context, containers, dataflow, deployment, contextmap: contextMap };
 
 module.exports = { BUILDERS, context, containers, dataflow, deployment, contextMap };
+
+},
+function (module, exports, __r) {
+'use strict';
+
+class Formatter {
+  constructor(format = 'toon') {
+    this.format = format;
+  }
+
+  toon(header, rows, fields) {
+    if (!rows || rows.length === 0) {
+      return `${header}: 0 results\n`;
+    }
+    const cols = fields || Object.keys(rows[0]);
+    let out = `${header}[${rows.length}]{${cols.join(',')}}:\n`;
+    for (const row of rows) {
+      out += '  ' + cols.map(c => this._cell(row[c])).join(',') + '\n';
+    }
+    return out;
+  }
+
+  json(data) {
+    return JSON.stringify(data, null, 2) + '\n';
+  }
+
+  text(header, rows, fields) {
+    if (!rows || rows.length === 0) return `${header}: (empty)\n`;
+    const cols = fields || Object.keys(rows[0]);
+    let out = `${header}:\n`;
+    for (const row of rows) {
+      out += cols.map(c => `${c}: ${row[c]}`).join(', ') + '\n';
+    }
+    return out;
+  }
+
+  _cell(val) {
+    if (val === null || val === undefined) return '';
+    const s = String(val);
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  formatOutput(header, rows, fields) {
+    switch (this.format) {
+      case 'json': return this.json(rows);
+      case 'text': return this.text(header, rows, fields);
+      default: return this.toon(header, rows, fields);
+    }
+  }
+
+  formatObject(header, data) {
+    if (this.format === 'json') return this.json(data);
+    if (this.format === 'text') return this.text(header, [data]);
+    const lines = [`${header}:`];
+    for (const [k, v] of Object.entries(data)) {
+      lines.push(`  ${k}: ${v}`);
+    }
+    return lines.join('\n') + '\n';
+  }
+}
+
+module.exports = Formatter;
+
+},
+function (module, exports, __r) {
+'use strict';
+
+const { buildBoard, boardToGraph } = __r(6);
+const { renderBoard, renderGraph } = __r(10);
+const { toMermaid, toDot } = __r(12);
+const { BUILDERS } = __r(7);
+const { KINDS, FORMATS } = __r(5);
+const { linkMap, sourceRanges } = __r(4);
+
+/* The boxes of this diagram that lead somewhere: { boxId: [ { href, title } ] }. */
+function resolveLinks(model, kind, format, opts) {
+  const base = opts.linkBase || '';
+  const href = opts.href || ((t) => t.url || `${base}${t.diagram}.${FORMATS[format]}${t.node ? `#${encodeURIComponent(t.node).replace(/%3A/g, ':')}` : ''}`);
+  const out = new Map();
+  for (const [id, targets] of Object.entries(linkMap(model)[kind] || {})) out.set(id, targets.map((t) => ({ href: href(t), title: `Open ${t.label}`, target: t })));
+  return out;
+}
+
+/* Returns the diagram as text. Throws an Error with .code NO_REGIONS or NO_CONTEXTS when there is nothing to draw.
+   opts.links turns on links between diagrams: each box that leads somewhere becomes a link, to <diagram>.<ext>#<box>
+   beside the file (opts.linkBase prefixes that, opts.href replaces how a target becomes an address). */
+function render(model, kind, format = 'svg', theme = 'light', opts = {}) {
+  if (!KINDS.includes(kind)) throw new Error(`Unknown diagram "${kind}". Choose one of: ${KINDS.join(', ')}`);
+  if (!FORMATS[format]) throw new Error(`Unknown format "${format}". Choose one of: ${Object.keys(FORMATS).join(', ')}`);
+  const diagram = kind === 'eventmodel' ? buildBoard(model) : BUILDERS[kind](model);
+  const links = opts.links ? resolveLinks(model, kind, format, opts) : null;
+  if (format === 'svg') return (kind === 'eventmodel' ? renderBoard : renderGraph)(diagram, { theme, links, ranges: kind === 'eventmodel' ? null : sourceRanges(model, kind) });
+  const graph = kind === 'eventmodel' ? boardToGraph(diagram) : diagram;
+  return (format === 'mermaid' ? toMermaid : toDot)(graph, links);
+}
+
+module.exports = { KINDS, FORMATS, render };
+
+},
+function (module, exports, __r) {
+'use strict';
+
+const { layering } = __r(11);
+const { LANES } = __r(6);
+
+/*
+ * Dependency-free SVG output. Two renderers:
+ *   renderBoard  the Event Modeling swimlane board
+ *   renderGraph  a layered left-to-right graph, for the system diagrams
+ * Text is monospace so box widths can be computed without a browser.
+ */
+
+const THEMES = {
+  light: { bg: '#ffffff', ink: '#0a0e1a', soft: '#465170', line: '#7d87a3', band: '#f4f6fb', accent: '#ffd400', accentInk: '#0a0e1a', surface: '#e9eef7' },
+  dark: { bg: '#0a0e1a', ink: '#f3f5fa', soft: '#c2cadd', line: '#8892ad', band: '#0f1630', accent: '#ffd400', accentInk: '#0a0e1a', surface: '#17244a' },
+};
+const MONO = "ui-monospace, 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace";
+const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const CW = 7.3; // monospace advance at 12px
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const n1 = (n) => Math.round(n * 10) / 10;
+const textW = (s, size = 12) => s.length * CW * (size / 12);
+
+function nodeSize(n, minW = 96) {
+  const w = Math.max(minW, textW(n.label) + 28, n.sub ? textW(n.sub, 10) * 0.9 + 28 : 0);
+  return { w: Math.ceil(w), h: n.sub ? 50 : 40 };
+}
+
+/* One shape per kind. Shape and outline carry the meaning, colour only reinforces it. */
+function shape(n, g, t) {
+  const { x, y, w, h } = g;
+  const dashed = n.declared === false || n.assumed || n.planned ? ' stroke-dasharray="5 3"' : '';
+  const onAccent = n.kind === 'system' || (n.kind === 'event' && !n.assumed);
+  const label = `<text x="${n1(x + w / 2)}" y="${n1(y + (n.sub ? h / 2 - 4 : h / 2 + 4))}" text-anchor="middle" font-family="${MONO}" font-size="12" font-weight="${n.kind === 'event' ? 600 : 500}" fill="${onAccent ? t.accentInk : t.ink}">${esc(n.label)}</text>`;
+  const sub = n.sub ? `<text x="${n1(x + w / 2)}" y="${n1(y + h / 2 + 12)}" text-anchor="middle" font-family="${SANS}" font-size="10" fill="${onAccent ? t.accentInk : t.soft}">${esc(n.sub)}</text>` : '';
+  let body;
+  switch (n.kind) {
+    case 'event':
+      body = n.assumed
+        ? `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="5 3"/>`
+        : `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.accent}" stroke="${t.ink}" stroke-width="1"/>`;
+      break;
+    case 'command':
+    case 'process':
+      body = `<rect x="${n1(x + 3)}" y="${n1(y + 3)}" width="${w}" height="${h}" rx="6" fill="none" stroke="${t.line}" stroke-width="1"/><rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5"${dashed}/>`;
+      break;
+    case 'view':
+    case 'store':
+    case 'cache':
+      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.surface}" stroke="${t.ink}" stroke-width="1.5"${dashed}/><line x1="${n1(x + 4)}" y1="${n1(y + h - 5)}" x2="${n1(x + w - 4)}" y2="${n1(y + h - 5)}" stroke="${t.ink}" stroke-width="1"/>`;
+      break;
+    case 'policy':
+    case 'worker':
+      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+      break;
+    case 'timer':
+      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="1 3"/>`;
+      break;
+    case 'external':
+      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+      break;
+    case 'system':
+      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="10" fill="${t.accent}" stroke="${t.ink}" stroke-width="2.5"/>`;
+      break;
+    default: // actor and anything else
+      body = `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="${t.surface}" stroke="${t.ink}" stroke-width="1.5"/>`;
+  }
+  return body + label + sub;
+}
+
+/* Links between diagrams (see links.js). A box that leads somewhere is wrapped in a link to its first target,
+   and carries one small arrow badge per target, each with its own tooltip. */
+const idAttr = (opts, id) => (opts.links ? ` id="${esc(id)}"` : '');
+const rangesAttr = (r) => (r && r.length ? ` data-lines="${r.map(([a, b]) => `${a}-${b}`).join(',')}"` : '');
+function anchored(body, targets) {
+  if (!targets || !targets.length) return body;
+  return `<a class="lnk" href="${esc(targets[0].href)}"><title>${esc(targets[0].title)}</title>${body}</a>`;
+}
+function badges(targets, g, t) {
+  if (!targets || !targets.length) return '';
+  return targets.slice(0, 3).map((k, i) => {
+    const x = n1(g.x + g.w - 8 - i * 20);
+    const y = n1(g.y - 9);
+    return `<a class="lnk-badge" href="${esc(k.href)}"><title>${esc(k.title)}</title><rect x="${x}" y="${y}" width="17" height="15" rx="4" fill="${t.accent}" stroke="${t.ink}" stroke-width="1"/><path d="M${n1(x + 4.5)} ${n1(y + 10.5)}L${n1(x + 12)} ${n1(y + 4)}M${n1(x + 7)} ${n1(y + 4)}H${n1(x + 12)}V${n1(y + 9)}" fill="none" stroke="${t.ink}" stroke-width="1.5" stroke-linecap="round"/></a>`;
+  }).join('');
+}
+
+function defs(t) {
+  return `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="${t.line}"/></marker></defs>`;
+}
+
+function edgePath(a, b, back, bump = 0) {
+  if (back) {
+    const sx = a.x + a.w / 2;
+    const tx = b.x + b.w / 2;
+    const sy = a.y + a.h;
+    const ty = b.y + b.h;
+    const d = 44 + bump;
+    return { d: `M${n1(sx)} ${n1(sy)} C${n1(sx)} ${n1(sy + d)} ${n1(tx)} ${n1(ty + d)} ${n1(tx)} ${n1(ty)}`, mx: (sx + tx) / 2, my: (sy + ty) / 2 + d * 0.75 };
+  }
+  if (b.x > a.x + a.w - 1) {
+    const x1 = a.x + a.w;
+    const y1 = a.y + a.h / 2;
+    const x2 = b.x;
+    const y2 = b.y + b.h / 2;
+    const dx = Math.max(24, (x2 - x1) / 2);
+    return { d: `M${n1(x1)} ${n1(y1)} C${n1(x1 + dx)} ${n1(y1)} ${n1(x2 - dx)} ${n1(y2)} ${n1(x2)} ${n1(y2)}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
+  }
+  // same column: connect top and bottom
+  const down = b.y > a.y;
+  const x1 = a.x + a.w / 2;
+  const x2 = b.x + b.w / 2;
+  const y1 = down ? a.y + a.h : a.y;
+  const y2 = down ? b.y : b.y + b.h;
+  return { d: `M${n1(x1)} ${n1(y1)} C${n1(x1)} ${n1((y1 + y2) / 2)} ${n1(x2)} ${n1((y1 + y2) / 2)} ${n1(x2)} ${n1(y2)}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
+}
+
+function edgeSvg(e, p, t) {
+  const dash = e.style === 'dashed' ? ' stroke-dasharray="5 4"' : '';
+  const path = `<path d="${p.d}" fill="none" stroke="${t.line}" stroke-width="1.4"${dash} marker-end="url(#arr)"/>`;
+  const label = e.label
+    ? `<text x="${n1(p.mx)}" y="${n1(p.my - 4)}" text-anchor="middle" font-family="${SANS}" font-size="10" fill="${t.soft}" stroke="${t.bg}" stroke-width="3" paint-order="stroke">${esc(e.label)}</text>`
+    : '';
+  return path + label;
+}
+
+function wrap(width, height, title, desc, t, inner) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.ceil(width)} ${Math.ceil(height)}" width="${Math.ceil(width)}" height="${Math.ceil(height)}" role="img" aria-labelledby="t d">
+<title id="t">${esc(title)}</title><desc id="d">${esc(desc)}</desc>
+<rect width="100%" height="100%" fill="${t.bg}"/>
+${defs(t)}
+${inner}
+</svg>
+`;
+}
+
+function renderBoard(board, opts = {}) {
+  const t = THEMES[opts.theme] || THEMES.light;
+  const M = 28;
+  const LABEL_W = 84;
+  const GAP = 48;
+  const TOP = 56;
+  const ROW_H = 78;
+
+  const size = new Map(board.nodes.map((n) => [n.id, nodeSize(n)]));
+  const colW = Array(board.cols).fill(0);
+  for (const n of board.nodes) colW[n.col] = Math.max(colW[n.col], (n.indent || 0) + size.get(n.id).w, ...(n.notes || []).map((t) => textW(t, 9.5)));
+  const colX = [];
+  let x = M + LABEL_W + 16;
+  for (let c = 0; c < board.cols; c++) { colX.push(x); x += colW[c] + GAP; }
+  const width = x - GAP + M;
+  const rowsIn = Object.fromEntries(LANES.map((l) => [l, 1]));
+  for (const n of board.nodes) rowsIn[n.lane] = Math.max(rowsIn[n.lane], n.row + 1);
+  const laneH = (l) => 30 + rowsIn[l] * ROW_H;
+  const laneTop = {};
+  let ty = TOP;
+  for (const l of LANES) { laneTop[l] = ty; ty += laneH(l); }
+  const lanesTop = (l) => laneTop[l];
+  const height = ty + 52;
+
+  const geo = new Map();
+  for (const n of board.nodes) {
+    const s = size.get(n.id);
+    geo.set(n.id, { x: colX[n.col] + (n.indent || 0), y: lanesTop(n.lane) + 14 + n.row * ROW_H, w: s.w, h: s.h });
+  }
+
+  let inner = '';
+  inner += `<text x="${M}" y="30" font-family="${SANS}" font-size="16" font-weight="700" fill="${t.ink}">${esc(board.title)} · event model</text>`;
+  LANES.forEach((lane, i) => {
+    const y = lanesTop(lane);
+    if (i % 2 === 0) inner += `<rect x="${M}" y="${y}" width="${n1(width - 2 * M)}" height="${laneH(lane)}" fill="${t.band}"/>`;
+    inner += `<text x="${M + 10}" y="${y + laneH(lane) / 2 + 4}" font-family="${MONO}" font-size="10" letter-spacing="1" fill="${t.soft}">${lane.toUpperCase()}</text>`;
+  });
+
+  board.groups.forEach((g, i) => {
+    const boxes = g.members.map((id) => geo.get(id)).filter(Boolean);
+    if (!boxes.length) return;
+    const pad = 9 + i * 5;
+    const x1 = Math.min(...boxes.map((b) => b.x)) - pad;
+    const y1 = Math.min(...boxes.map((b) => b.y)) - pad;
+    const x2 = Math.max(...boxes.map((b) => b.x + b.w)) + pad;
+    const y2 = Math.max(...boxes.map((b) => b.y + b.h)) + pad;
+    const gt = opts.links && opts.links.get(g.id);
+    let gs = `<rect x="${n1(x1)}" y="${n1(y1)}" width="${n1(x2 - x1)}" height="${n1(y2 - y1)}" rx="10" fill="${t.accent}" fill-opacity="0.12" stroke="${t.ink}" stroke-width="1.3" stroke-dasharray="7 4"/>`;
+    gs += `<text x="${n1(x1 + 8)}" y="${n1(y1 - 5)}" font-family="${MONO}" font-size="10.5" font-weight="700" fill="${t.ink}" stroke="${t.bg}" stroke-width="3" paint-order="stroke">${esc(g.label)}${g.sub ? ` · ${esc(g.sub)}` : ''}</text>`;
+    inner += `<g class="gp"${idAttr(opts, g.id)} data-id="${esc(g.id)}">${gs}${badges(gt, { x: x1, y: y1 + 9, w: x2 - x1 }, t)}</g>`;
+  });
+
+  let bump = 0;
+  const byId = new Map(board.nodes.map((n) => [n.id, n]));
+  for (const e of board.edges) {
+    const a = geo.get(e.from);
+    const b = geo.get(e.to);
+    let seg;
+    if (e.kind === 'tree') {
+      const sx = a.x + 12;
+      seg = `<path d="M${n1(sx)} ${n1(a.y + a.h)} V${n1(b.y + b.h / 2)} H${n1(b.x)}" fill="none" stroke="${t.line}" stroke-width="1.4" marker-end="url(#arr)"/>`;
+    } else if (e.kind === 'reads') {
+      const toLeft = a.x + a.w / 2 < b.x;
+      const ex = toLeft ? b.x : b.x + b.w;
+      const ey = b.y + b.h / 2;
+      const vx = a.x + a.w / 2;
+      seg = `<path d="M${n1(vx)} ${n1(a.y)} V${n1(ey)} H${n1(ex)}" fill="none" stroke="${t.line}" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>`;
+      if (e.label) seg += `<text x="${n1(vx + 4)}" y="${n1(ey - 5)}" font-family="${SANS}" font-size="10" fill="${t.soft}" stroke="${t.bg}" stroke-width="3" paint-order="stroke">${esc(e.label)}</text>`;
+    } else {
+      const back = byId.get(e.to).col < byId.get(e.from).col;
+      seg = edgeSvg({ label: e.label, style: e.kind === 'given' || e.kind === 'reads' ? 'dashed' : 'solid' }, edgePath(a, b, back, back ? (bump += 6) : 0), t);
+    }
+    inner += `<g class="ed" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${seg}</g>`;
+  }
+  for (const n of board.nodes) {
+    const g = geo.get(n.id);
+    const tip = n.fullNotes && n.fullNotes.length ? `<title>${esc(n.fullNotes.join(' | '))}</title>` : '';
+    const nt = opts.links && opts.links.get(n.id);
+    inner += `<g class="nd"${idAttr(opts, n.id)} data-id="${esc(n.id)}" data-kind="${esc(n.kind)}" data-label="${esc(n.label)}"${n.ranges && n.ranges.length ? ` data-lines="${n.ranges.map(([a, b]) => `${a}-${b}`).join(',')}"` : ''}>${tip}${anchored(shape(n, g, t), nt)}${badges(nt, g, t)}</g>`;
+    (n.notes || []).forEach((line, i) => { inner += `<text x="${n1(g.x)}" y="${n1(g.y + g.h + 12 + i * 11)}" font-family="${SANS}" font-size="9.5" fill="${t.soft}">${esc(line)}</text>`; });
+  }
+
+  const ly = ty + 26;
+  const legend = [
+    ['command', 'command'], ['event', 'event'], ['view', 'view'], ['policy', 'policy / worker'], ['assumed', 'assumed event (nobody emits it)'],
+  ];
+  let lx = M;
+  for (const [kind, text] of legend) {
+    const n = kind === 'assumed' ? { kind: 'event', assumed: true, label: '' } : { kind, label: '' };
+    inner += shape(n, { x: lx, y: ly - 9, w: 26, h: 16 }, t);
+    inner += `<text x="${lx + 34}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">${esc(text)}</text>`;
+    lx += 34 + textW(text, 11) * 0.88 + 26;
+  }
+  inner += `<text x="${lx}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">dashed arrow = fact or view the command reads</text>`;
+
+  const counts = ['command', 'event', 'view', 'policy'].map((k) => `${board.nodes.filter((n) => n.lane === k).length} ${k}`).join(', ');
+  return wrap(Math.max(width, lx + 330), height, `${board.title} event model`, `Event Modeling board with lanes for actor, command, event, view and policy. ${counts} nodes, ${board.edges.length} links, ${board.groups.length} consistency boundaries.`, t, inner);
+}
+
+/* Places nodes in layers, left to right. Coordinates start at 0,0.
+   A node outside every group but inside a group's layer span would be swallowed by the
+   dashed box, so it moves past the group (if the group feeds it) or before it. */
+function layoutLayered(nodes, edges, groups) {
+  const LGAP = 150;
+  const VGAP = 26;
+  const GAP_GROUP = 44;
+  const size = new Map(nodes.map((n) => [n.id, nodeSize(n, 110)]));
+  const groupOf = new Map();
+  groups.forEach((g, i) => g.members.forEach((id) => groupOf.set(id, i)));
+  const gi = (id) => (groupOf.has(id) ? groupOf.get(id) : -1);
+
+  const { col, back, preds, succs } = layering(nodes.map((n) => n.id), edges);
+  groups.forEach((g) => {
+    const cols = g.members.map((id) => col.get(id)).filter((c) => c !== undefined);
+    if (!cols.length) return;
+    const lo = Math.min(...cols);
+    const hi = Math.max(...cols);
+    const right = Math.max(...col.values()) + 1;
+    let usedRight = false;
+    for (const n of nodes) {
+      const c = col.get(n.id);
+      if (gi(n.id) !== -1 || c < lo || c > hi) continue;
+      if (preds.get(n.id).some((p) => g.members.includes(p))) { col.set(n.id, right); usedRight = true; } else col.set(n.id, 0);
+    }
+    return usedRight;
+  });
+
+  const rightmost = (skipSide) => Math.max(0, ...nodes.filter((n) => !skipSide || n.side !== 'right').map((n) => col.get(n.id)));
+  for (const n of nodes) if (n.side === 'right') col.set(n.id, rightmost(true) + 1);
+  const layerCount = Math.max(...col.values()) + 1;
+  const layers = Array.from({ length: layerCount }, () => []);
+  nodes.forEach((n) => layers[col.get(n.id)].push(n.id));
+
+  const pos = new Map();
+  const reindex = () => layers.forEach((l) => l.forEach((id, i) => pos.set(id, i)));
+  reindex();
+  const bary = (id, nbrs) => {
+    const ps = nbrs.get(id).filter((p) => pos.has(p));
+    return ps.length ? ps.reduce((s, p) => s + pos.get(p), 0) / ps.length : pos.get(id);
+  };
+  for (let iter = 0; iter < 4; iter++) {
+    for (let l = 1; l < layerCount; l++) { layers[l].sort((a, b) => gi(a) - gi(b) || bary(a, preds) - bary(b, preds)); reindex(); }
+    for (let l = layerCount - 2; l >= 0; l--) { layers[l].sort((a, b) => gi(a) - gi(b) || bary(a, succs) - bary(b, succs)); reindex(); }
+  }
+
+  const layerW = layers.map((l) => Math.max(0, ...l.map((id) => size.get(id).w)));
+  const layerH = layers.map((l) => l.reduce((s, id, i) => s + size.get(id).h + (i ? VGAP + (gi(l[i - 1]) !== gi(id) ? GAP_GROUP : 0) : 0), 0));
+  const maxH = Math.max(0, ...layerH);
+  const geo = new Map();
+  let x = 0;
+  layers.forEach((l, li) => {
+    let y = (maxH - layerH[li]) / 2;
+    l.forEach((id, i) => {
+      const s = size.get(id);
+      if (i) y += VGAP + (gi(l[i - 1]) !== gi(id) ? GAP_GROUP : 0);
+      geo.set(id, { x: x + (layerW[li] - s.w) / 2, y, w: s.w, h: s.h });
+      y += s.h;
+    });
+    x += layerW[li] + LGAP;
+  });
+  return { geo, back, width: x - LGAP, height: maxH };
+}
+
+/* Layered left-to-right graph. Groups are dashed boxes; with graph.stack each group is
+   laid out on its own and the groups are stacked top to bottom (regions). */
+function renderGraph(graph, opts = {}) {
+  const t = THEMES[opts.theme] || THEMES.light;
+  const M = 28;
+  const nodes = graph.nodes;
+  const groups = graph.groups || [];
+  const GROUP_PAD_TOP = 34;
+  const GROUP_PAD_BOTTOM = 18;
+  const geo = new Map();
+  const back = new Set();
+  let width = 0;
+  let height = 0;
+
+  if (graph.stack) {
+    let y = 0;
+    for (const g of groups) {
+      const set = new Set(g.members);
+      const sub = layoutLayered(nodes.filter((n) => set.has(n.id)), graph.edges.filter((e) => set.has(e.from) && set.has(e.to)), []);
+      for (const [id, r] of sub.geo) geo.set(id, { ...r, y: r.y + y + GROUP_PAD_TOP });
+      sub.back.forEach((k) => back.add(k));
+      width = Math.max(width, sub.width);
+      y += GROUP_PAD_TOP + sub.height + GROUP_PAD_BOTTOM + 28;
+    }
+    height = y;
+  } else {
+    const l = layoutLayered(nodes, graph.edges, groups);
+    l.geo.forEach((r, id) => geo.set(id, r));
+    l.back.forEach((k) => back.add(k));
+    width = l.width;
+    height = l.height + GROUP_PAD_TOP;
+  }
+  const dx = M + 28;
+  const dy = 96;
+  for (const [id, r] of geo) geo.set(id, { ...r, x: r.x + dx, y: r.y + dy });
+
+  let inner = `<text x="${M}" y="32" font-family="${SANS}" font-size="16" font-weight="700" fill="${t.ink}">${esc(graph.title)}</text>`;
+  if (graph.subtitle) inner += `<text x="${M}" y="50" font-family="${SANS}" font-size="11" fill="${t.soft}">${esc(graph.subtitle)}</text>`;
+
+  groups.forEach((g) => {
+    const boxes = g.members.map((id) => geo.get(id)).filter(Boolean);
+    if (!boxes.length) return;
+    const x1 = Math.min(...boxes.map((b) => b.x)) - 20;
+    const y1 = Math.min(...boxes.map((b) => b.y)) - GROUP_PAD_TOP;
+    const x2 = Math.max(...boxes.map((b) => b.x + b.w)) + 20;
+    const y2 = Math.max(...boxes.map((b) => b.y + b.h)) + GROUP_PAD_BOTTOM;
+    const gt = opts.links && opts.links.get(g.id);
+    let gs = `<rect x="${n1(x1)}" y="${n1(y1)}" width="${n1(x2 - x1)}" height="${n1(y2 - y1)}" rx="12" fill="${t.band}" stroke="${t.line}" stroke-width="1.3" stroke-dasharray="7 4"/>`;
+    gs += `<text x="${n1(x1 + 12)}" y="${n1(y1 + 20)}" font-family="${SANS}" font-size="12" font-weight="700" fill="${t.ink}">${esc(g.label)}</text>`;
+    inner += `<g class="gp"${idAttr(opts, g.id)} data-id="${esc(g.id)}">${gs}${badges(gt, { x: x1, y: y1 + 9, w: x2 - x1 }, t)}</g>`;
+  });
+
+  let bump = 0;
+  for (const e of graph.edges) {
+    if (!geo.has(e.from) || !geo.has(e.to)) continue;
+    const isBack = back.has(`${e.from}>${e.to}`);
+    inner += `<g class="ed" data-from="${esc(e.from)}" data-to="${esc(e.to)}">${edgeSvg(e, edgePath(geo.get(e.from), geo.get(e.to), isBack, isBack ? (bump += 6) : 0), t)}</g>`;
+  }
+  for (const n of nodes) {
+    const g = geo.get(n.id);
+    const nt = opts.links && opts.links.get(n.id);
+    inner += `<g class="nd"${idAttr(opts, n.id)} data-id="${esc(n.id)}" data-kind="${esc(n.kind)}" data-label="${esc(n.label)}"${rangesAttr(opts.ranges && opts.ranges.get(n.id))}>${anchored(shape(n, g, t), nt)}${badges(nt, g, t)}</g>`;
+  }
+
+  const w = Math.max(dx + width + M + 28, M + (graph.subtitle ? textW(graph.subtitle, 11) * 0.82 : 0) + M);
+  const h = dy + height + 60;
+  return wrap(w, h, graph.title, graph.desc || `${graph.title}: ${nodes.length} elements, ${graph.edges.length} flows.`, t, inner);
+}
+
+module.exports = { renderBoard, renderGraph, THEMES };
+
+},
+function (module, exports, __r) {
+'use strict';
+
+/*
+ * Layering shared by every diagram.
+ *
+ * Models contain real loops (a command reads a view fed by its own events, a
+ * policy calls the command that triggered it). Layering needs a DAG, so edges
+ * that close a loop are set aside as "back" edges: still drawn, never used to
+ * place nodes. The choice is deterministic: roots are tried in the given order.
+ */
+function layering(ids, edges) {
+  const out = new Map(ids.map((id) => [id, []]));
+  const indeg = new Map(ids.map((id) => [id, 0]));
+  const back = new Set();
+  for (const e of edges) {
+    if (!out.has(e.from) || !out.has(e.to) || e.from === e.to) continue;
+    // A weak edge is known feedback (a worker calling back into the API). It never places nodes.
+    if (e.weak) { back.add(`${e.from}>${e.to}`); continue; }
+    out.get(e.from).push(e.to);
+    indeg.set(e.to, indeg.get(e.to) + 1);
+  }
+
+  const state = new Map();
+  // (back is filled above for weak edges and below for cycle-closing edges)
+  const post = [];
+  const visit = (id) => {
+    state.set(id, 1);
+    for (const next of [...out.get(id)].reverse()) {
+      if (state.get(next) === 1) back.add(`${id}>${next}`);
+      else if (!state.has(next)) visit(next);
+    }
+    state.set(id, 2);
+    post.push(id);
+  };
+  // Roots and children are walked in reverse so that reversing the post-order restores source order.
+  for (const id of [...ids.filter((i) => indeg.get(i) === 0), ...ids].reverse()) if (!state.has(id)) visit(id);
+
+  const topo = post.reverse();
+  const forward = edges.filter((e) => e.from !== e.to && out.has(e.from) && out.has(e.to) && !back.has(`${e.from}>${e.to}`));
+  const preds = new Map(ids.map((id) => [id, []]));
+  const succs = new Map(ids.map((id) => [id, []]));
+  for (const e of forward) { preds.get(e.to).push(e.from); succs.get(e.from).push(e.to); }
+
+  const col = new Map();
+  for (const id of topo) col.set(id, preds.get(id).reduce((m, p) => Math.max(m, col.get(p) + 1), 0));
+  return { col, back, topo, preds, succs };
+}
+
+module.exports = { layering };
+
+},
+function (module, exports, __r) {
+'use strict';
+
+/* Mermaid and Graphviz DOT from the generic graph form. */
+
+const SHAPES = {
+  actor: { dot: 'ellipse', fill: '#e9eef7' },
+  external: { dot: 'ellipse', fill: '#ffffff', style: 'dashed' },
+  command: { dot: 'box', fill: '#ffffff' },
+  process: { dot: 'box', fill: '#ffffff' },
+  event: { dot: 'box', fill: '#ffd400' },
+  view: { dot: 'box', fill: '#e9eef7' },
+  store: { dot: 'cylinder', fill: '#e9eef7' },
+  cache: { dot: 'box', fill: '#e9eef7' },
+  policy: { dot: 'box', fill: '#ffffff', style: 'dashed,rounded' },
+  worker: { dot: 'box', fill: '#ffffff', style: 'dashed,rounded' },
+  system: { dot: 'box', fill: '#ffd400' },
+};
+
+const ids = (graph) => new Map(graph.nodes.map((n, i) => [n.id, `n${i}`]));
+const q = (s) => String(s).replace(/"/g, '#quot;');
+
+/* links: the Map from diagram/index.js, boxId -> [{ href, title }]. Mermaid and DOT can link a box once, so the first target is used. */
+function toMermaid(graph, links) {
+  const id = ids(graph);
+  const lines = [`flowchart ${graph.direction || 'LR'}`];
+  const inGroup = new Set((graph.groups || []).flatMap((g) => g.members));
+  const decl = (n, pad) => `${pad}${id.get(n.id)}["${q(n.label)}${n.sub ? `<br/><i>${q(n.sub)}</i>` : ''}"]`;
+  for (const n of graph.nodes) if (!inGroup.has(n.id)) lines.push(decl(n, '  '));
+  (graph.groups || []).forEach((g, i) => {
+    lines.push(`  subgraph g${i}["${q(g.label)}"]`);
+    for (const m of g.members) { const n = graph.nodes.find((x) => x.id === m); if (n) lines.push(decl(n, '    ')); }
+    lines.push('  end');
+  });
+  for (const e of graph.edges) {
+    if (!id.has(e.from) || !id.has(e.to)) continue;
+    const arrow = e.style === 'dashed' ? '-.->' : '-->';
+    lines.push(`  ${id.get(e.from)} ${arrow}${e.label ? `|"${q(e.label)}"|` : ''} ${id.get(e.to)}`);
+  }
+  if (links) for (const n of graph.nodes) { const t = links.get(n.id); if (t && t.length) lines.push(`  click ${id.get(n.id)} href "${q(t[0].href)}" "${q(t[0].title)}"`); }
+  const kinds = [...new Set(graph.nodes.map((n) => n.kind))];
+  for (const k of kinds) {
+    const s = SHAPES[k] || SHAPES.actor;
+    lines.push(`  classDef ${k} fill:${s.fill},stroke:#0a0e1a,color:#0a0e1a${s.style && s.style.includes('dashed') ? ',stroke-dasharray:5 3' : ''}`);
+    lines.push(`  class ${graph.nodes.filter((n) => n.kind === k).map((n) => id.get(n.id)).join(',')} ${k}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+function toDot(graph, links) {
+  const id = ids(graph);
+  const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const lines = ['digraph eventline {', `  label="${esc(graph.title)}"; labelloc=t; fontname="Helvetica";`, `  rankdir=${graph.direction || 'LR'};`, '  node [fontname="Courier" fontsize=11];', '  edge [fontname="Helvetica" fontsize=9];'];
+  const inGroup = new Set((graph.groups || []).flatMap((g) => g.members));
+  const decl = (n, pad) => {
+    const s = SHAPES[n.kind] || SHAPES.actor;
+    const style = `filled${s.style ? ',' + s.style : ''}`;
+    const t = links && links.get(n.id);
+    const url = t && t.length ? ` URL="${esc(t[0].href)}" tooltip="${esc(t[0].title)}"` : '';
+    return `${pad}${id.get(n.id)} [label="${esc(n.label)}${n.sub ? `\\n${esc(n.sub)}` : ''}" shape=${s.dot} style="${style}" fillcolor="${s.fill}"${url}];`;
+  };
+  for (const n of graph.nodes) if (!inGroup.has(n.id)) lines.push(decl(n, '  '));
+  (graph.groups || []).forEach((g, i) => {
+    lines.push(`  subgraph cluster_${i} { label="${esc(g.label)}"; style=dashed;`);
+    for (const m of g.members) { const n = graph.nodes.find((x) => x.id === m); if (n) lines.push(decl(n, '    ')); }
+    lines.push('  }');
+  });
+  for (const e of graph.edges) {
+    if (!id.has(e.from) || !id.has(e.to)) continue;
+    const attrs = [e.label ? `label="${esc(e.label)}"` : '', e.style === 'dashed' ? 'style=dashed' : ''].filter(Boolean).join(' ');
+    lines.push(`  ${id.get(e.from)} -> ${id.get(e.to)}${attrs ? ` [${attrs}]` : ''};`);
+  }
+  lines.push('}');
+  return lines.join('\n') + '\n';
+}
+
+module.exports = { toMermaid, toDot };
 
 }
 ];

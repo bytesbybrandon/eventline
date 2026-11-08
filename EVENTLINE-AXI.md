@@ -66,6 +66,12 @@ npx eventline-axi diagrams examples/twitter-pure.dsl -o diagrams
 
 Each diagram is available as `svg`, `mermaid` or `dot` (`-f`), and `-t dark` gives a dark theme.
 
+`--links` makes the diagrams navigable: each box that leads somewhere links to the same thing in another diagram, as `<diagram>.<ext>#<box>` beside the file.
+`diagrams <file> --links` writes the whole set so the links resolve, and `--link-base` puts a prefix in front of every link, such as a site path.
+SVG boxes carry an arrow badge per target, Mermaid gets `click` lines and DOT gets `URL` attributes (those two link once).
+The links come from the model; `@link` on a command, view, policy or boundary overrides them (see the language reference).
+Links in an SVG work when it is opened directly or inlined in a page, not inside an `<img>` tag.
+
 Order on the board comes from causality, because a model has no clock.
 A command sits after the commands whose events or views it reads.
 A view sits right of the events that feed it, and a worker right of the event that wakes it.
@@ -79,11 +85,13 @@ The deployment view needs `region:` in the system block and assumes each region 
 ## Use as a library
 
 ```js
-import { parse, check, render, ParseError, KINDS } from 'eventline-axi';
+import { parse, check, render, linkMap, ParseError, KINDS } from 'eventline-axi';
 
 const model = parse(text);              // throws ParseError with .line on bad input
 const issues = check(model);            // same rules as `validate`
 const svg = render(model, 'contextmap'); // kinds: KINDS; formats: svg (default), mermaid, dot
+const linked = render(model, 'containers', 'svg', 'dark', { links: true }); // linkBase, href(target) tune the addresses
+const map = linkMap(model); // { diagram: { boxId: [{ diagram, node, label, url }] } }
 ```
 
 These are pure functions with no I/O, no Node built-ins and no dependencies, so they bundle for a browser.

@@ -369,11 +369,24 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
 .pg__tab[aria-pressed="true"] { background: var(--sc-accent); color: var(--sc-accent-ink); border-color: var(--sc-accent); }
 .pg__grid { display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: var(--sc-4); height: min(72svh, 46rem); min-height: 30rem; }
 .pg__ed, .pg__bd {
-  display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0;
   background: #0a0e1a; border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); overflow: hidden;
   box-shadow: var(--sc-e3), var(--sc-edge);
 }
 .pg__bar { display: flex; justify-content: space-between; align-items: center; gap: var(--sc-3); padding: 0 var(--sc-4); min-height: 3rem; border-bottom: 1px solid var(--sc-hairline); background: #0f1630; }
+.pg__bar--kinds { padding-inline: var(--sc-2) var(--sc-4); min-height: 3.2rem; }
+.pg__kinds { display: flex; gap: 2px; overflow-x: auto; flex: 1 1 0; min-width: 0; scrollbar-width: none; }
+.pg__kinds::-webkit-scrollbar { display: none; }
+.pg__kind {
+  flex: none; min-height: 44px; padding: 0 0.85em; background: transparent; color: var(--sc-ink-soft); border: 0; border-radius: 8px; cursor: pointer;
+  font-size: var(--sc-t-sm); font-weight: 600; white-space: nowrap; position: relative;
+  transition: color var(--sc-d-fast) var(--sc-ease-out), background-color var(--sc-d-fast) var(--sc-ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pg__kind:hover:not(:disabled) { color: var(--sc-ink); } }
+.pg__kind[aria-selected="true"] { color: var(--sc-ink); }
+.pg__kind[aria-selected="true"]::after { content: ""; position: absolute; left: 0.85em; right: 0.85em; bottom: 4px; height: 2px; border-radius: 1px; background: var(--sc-accent); }
+.pg__kind:disabled { opacity: 0.4; cursor: not-allowed; }
+.pg__kind:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: -2px; }
 .pg__hint { font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
 .pg__code { position: relative; min-height: 0; display: grid; }
 /* the selected block: a band under the text, moved with the editor's scroll */
@@ -403,10 +416,16 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
 .pg__board.is-fit { place-items: center; }
 .pg__board.is-fit svg { width: 100%; height: auto; max-height: 100%; }
 .pg__board svg .nd { cursor: pointer; outline: none; }
+.pg__board svg a { cursor: pointer; }
+.pg__board svg .gp.is-flash { animation: gp-flash 1.4s var(--sc-ease-out); }
+@keyframes gp-flash { from { filter: drop-shadow(0 0 8px #ffd400) drop-shadow(0 0 2px #ffd400); } to { filter: drop-shadow(0 0 0 transparent); } }
+.pg__board svg a.lnk-badge:hover rect { fill: #fff; }
+.pg__board svg a.lnk-badge:focus-visible rect { stroke-width: 2.5; stroke: #f3f5fa; }
 .pg__board svg .nd.is-sel { filter: drop-shadow(0 0 3px #ffd400); }
 .pg__board svg .nd:focus-visible { filter: drop-shadow(0 0 4px #f3f5fa); }
 .pg__board svg .nd, .pg__board svg .ed { transition: opacity 200ms var(--sc-ease-out); }
 .pg__board svg.is-tracing .nd:not(.is-on), .pg__board svg.is-tracing .ed:not(.is-on) { opacity: 0.14; }
+.pg__board svg.is-tracing .nd:not(.is-on) .lnk-badge { pointer-events: none; }
 .pg__board svg.is-tracing .ed.is-on path { stroke: #ffd400; stroke-width: 2.4; }
 .pg__empty { margin: auto; color: var(--sc-ink-soft); font-size: var(--sc-t-sm); padding: var(--sc-5); }
 .pg__grid[data-state="error"] .pg__board svg { opacity: 0.35; }
@@ -426,9 +445,22 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
 .pg__issues li[data-s="error"]::before { content: "\25CF"; }
 .pg__issues li[data-s="warn"]::before { content: "\25B2"; }
 .pg__issues li[data-s="info"]::before { content: "i"; color: var(--sc-ink-soft); }
-.pg__tools { display: flex; align-items: center; gap: var(--sc-2); }
-.pg__z { min-width: 36px; padding: 0 0.6em; font-size: var(--sc-t-sm); }
-.pg__zv { min-width: 3.2rem; text-align: center; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
+.pg__tools { display: flex; flex: none; align-items: center; gap: var(--sc-2); }
+/* zoom floats over the board's corner, like a map's controls, so the tab strip keeps the bar */
+.pg__bd { position: relative; }
+.pg__zoom {
+  position: absolute; right: var(--sc-3); bottom: var(--sc-3); display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: color-mix(in oklab, #0a0e1a 88%, transparent); border: 1px solid var(--sc-hairline-strong); border-radius: 10px; box-shadow: var(--sc-e2);
+}
+.pg__z {
+  min-width: 40px; min-height: 40px; padding: 0 0.6em; background: transparent; color: var(--sc-ink); border: 0; border-radius: 7px; cursor: pointer;
+  font-size: var(--sc-t-sm); font-weight: 600; transition: background-color var(--sc-d-fast) var(--sc-ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pg__z:hover { background: color-mix(in oklab, var(--sc-ink) 12%, transparent); } }
+.pg__z:active { transform: scale(0.96); }
+.pg__z:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: -2px; }
+.pg__z--fit[aria-pressed="true"] { color: var(--sc-accent); }
+.pg__zv { min-width: 3.4rem; text-align: center; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); font-variant-numeric: tabular-nums; }
 .pg__out { display: flex; flex-wrap: wrap; gap: var(--sc-2); justify-content: flex-end; }
 .pg__out .btn[data-done]::after { content: " \2713"; color: var(--sc-accent); }
 
@@ -511,7 +543,6 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
   .pf-faq__wrap, .pf-run__wrap { grid-template-columns: minmax(0, 1fr); gap: var(--sc-6); }
   .pg__head, .pg__foot { grid-template-columns: minmax(0, 1fr); }
   .pg__presets, .pg__out { justify-content: flex-start; }
-  .pg__hint--pan { display: none; }
   .pg__grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(16rem, 22rem) minmax(18rem, 26rem); height: auto; }
   .pf-faq__wrap h2 { position: static; max-width: 14ch; }
 }
