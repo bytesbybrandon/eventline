@@ -58,6 +58,7 @@ Diagram types, formats and what each one is derived from are in [EVENTLINE-AXI.m
 
 ## Learn the notation
 
+- [The documentation site](https://bytesbybrandon.github.io/eventline/docs/) has all of this with search.
 - [docs/README.md](./docs/README.md) is the map: which document to read first for your goal.
 - [docs/LANGUAGE.md](./docs/LANGUAGE.md) is the full reference.
 - [docs/EXAMPLES.md](./docs/EXAMPLES.md) has two worked models, a rate limiter and a payment webhook.
