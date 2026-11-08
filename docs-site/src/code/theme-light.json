@@ -1,0 +1,16 @@
+{
+  "name": "eventline-light",
+  "type": "light",
+  "colors": { "editor.background": "#f4f6fb", "editor.foreground": "#1c233b" },
+  "tokenColors": [
+    { "scope": ["comment"], "settings": { "foreground": "#59627d", "fontStyle": "italic" } },
+    { "scope": ["keyword.control"], "settings": { "foreground": "#38425f", "fontStyle": "bold" } },
+    { "scope": ["keyword.operator"], "settings": { "foreground": "#59627d" } },
+    { "scope": ["entity.name.function.command"], "settings": { "foreground": "#0a0e1a", "fontStyle": "bold" } },
+    { "scope": ["entity.name.type"], "settings": { "foreground": "#0a0e1a", "fontStyle": "bold" } },
+    { "scope": ["variable.other.event"], "settings": { "foreground": "#7a6000", "fontStyle": "bold" } },
+    { "scope": ["storage.type.annotation"], "settings": { "foreground": "#38425f", "fontStyle": "italic" } },
+    { "scope": ["string"], "settings": { "foreground": "#465170" } },
+    { "scope": ["constant.numeric"], "settings": { "foreground": "#1c233b" } }
+  ]
+}

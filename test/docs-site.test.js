@@ -73,3 +73,22 @@ test('every docs page shares the social image', () => {
   assert.ok(config.includes("name: 'twitter:image'"));
   assert.ok(fs.existsSync(path.join(root, 'site', 'og.png')));
 });
+
+test('fenced blocks that hold eventline source are tagged for highlighting, and nothing else is', async () => {
+  const { tagEventline } = await load();
+  const model = 'user -> postTweet(content) in UserTimeline(userId)\non [user-authenticated(userId)]\n  --[default]--> [tweet-created { userId }]\n';
+  const out = tagEventline(`Intro\n\n\`\`\`text\n${model}\`\`\`\n\n\`\`\`\n${model}\`\`\`\n\n\`\`\`bash\nnpx -y eventline-axi model.dsl\n\`\`\`\n\n\`\`\`text\nclient  ->  gateway  ->  store\n\`\`\`\n`);
+  assert.equal(out.match(/^```eventline$/gm).length, 2);
+  assert.match(out, /```bash\nnpx -y eventline-axi model\.dsl\n```/);
+  assert.match(out, /```text\nclient {2}-> {2}gateway/);
+});
+
+test('the playground link carries the model as base64url that decodes back to the exact text', async () => {
+  const { playgroundHref, isDrawable } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  const text = 'user -> postTweet(content) in UserTimeline(userId)\non [user-authenticated(userId)]\n  --[default]--> [tweet-created { userId, note: "h\u00e9llo" }]\n';
+  const href = playgroundHref(text);
+  assert.match(href, /^\/eventline\/#play=[A-Za-z0-9_-]+$/);
+  assert.equal(Buffer.from(href.split('#play=')[1], 'base64url').toString('utf8'), text);
+  assert.ok(isDrawable(text));
+  assert.ok(!isDrawable('user -> postTweet(content)'), 'a one-line fragment is not worth drawing');
+});

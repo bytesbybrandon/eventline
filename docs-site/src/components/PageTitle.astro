@@ -1,0 +1,36 @@
+---
+// A mono kicker with the sidebar group above the title. The home page draws its own title.
+const PAGE_TITLE_ID = '_top';
+
+const route = Astro.locals.starlightRoute;
+const isHome = route.entry.data.template === 'splash';
+const kicker = (() => {
+  for (const item of route.sidebar) {
+    if (item.type !== 'group') continue;
+    const has = (entries) => entries.some((e) => (e.type === 'link' ? e.isCurrent : has(e.entries)));
+    if (has(item.entries)) return item.label;
+  }
+  return '';
+})();
+---
+
+{!isHome && (
+  <div class="page-title">
+    {kicker && <p class="kicker">{kicker}</p>}
+    <h1 id={PAGE_TITLE_ID}>{route.entry.data.title}</h1>
+  </div>
+)}
+
+<style>
+  @layer starlight.core {
+    .page-title { margin-bottom: 0.5rem; }
+    .kicker {
+      margin: 0 0 0.5rem; font-family: var(--sl-font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--sl-color-text-accent);
+    }
+    h1 {
+      margin: 0; font-size: clamp(2.3rem, 1.5rem + 3vw, 3.6rem); line-height: 1.02; font-weight: 650;
+      letter-spacing: -0.03em; color: var(--sl-color-white); text-wrap: balance;
+    }
+  }
+</style>
