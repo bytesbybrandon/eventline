@@ -91,7 +91,7 @@ program
 
 program
   .command('diagram <kind> <file>')
-  .description('Draw a diagram: eventmodel | context | containers | dataflow | deployment')
+  .description('Draw a diagram: eventmodel | context | containers | dataflow | deployment | contextmap')
   .option('-f, --format <fmt>', 'svg | mermaid | dot', 'svg')
   .option('-t, --theme <theme>', 'light | dark', 'light')
   .option('-o, --out <path>', 'Write to a file instead of stdout')

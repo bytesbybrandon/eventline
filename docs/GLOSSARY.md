@@ -170,6 +170,25 @@ quota-anomaly-detected { userId, excessCount }
 
 ---
 
+### Context
+
+A bounded context: a group of commands, views and policies with its own language and rules, written as `context Name { ... }`.
+It lists the events other contexts may rely on in `publishes`.
+It is not a [boundary](#boundary-dynamic-consistency-boundary), which is a consistency scope.
+
+### Refusal
+
+`--[guard]--> reject CODE`: a command that refuses and records no event.
+Use an event instead when the refusal must be remembered.
+
+### Note
+
+`@note("...")` free text on a command, view, policy or boundary, for what the notation does not model, such as which endpoint starts a command.
+
+### Timer
+
+`every N unit` or `cron "..."` starts a policy on a schedule instead of an event.
+
 ## Derived Concepts
 
 ### Guard
