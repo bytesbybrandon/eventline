@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parse } = require('../lib/parser');
 const { summarize } = require('../lib/summary');
-const { render } = require('../lib/commands/diagram');
+const { render } = require('../lib/diagram');
 
 const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');

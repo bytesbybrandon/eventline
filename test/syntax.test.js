@@ -8,7 +8,7 @@ const { parse, ParseError } = require('../lib/parser');
 const { check } = require('../lib/commands/validate');
 const { buildBoard } = require('../lib/diagram/board');
 const { BUILDERS } = require('../lib/diagram/system');
-const { render } = require('../lib/commands/diagram');
+const { render } = require('../lib/diagram');
 
 const rules = (src) => check(parse(src)).map((i) => `${i.severity}:${i.rule}`);
 

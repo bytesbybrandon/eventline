@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('../lib/parser');
-const { render } = require('../lib/commands/diagram');
+const { render } = require('../lib/diagram');
 
 const root = path.join(__dirname, '..');
 const src = path.join(root, 'examples', 'twitter-pure.dsl');

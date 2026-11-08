@@ -53,11 +53,11 @@ A conforming SliceRM implementation does all of the following.
    SliceRM does not extend the syntax privately.
    New needs come back to this repo as a language change.
 
-The parser, model and diagram code in `lib/` are plain CommonJS with no runtime dependencies and no Node built-ins.
-`parse(text)` returns the model, and `render(model, kind, format)` returns SVG, Mermaid or DOT as a string.
-Vendor those files into SliceRM or call the CLI.
-Brandon decides which.
-A published `exports` map for `eventline-axi` would make the first option cleaner.
+The package `eventline-axi` exposes the library: `import { parse, check, render, ParseError } from 'eventline-axi'`.
+Everything on that path is pure CommonJS with no dependencies and no Node built-ins, and it bundles for a browser (about 82 KB with esbuild).
+`parse(text)` returns the model, `check(model)` returns the validate issues, and `render(model, kind, format)` returns SVG, Mermaid or DOT as a string.
+Depend on the package at a pinned version rather than copying files, so the language and SliceRM move together on purpose.
+Use the CLI only for scripts and CI.
 
 ## 4. Mapping, SliceRM to eventline
 

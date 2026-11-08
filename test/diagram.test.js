@@ -7,7 +7,7 @@ const path = require('node:path');
 const { parse } = require('../lib/parser');
 const { buildBoard, boardToGraph } = require('../lib/diagram/board');
 const { BUILDERS } = require('../lib/diagram/system');
-const { render, KINDS } = require('../lib/commands/diagram');
+const { render, KINDS } = require('../lib/diagram');
 const { check } = require('../lib/commands/validate');
 
 const load = (name) => parse(fs.readFileSync(path.join(__dirname, '..', 'examples', name), 'utf8'));
