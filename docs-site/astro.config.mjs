@@ -22,7 +22,7 @@ export default defineConfig({
         { label: 'Model a system', items: ['actors', 'system-context', 'twitter-translation'] },
         { label: 'Use the tool', items: ['eventline-axi'] },
         { label: 'Interviews', items: ['interview-simulation'] },
-        { label: 'Build with it', items: ['architecture', 'contributing', 'dyad-brief'] },
+        { label: 'Build with it', items: ['architecture', 'contributing'] },
       ],
     }),
   ],
