@@ -62,6 +62,15 @@ class Scanner {
     return lo + 1 + this.lineOffset;
   }
 
+  /* The last line the parser has consumed: trailing blank lines and comments that ws() skipped do not count. */
+  endLine() {
+    const text = (k) => this.s.slice(this.starts[k], k + 1 < this.starts.length ? this.starts[k + 1] - 1 : this.s.length).trim();
+    let k = this.lineAt() - 1 - this.lineOffset;
+    if (this.s.slice(this.starts[k], this.i).trim() === '') k--;
+    while (k > 0 && (text(k) === '' || text(k).startsWith('//'))) k--;
+    return k + 1 + this.lineOffset;
+  }
+
   fail(msg, at = this.i) {
     const rest = this.s.slice(at).split('\n')[0].trim().slice(0, 40);
     throw new ParseError(rest ? `${msg}, found "${rest}"` : `${msg}, found end of input`, this.lineAt(at));
@@ -354,7 +363,8 @@ function parseView(sc, model) {
   sc.expect('=>', '"=>" before the view shape');
   const shape = parseFields(sc.balanced());
   const annotations = parseAnnotations(sc);
-  const view = { name, params: paramNames(paramDefs), paramDefs, sources, shape, annotations, notes: notesFrom(annotations), triggers: triggersFrom(annotations), query: queryFrom(annotations), scenarios: [], line };
+  const view = { name, params: paramNames(paramDefs), paramDefs, sources, shape, annotations, notes: notesFrom(annotations), triggers: triggersFrom(annotations), query: queryFrom(annotations), scenarios: [], line, endLine: 0 };
+  view.endLine = sc.endLine();
   model.views.push(view);
   sc.last = view;
 }
@@ -362,7 +372,7 @@ function parseView(sc, model) {
 function parseCommand(sc, model, actor, line) {
   const name = sc.ident('a command name');
   const paramDefs = parseParams(sc.balanced());
-  const cmd = { actor, name, params: paramNames(paramDefs), paramDefs, boundary: null, on: [], from: [], branches: [], annotations: {}, notes: [], scenarios: [], line };
+  const cmd = { actor, name, params: paramNames(paramDefs), paramDefs, boundary: null, on: [], from: [], branches: [], annotations: {}, notes: [], scenarios: [], line, endLine: 0 };
   sc.ws();
   const inClause = /^in\s+([A-Za-z_][\w-]*)\s*\(/.exec(sc.s.slice(sc.i, sc.i + 120));
   if (inClause) {
@@ -393,6 +403,7 @@ function parseCommand(sc, model, actor, line) {
     cmd.branches.push({ guard: guard === 'default' ? null : guard, default: guard === 'default', emits, reject, line: bline });
   }
   if (!cmd.branches.length) throw new ParseError(`Command "${name}" needs at least one --[guard]--> [events] or --[guard]--> reject CODE branch`, line);
+  cmd.endLine = sc.endLine();
   model.commands.push(cmd);
   sc.last = cmd;
 }
@@ -405,7 +416,7 @@ function parseCommand(sc, model, actor, line) {
 function parsePolicy(sc, model, trigger, line) {
   if (trigger.event && sc.peek('{')) { trigger.payload = squash(sc.balanced()); trigger.fields = parseFields(trigger.payload); }
   const annotations = parseAnnotations(sc);
-  const policy = { trigger, annotations, notes: notesFrom(annotations), from: [], rules: [], line };
+  const policy = { trigger, annotations, notes: notesFrom(annotations), from: [], rules: [], line, endLine: 0 };
   if (sc.keywordBracket('from')) { sc.i += 4; policy.from = parseFactList(sc.balanced(), line); }
   while (sc.peek('--[') || sc.peek('->')) {
     const rline = sc.lineAt();
@@ -428,6 +439,7 @@ function parsePolicy(sc, model, trigger, line) {
   }
   const what = trigger.event ? `on "${trigger.event}"` : `on "${trigger.schedule}"`;
   if (!policy.rules.length) throw new ParseError(`Policy ${what} needs a rule such as -> worker -> command()`, line);
+  policy.endLine = sc.endLine();
   model.policies.push(policy);
 }
 
@@ -885,8 +897,9 @@ function commandGroups(model) {
   const groups = new Map();
   for (const cmd of model.commands) {
     const key = `${cmd.actor.toLowerCase()}>${cmd.name}`;
-    if (!groups.has(key)) groups.set(key, { actor: cmd.actor, name: cmd.name, params: cmd.params, boundary: cmd.boundary, on: [], from: [], branches: [], notes: [], triggers: [], annotations: {}, line: cmd.line });
+    if (!groups.has(key)) groups.set(key, { ranges: [], actor: cmd.actor, name: cmd.name, params: cmd.params, boundary: cmd.boundary, on: [], from: [], branches: [], notes: [], triggers: [], annotations: {}, line: cmd.line });
     const g = groups.get(key);
+    g.ranges.push([cmd.line, cmd.endLine]);
     g.on.push(...cmd.on);
     g.from.push(...cmd.from);
     g.branches.push(...cmd.branches);
@@ -958,13 +971,14 @@ function buildBoard(model) {
   cmds.forEach((cmd, col) => {
     const kind = model.actorKind(cmd.actor);
     const declared = model.actors.find((a) => a.name.toLowerCase() === cmd.actor.toLowerCase());
-    const actor = put(`actor:${cmd.name}`, 'actor', declared ? declared.name : cmd.actor, col, { kind: kind === 'external' ? 'external' : 'actor' });
+    const actor = put(`actor:${cmd.name}`, 'actor', declared ? declared.name : cmd.actor, col, { kind: kind === 'external' ? 'external' : 'actor', ranges: cmd.ranges.map(([from]) => [from, from]) });
     const facts = [...new Set(cmd.on.map((f) => f.name).filter(assumed))];
     const rejects = [...new Set(cmd.branches.map((b) => b.reject).filter(Boolean))];
     const planned = !!cmd.annotations.planned;
     const c = put(`cmd:${cmd.name}`, 'command', `${cmd.name}(${cmd.params.join(', ')})`, col, {
       kind: 'command', sub: planned ? 'planned' : kind === 'external' ? 'translation' : 'state change', slice: kind === 'external' ? 'translation' : 'state change',
       planned,
+      ranges: cmd.ranges,
       notes: [
         ...(cmd.source && cmd.source.system ? [`translates from ${clip(`${cmd.source.system} ${cmd.source.version || ''}`.trim(), 30)}`] : []),
         ...(facts.length ? [`assumes ${clip(facts.join(', '), 40)}`] : []),
@@ -995,7 +1009,7 @@ function buildBoard(model) {
     const srcCols = view.sources.map((s) => colOf.get(`evt:${s.name}`)).filter((c) => c !== undefined);
     const col = free('view', srcCols.length ? Math.max(...srcCols) + 1 : end);
     const planned = !!view.annotations.planned;
-    const v = put(`view:${view.name}`, 'view', viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, fullNotes: view.notes, notes: [] });
+    const v = put(`view:${view.name}`, 'view', viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, ranges: [[view.line, view.endLine]], fullNotes: view.notes, notes: [] });
     const unemitted = [...new Set(view.sources.map((s) => s.name).filter(assumed))];
     if (unemitted.length) v.notes.push(`from ${clip(unemitted.join(', '), 40)}`);
     if (view.triggers.length) v.notes.push(`read in ${clip(view.triggers.map(triggerLabel).join(', '), 36)}`);
@@ -1039,6 +1053,7 @@ function buildBoard(model) {
       const wcol = timer ? colOf.get(tid) : free('policy', tcol + 1);
       const planned = !!pol.annotations.planned;
       const w = nodes.get(wid) || put(wid, 'policy', rule.worker, wcol, { kind: 'policy', sub: planned ? 'planned' : 'automation', slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
+      (w.ranges = w.ranges || []).push([pol.line, pol.endLine]);
       bump(w.col);
       for (const f of pol.from) {
         if (!nodes.has(`view:${f.name}`)) { const vcol = free('view', end); put(`view:${f.name}`, 'view', viewLabel(f.name), vcol, { kind: 'view', declared: false, sub: 'not declared' }); bump(vcol); }
@@ -1294,7 +1309,7 @@ function renderBoard(board, opts = {}) {
   for (const n of board.nodes) {
     const g = geo.get(n.id);
     const tip = n.fullNotes && n.fullNotes.length ? `<title>${esc(n.fullNotes.join(' | '))}</title>` : '';
-    inner += `<g class="nd" data-id="${esc(n.id)}" data-kind="${esc(n.kind)}" data-label="${esc(n.label)}">${tip}${shape(n, g, t)}</g>`;
+    inner += `<g class="nd" data-id="${esc(n.id)}" data-kind="${esc(n.kind)}" data-label="${esc(n.label)}"${n.ranges && n.ranges.length ? ` data-lines="${n.ranges.map(([a, b]) => `${a}-${b}`).join(',')}"` : ''}>${tip}${shape(n, g, t)}</g>`;
     (n.notes || []).forEach((line, i) => { inner += `<text x="${n1(g.x)}" y="${n1(g.y + g.h + 12 + i * 11)}" font-family="${SANS}" font-size="9.5" fill="${t.soft}">${esc(line)}</text>`; });
   }
 

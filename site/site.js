@@ -602,7 +602,7 @@
     return document.importNode(doc.documentElement, true);
   }
   /* wires tracing onto a board svg; readout is the element that says what is lit */
-  function traceBoard(svg, readout, idle) {
+  function traceBoard(svg, readout, idle, opts = {}) {
     const nodes = new Map($$('.nd', svg).map((n) => [n.dataset.id, n]));
     const edges = $$('.ed', svg).map((e) => ({ el: e, from: e.dataset.from, to: e.dataset.to }));
     const up = new Map(); const down = new Map();
@@ -616,7 +616,12 @@
       while (q.length) for (const e of next.get(q.shift()) || []) { used.add(e); if (!seen.has(e[key])) { seen.add(e[key]); q.push(e[key]); } }
       return { seen, used };
     };
-    let pinned = null;
+    let base = null; // the selected box: it stays lit until something else is selected
+    const paint = (id) => {
+      if (id) show(id); else clear();
+      for (const [nid, el] of nodes) el.classList.toggle('is-sel', nid === base);
+    };
+    const select = (id) => { base = id; paint(base); if (opts.onSelect) opts.onSelect(base, base ? nodes.get(base) : null); };
     function show(id) {
       const u = walk(id, up, 'from'); const d = walk(id, down, 'to');
       svg.classList.add('is-tracing');
@@ -639,13 +644,25 @@
     }
     const nodeOf = (t) => t.closest && t.closest('.nd');
     svg.addEventListener('pointerover', (ev) => { const n = nodeOf(ev.target); if (n && ev.pointerType !== 'touch') show(n.dataset.id); });
-    svg.addEventListener('pointerout', (ev) => { if (ev.pointerType !== 'touch' && nodeOf(ev.target) && !pinned) clear(); });
+    svg.addEventListener('pointerout', (ev) => { if (ev.pointerType !== 'touch' && nodeOf(ev.target)) paint(base); });
     svg.addEventListener('click', (ev) => {
+      if (opts.suppressClick && opts.suppressClick()) return;
       const n = nodeOf(ev.target);
-      if (!n) { pinned = null; clear(); return; }
-      if (pinned === n.dataset.id) { pinned = null; clear(); } else { pinned = n.dataset.id; show(pinned); }
+      if (!n) select(null);
+      else select(base === n.dataset.id ? null : n.dataset.id);
     });
-    return { show, clear };
+    if (opts.focusable) {
+      for (const [nid, el] of nodes) {
+        el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', `${el.dataset.kind} ${el.dataset.label}. Press Enter to find its lines in the editor.`);
+        el.addEventListener('focus', () => show(nid));
+        el.addEventListener('blur', () => paint(base));
+        el.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); select(nid); }
+        });
+      }
+    }
+    return { nodes, setBase(id) { base = id && nodes.has(id) ? id : null; paint(base); }, get base() { return base; } };
   }
 
   const boardFig = $('.pf-board__fig');
@@ -695,7 +712,7 @@
   ].join('\n');
   const pgEl = {
     grid: $('#pg'), text: $('#pg-text'), mirror: $('#pg-mirror code'), mirrorBox: $('#pg-mirror'), board: $('#pg-board'),
-    status: $('#pg-status'), trace: $('#pg-trace'), issues: $('#pg-issues'),
+    status: $('#pg-status'), trace: $('#pg-trace'), issues: $('#pg-issues'), hl: $('#pg-hl'),
   };
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const TOKEN = /(@[A-Za-z_]\w*)|("(?:[^"\\]|\\.)*")|(->\s*)([A-Za-z_]\w*)(?=\()|(\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\*?)|(\bon(?=\s*\[)|\bfrom(?=\s*\[)|\bin(?=\s+[A-Z])|\b(?:default|reject)\b)/g;
@@ -726,7 +743,10 @@
     return out;
   }
   const paintMirror = () => { pgEl.mirror.innerHTML = pgEl.text.value.split('\n').map(hlLine).join('\n') + '\n'; };
-  const syncScroll = () => { pgEl.mirrorBox.scrollTop = pgEl.text.scrollTop; pgEl.mirrorBox.scrollLeft = pgEl.text.scrollLeft; };
+  const syncScroll = () => {
+    pgEl.mirrorBox.scrollTop = pgEl.text.scrollTop; pgEl.mirrorBox.scrollLeft = pgEl.text.scrollLeft;
+    pgEl.hl.style.transform = 'translate3d(0,' + (-pgEl.text.scrollTop) + 'px,0)';
+  };
   pgEl.text.addEventListener('scroll', syncScroll);
 
   const b64 = {
@@ -770,13 +790,22 @@
     svg.removeAttribute('width'); svg.removeAttribute('height');
     pgEl.board.replaceChildren(svg);
     pgEl.grid.dataset.state = 'ok';
-    traceBoard(svg, pgEl.trace, 'Point at a box on the board to trace its lineage.');
+    pgBoard = { svg, tracer: traceBoard(svg, pgEl.trace, IDLE, { focusable: true, onSelect: onBoardSelect, suppressClick: () => panMoved }) };
+    applyZoom();
+    restoreSelection();
     pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'view'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
     const issues = eventline.check(model).slice(0, 5);
     for (const it of issues) {
       const li = document.createElement('li'); li.dataset.s = it.severity;
       const span = document.createElement('span'); span.textContent = it.message;
-      li.append(span); pgEl.issues.append(li);
+      li.append(span);
+      if (Number.isInteger(it.line) && it.line > 0) {
+        const go = document.createElement('button'); go.type = 'button'; go.className = 'pg__issue'; go.textContent = 'line ' + it.line;
+        go.setAttribute('aria-label', 'Show line ' + it.line + ' in the editor');
+        go.addEventListener('click', () => { if (pgBoard) pgBoard.tracer.setBase(null); pgSel = null; showLines([[it.line, it.line]], true); });
+        span.append(go);
+      }
+      pgEl.issues.append(li);
     }
   }
   function setText(text, fromUser) {
@@ -805,13 +834,173 @@
   }
   $$('.pg__tab').forEach((t) => t.addEventListener('click', () => loadPreset(t.dataset.preset)));
 
+  /* ------------------------------------------- the board and the text, linked -- */
+  const IDLE = 'Point at a box to trace its lineage. Click it to find its lines.';
+  let pgBoard = null;   // { svg, tracer } for the board on screen
+  let pgSel = null;     // id of the selected box; survives redraws while the box still exists
+  const lineMetrics = () => { const cs = getComputedStyle(pgEl.text); return { lh: parseFloat(cs.lineHeight), pt: parseFloat(cs.paddingTop) }; };
+
+  function showLines(ranges, reveal) {
+    pgEl.hl.replaceChildren();
+    if (!ranges.length) return;
+    const { lh, pt } = lineMetrics();
+    for (const [from, to] of ranges) {
+      const band = document.createElement('i');
+      band.style.top = (pt + (from - 1) * lh) + 'px';
+      band.style.height = ((to - from + 1) * lh) + 'px';
+      pgEl.hl.append(band);
+    }
+    if (reveal) {
+      const top = pt + (ranges[0][0] - 1) * lh;
+      const bottom = pt + ranges[0][1] * lh;
+      const view = pgEl.text.clientHeight;
+      if (top < pgEl.text.scrollTop || bottom > pgEl.text.scrollTop + view) pgEl.text.scrollTop = Math.max(0, top - view * 0.25);
+    }
+    syncScroll();
+  }
+  /* A block node knows its lines from the parser. An event is wherever its name is written. */
+  function rangesOf(el) {
+    if (el.dataset.lines) return el.dataset.lines.split(',').map((s) => s.split('-').map(Number));
+    if (el.dataset.kind !== 'event') return [];
+    const name = el.dataset.label.replace(/[.*+?^|()[\]\\{}$]/g, '\\$&');
+    const re = new RegExp('(^|[^\\w-])' + name + '\\*?(?![\\w-])');
+    const out = [];
+    pgEl.text.value.split('\n').forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (!re.test(code)) return;
+      const last = out[out.length - 1];
+      if (last && last[1] === i) last[1] = i + 1; else out.push([i + 1, i + 1]);
+    });
+    return out;
+  }
+  function onBoardSelect(id, el) {
+    pgSel = id;
+    showLines(el ? rangesOf(el) : [], true);
+  }
+  /* The caret picks a box: an event name picks that event, anywhere else the block it sits in. */
+  function nodeAtCaret() {
+    if (!pgBoard) return null;
+    const text = pgEl.text.value;
+    const pos = pgEl.text.selectionStart;
+    const line = text.slice(0, pos).split('\n').length;
+    const start = text.lastIndexOf('\n', pos - 1) + 1;
+    const stop = text.indexOf('\n', pos) < 0 ? text.length : text.indexOf('\n', pos);
+    const ltxt = text.slice(start, stop);
+    const col = pos - start;
+    const word = /[A-Za-z_][\w-]*/g;
+    let m;
+    while ((m = word.exec(ltxt))) {
+      if (col >= m.index && col <= m.index + m[0].length) {
+        if (m[0].includes('-') && pgBoard.tracer.nodes.has('evt:' + m[0])) return 'evt:' + m[0];
+        break;
+      }
+    }
+    let best = null; let size = Infinity;
+    for (const [id, el] of pgBoard.tracer.nodes) {
+      if (!el.dataset.lines || el.dataset.kind === 'actor' || el.dataset.kind === 'external') continue;
+      for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && to - from < size) { best = id; size = to - from; }
+    }
+    return best;
+  }
+  let caretQueued = false;
+  function followCaret() {
+    if (caretQueued) return;
+    caretQueued = true;
+    raf(() => {
+      caretQueued = false;
+      if (!pgBoard) return;
+      const id = nodeAtCaret();
+      pgSel = id;
+      pgBoard.tracer.setBase(id);
+      showLines(id ? rangesOf(pgBoard.tracer.nodes.get(id)) : [], false);
+      if (id) revealNode(pgBoard.tracer.nodes.get(id));
+    });
+  }
+  /* after a redraw: keep the selection if the box still exists, and let the caret win while you are typing */
+  function restoreSelection() {
+    if (document.activeElement === pgEl.text) { followCaret(); return; }
+    if (pgSel && pgBoard.tracer.nodes.has(pgSel)) {
+      pgBoard.tracer.setBase(pgSel);
+      showLines(rangesOf(pgBoard.tracer.nodes.get(pgSel)), false);
+    } else { pgSel = null; showLines([], false); }
+  }
+  ['keyup', 'click', 'focus'].forEach((t) => pgEl.text.addEventListener(t, followCaret));
+
+  /* zoom and pan: the board scrolls inside its panel; zoom resizes the svg around the pointer */
+  const zoom = { mode: 'fit', scale: 1 };
   const fitBtn = $('#pg-fit');
-  fitBtn.addEventListener('click', () => {
-    const on = fitBtn.getAttribute('aria-pressed') !== 'true';
-    fitBtn.setAttribute('aria-pressed', String(on));
-    fitBtn.textContent = on ? 'Fit to panel' : 'Actual size';
-    pgEl.board.classList.toggle('is-fit', on);
+  const zoomOut = $('#pg-zv');
+  const natural = (svg) => { const vb = svg.viewBox.baseVal; return { w: vb.width, h: vb.height }; };
+  const curScale = () => (zoom.mode === 'manual' ? zoom.scale : pgBoard.svg.getBoundingClientRect().width / natural(pgBoard.svg).w);
+  function applyZoom() {
+    if (!pgBoard) return;
+    const svg = pgBoard.svg;
+    const fit = zoom.mode === 'fit';
+    pgEl.board.classList.toggle('is-fit', fit);
+    fitBtn.setAttribute('aria-pressed', String(fit));
+    if (fit) { svg.style.width = ''; svg.style.height = ''; zoomOut.textContent = Math.round(curScale() * 100) + '%'; return; }
+    const n = natural(svg);
+    svg.style.width = n.w * zoom.scale + 'px';
+    svg.style.height = n.h * zoom.scale + 'px';
+    zoomOut.textContent = Math.round(zoom.scale * 100) + '%';
+  }
+  function zoomTo(next, clientX, clientY) {
+    if (!pgBoard) return;
+    const svg = pgBoard.svg;
+    const cur = curScale();
+    const target = Math.min(Math.max(next, 0.2), 3);
+    const r = svg.getBoundingClientRect();
+    const nx = (clientX - r.left) / cur;
+    const ny = (clientY - r.top) / cur;
+    zoom.mode = 'manual'; zoom.scale = target;
+    applyZoom();
+    const r2 = svg.getBoundingClientRect();
+    pgEl.board.scrollLeft += (r2.left + nx * target) - clientX;
+    pgEl.board.scrollTop += (r2.top + ny * target) - clientY;
+  }
+  const boardCentre = () => { const r = pgEl.board.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  $('#pg-zin').addEventListener('click', () => { if (pgBoard) zoomTo(curScale() * 1.25, ...boardCentre()); });
+  $('#pg-zout').addEventListener('click', () => { if (pgBoard) zoomTo(curScale() / 1.25, ...boardCentre()); });
+  fitBtn.addEventListener('click', () => { zoom.mode = 'fit'; applyZoom(); });
+  pgEl.board.addEventListener('wheel', (ev) => {
+    if (!pgBoard || !(ev.ctrlKey || ev.metaKey)) return;
+    ev.preventDefault();
+    zoomTo(curScale() * Math.exp(-ev.deltaY * 0.0022), ev.clientX, ev.clientY);
+  }, { passive: false });
+  pgEl.board.setAttribute('tabindex', '0');
+  pgEl.board.setAttribute('role', 'region');
+  pgEl.board.setAttribute('aria-label', 'Event Modeling board. Plus and minus zoom, zero fits, arrow keys scroll.');
+  pgEl.board.addEventListener('keydown', (ev) => {
+    if (!pgBoard || ev.target.closest('.nd') || ev.ctrlKey || ev.metaKey) return;
+    if (ev.key === '+' || ev.key === '=') { ev.preventDefault(); zoomTo(curScale() * 1.25, ...boardCentre()); }
+    else if (ev.key === '-') { ev.preventDefault(); zoomTo(curScale() / 1.25, ...boardCentre()); }
+    else if (ev.key === '0') { ev.preventDefault(); zoom.mode = 'fit'; applyZoom(); }
   });
+  /* a mouse drags the board; touch scrolls it natively. A drag must not count as a click on the background. */
+  let pan = null;
+  let panMoved = false;
+  pgEl.board.addEventListener('pointerdown', (ev) => {
+    panMoved = false;
+    if (ev.pointerType !== 'mouse' || ev.button !== 0 || zoom.mode === 'fit' || ev.target.closest('.nd')) return;
+    pan = { x: ev.clientX, y: ev.clientY, l: pgEl.board.scrollLeft, t: pgEl.board.scrollTop, id: ev.pointerId };
+  });
+  pgEl.board.addEventListener('pointermove', (ev) => {
+    if (!pan) return;
+    const dx = ev.clientX - pan.x; const dy = ev.clientY - pan.y;
+    if (!panMoved && Math.hypot(dx, dy) > 3) { panMoved = true; pgEl.board.setPointerCapture(pan.id); pgEl.board.classList.add('is-drag'); }
+    if (panMoved) { pgEl.board.scrollLeft = pan.l - dx; pgEl.board.scrollTop = pan.t - dy; }
+  });
+  const endPan = () => { pan = null; pgEl.board.classList.remove('is-drag'); setTimeout(() => { panMoved = false; }, 0); };
+  pgEl.board.addEventListener('pointerup', endPan);
+  pgEl.board.addEventListener('pointercancel', endPan);
+  /* bring a box into view when the caret picks it and the board is zoomed in */
+  function revealNode(el) {
+    if (zoom.mode === 'fit') return;
+    const r = el.getBoundingClientRect();
+    const b = pgEl.board.getBoundingClientRect();
+    if (r.left < b.left || r.right > b.right) pgEl.board.scrollLeft += r.left - b.left - (b.width - r.width) / 2;
+    if (r.top < b.top || r.bottom > b.bottom) pgEl.board.scrollTop += r.top - b.top - (b.height - r.height) / 2;
+  }
   const flash = (btn) => { btn.dataset.done = '1'; setTimeout(() => { delete btn.dataset.done; }, 1800); };
   $('#pg-share').addEventListener('click', async (ev) => {
     history.replaceState(null, '', '#play=' + b64.enc(pgEl.text.value));

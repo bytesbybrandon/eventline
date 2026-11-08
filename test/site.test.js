@@ -51,3 +51,15 @@ test('every board node and edge carries the ids the page uses to trace lineage',
   assert.ok(nodes.length > 10 && edges.length > 10);
   for (const [, from, to] of edges) assert.ok(nodes.includes(from) && nodes.includes(to), `edge ${from} -> ${to} points at a node that is not drawn`);
 });
+
+test('block nodes on the board carry the source lines the parser found, so a click can find them in the editor', () => {
+  const lines = dsl.split('\n');
+  const svg = render(parse(dsl), 'eventmodel', 'svg', 'dark');
+  const range = (id) => /data-lines="(\d+)-(\d+)"/.exec(svg.slice(svg.indexOf(`data-id="${id}"`), svg.indexOf('>', svg.indexOf(`data-id="${id}"`) + 40) + 60));
+  for (const [id, head] of [['cmd:postTweet', 'user -> postTweet'], ['view:TweetDetails', 'view TweetDetails'], ['pol:notification-worker', 'tweet-liked']]) {
+    const m = range(id);
+    assert.ok(m, `${id} has no data-lines`);
+    assert.ok(lines[m[1] - 1].includes(head), `${id} starts at line ${m[1]}: ${lines[m[1] - 1]}`);
+    assert.equal(lines[m[2]].trim() === '' || m[2] === lines.length, true, `${id} ends at line ${m[2]}, which is not the last line of its block`);
+  }
+});
