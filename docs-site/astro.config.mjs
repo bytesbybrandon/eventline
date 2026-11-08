@@ -30,7 +30,7 @@ export default defineConfig({
       sidebar: [
         { label: 'Start here', items: ['index', 'event-modeling', 'language', 'examples', 'thinking-guide', 'glossary'] },
         { label: 'Model a system', items: ['actors', 'system-context', 'twitter-translation'] },
-        { label: 'Use the tool', items: ['eventline-axi'] },
+        { label: 'Use the tool', items: ['eventline-axi', 'rules'] },
         { label: 'Interviews', items: ['interview-simulation'] },
         { label: 'Build with it', items: ['architecture', 'contributing'] },
       ],

@@ -386,6 +386,9 @@ user -> postTweet(content: text) @note("the retry is safe because the id is a cl
 Use it for what the notation does not model, such as which screen or endpoint starts a command.
 Notes can repeat, and diagrams show them as tooltips.
 Other useful annotations on commands, views and policies are `@planned` for decided but not built, `@slice("name")` and `@story("...")` for tools that track slices, and `@state(...)` for state-backed work.
+A slice has one command, which can record several events, and one read model it defines.
+A slice may read any number of views that other slices define.
+`validate --profile eventmodeling` hints when one `@slice` name holds several read models, and warns when it holds several commands; the [rules reference](./RULES.md) explains each.
 
 ### Types
 

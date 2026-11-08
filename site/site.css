@@ -408,6 +408,12 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
 .pg__area { background: transparent; color: transparent; caret-color: var(--sc-accent); resize: none; outline: none; -webkit-text-fill-color: transparent; }
 .pg__area::selection { background: color-mix(in oklab, var(--sc-accent) 38%, transparent); -webkit-text-fill-color: transparent; }
 .pg__code:focus-within { box-shadow: inset 0 0 0 2px var(--sc-accent); }
+/* a mark in the editor's left margin for each line a check is about: shape and weight say how serious, not colour alone */
+.pg__marks b { position: absolute; left: 3px; width: 11px; display: grid; place-items: center; font: 700 9px/1 var(--sc-font-mono); }
+.pg__marks b[data-s="error"] { color: var(--sc-accent); font-size: 11px; }
+.pg__marks b[data-s="warn"] { color: var(--sc-accent); }
+.pg__marks b[data-s="info"] { color: var(--sc-ink-soft); opacity: 0.8; }
+.pg__board svg .issue-badge { pointer-events: none; }
 .t-cm { color: #7f8aa8; font-style: italic; }
 .pg__board { min-height: 0; overflow: auto; display: grid; place-items: start; cursor: grab; overscroll-behavior: contain; }
 .pg__board.is-drag { cursor: grabbing; user-select: none; }
@@ -438,6 +444,22 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
 .pg__trace b { color: var(--sc-accent); }
 .pg__issues { list-style: none; margin: var(--sc-2) 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--sc-t-sm); color: var(--sc-ink-soft); max-width: 90ch; }
 .pg__issues li { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: 0 var(--sc-2); align-items: baseline; }
+.pg__checks { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-2); margin-top: var(--sc-3); }
+.pg__checks-label { font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); margin-right: var(--sc-1); }
+.pg__check {
+  min-height: 36px; padding: 0 0.9em; border-radius: 999px; background: transparent; color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); cursor: pointer;
+  font-size: var(--sc-t-xs); font-weight: 600; transition: background-color var(--sc-d-fast) var(--sc-ease-out), border-color var(--sc-d-fast) var(--sc-ease-out), transform var(--sc-d-fast) var(--sc-ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pg__check:hover { border-color: var(--sc-accent); } }
+.pg__check:active { transform: scale(0.97); }
+.pg__check[aria-pressed="true"] { background: var(--sc-accent); color: var(--sc-accent-ink); border-color: var(--sc-accent); }
+.pg__check:focus-visible, .pg__checks-more:focus-visible, .pg__more:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+.pg__checks-more { font-size: var(--sc-t-xs); color: var(--sc-ink-soft); margin-left: var(--sc-2); }
+.pg__summary { margin: var(--sc-2) 0 0; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); min-height: 1.4em; }
+.pg__more { all: unset; margin-top: var(--sc-2); cursor: pointer; font-size: var(--sc-t-sm); text-decoration: underline; text-underline-offset: 0.2em; color: var(--sc-ink-soft); }
+.pg__more[hidden] { display: none; }
+.pg__issues .pg__cat { font-family: var(--sc-font-mono); font-size: 0.78em; color: var(--sc-ink-soft); border: 1px solid var(--sc-hairline); border-radius: 4px; padding: 0 0.4em; margin-left: 0.6ch; white-space: nowrap; }
+.pg__issues .pg__why { margin-left: 0.8ch; font-size: 0.9em; color: var(--sc-ink-soft); }
 .pg__issue { all: unset; margin-left: 0.8ch; cursor: pointer; text-decoration: underline; text-underline-offset: 0.2em; text-decoration-color: var(--sc-hairline-strong); }
 .pg__issue:hover { color: var(--sc-ink); }
 .pg__issue:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }

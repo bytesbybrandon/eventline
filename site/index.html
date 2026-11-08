@@ -214,7 +214,7 @@
       <div class="pg__ed">
         <div class="pg__bar"><span class="sc-label">model.dsl</span><span class="pg__hint">Click a box to find its lines</span></div>
         <div class="pg__code">
-          <div class="pg__hl" aria-hidden="true"><div class="pg__hl-in" id="pg-hl"></div></div>
+          <div class="pg__hl" aria-hidden="true"><div class="pg__hl-in" id="pg-hl"></div><div class="pg__hl-in pg__marks" id="pg-marks"></div></div>
           <pre class="pg__mirror" id="pg-mirror" aria-hidden="true"><code></code></pre>
           <textarea id="pg-text" class="pg__area" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="eventline model, editable. The board beside it updates as you type." aria-describedby="pg-status"></textarea>
         </div>
@@ -247,7 +247,16 @@
       <div class="pg__read">
         <p class="pg__status" id="pg-status" role="status">Loading the parser.</p>
         <p class="pg__trace" id="pg-trace" aria-live="polite">Point at a box on the board to trace its lineage.</p>
+        <div class="pg__checks" role="group" aria-label="Which checks to run">
+          <span class="pg__checks-label">Checks</span>
+          <button type="button" class="pg__check" data-profile="core" aria-pressed="true" title="The language itself: what cannot mean what it says">Language</button>
+          <button type="button" class="pg__check" data-profile="eventmodeling" aria-pressed="false" title="Event Modeling guidelines: information completeness, loops, slices">Event Modeling</button>
+          <button type="button" class="pg__check" data-profile="slicerm" aria-pressed="false" title="Stricter: a slice is one unit of delivery">Stricter</button>
+          <a class="pg__checks-more" href="/eventline/docs/rules/">What each one checks</a>
+        </div>
+        <p class="pg__summary" id="pg-summary" aria-live="polite"></p>
         <ul class="pg__issues" id="pg-issues" aria-label="Checks on this model"></ul>
+        <button type="button" class="pg__more" id="pg-more" hidden></button>
       </div>
       <div class="pg__out">
         <button type="button" class="btn" id="pg-share">Copy share link</button>

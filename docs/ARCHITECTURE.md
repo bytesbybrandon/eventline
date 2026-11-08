@@ -18,6 +18,7 @@ A short map of the code, for people changing it.
 | System diagrams | `lib/diagram/system.js` | Builds context, containers, data flow, deployment and the context map as one generic graph. |
 | Layout | `lib/diagram/layout.js` | Layering shared by the diagrams. Edges that close a loop are set aside, so loops never break placement. |
 | Renderers | `lib/diagram/svg.js`, `export.js` | SVG with no dependencies. Mermaid and DOT from the same graph. |
+| Rules | `lib/rules/` | The validation rules. `core.js` is the language, `profile.js` the Event Modeling and stricter rules, `catalogue.js` says what each rule means. |
 | Library entry | `lib/index.js`, `lib/diagram/index.js` | The public API: `parse`, `check`, `render`. Nothing in this path touches the file system. |
 
 ## One rule
@@ -31,6 +32,14 @@ A diagram draws only what the model states.
 
 If a diagram needs something the model cannot say, change the language, not the diagram.
 That is how `in Boundary(key)` came to exist.
+
+## Rules
+
+Every rule is listed once in `lib/rules/catalogue.js`, with its profile, severity, category, why and how to fix it.
+`check(model, { profile })` runs the core rules, then the profile's, and gives each finding its category, the statement it is about and where that statement ends.
+`docs/RULES.md` is generated from the catalogue: run `node scripts/build-rules-doc.js` after changing it.
+Tests fail if a rule reports an id that is not in the catalogue, if a catalogue example does not behave as it says, or if the page is stale.
+The playground shows the findings as marks beside the lines, badges on the boxes and a list; the profile is part of the shared address as `&p=`.
 
 ## The site
 

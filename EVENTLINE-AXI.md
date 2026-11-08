@@ -31,8 +31,13 @@ npx eventline-axi policies <file>
 # Trace dependencies
 npx eventline-axi deps <file> <entity>
 
-# Validate against checklist
+# Validate against checklist (core), or the Event Modeling guidelines, or the stricter set
 npx eventline-axi validate <file>
+npx eventline-axi validate <file> --profile eventmodeling
+npx eventline-axi validate <file> --profile slicerm
+
+# Every rule, with why and how to fix it
+npx eventline-axi rules
 
 # What screens, endpoints and other triggers people and systems use
 npx eventline-axi triggers <file>
@@ -88,11 +93,15 @@ The deployment view needs `region:` in the system block and assumes each region 
 import { parse, check, render, linkMap, ParseError, KINDS } from 'eventline-axi';
 
 const model = parse(text);              // throws ParseError with .line on bad input
-const issues = check(model);            // same rules as `validate`
+const issues = check(model);            // same rules as `validate`; check(model, { profile: 'eventmodeling' }) adds the guidelines
 const svg = render(model, 'contextmap'); // kinds: KINDS; formats: svg (default), mermaid, dot
 const linked = render(model, 'containers', 'svg', 'dark', { links: true }); // linkBase, href(target) tune the addresses
 const map = linkMap(model); // { diagram: { boxId: [{ diagram, node, label, url }] } }
 ```
+
+Each finding from `check` has `severity`, `rule`, `category`, `profile`, `message`, `line`, `endLine`, `subject` (the command, view, policy or boundary it is about, with its own `line` and `endLine`), `slice` (its `@slice` name) and `docs`.
+A tool can show a finding next to the right slice without mapping lines itself.
+The rules and profiles are in [RULES.md](./docs/RULES.md).
 
 These are pure functions with no I/O, no Node built-ins and no dependencies, so they bundle for a browser.
 `render` throws an error with `code` `NO_REGIONS` or `NO_CONTEXTS` when there is nothing to draw.

@@ -21,6 +21,7 @@ Contributions should stay focused on clarity, correctness and examples.
 - Keep the examples in `examples/` valid: `npx eventline-axi validate examples/<file>` should report no errors.
 - Keep the README, `docs/LANGUAGE.md` and `docs/EXAMPLES.md` consistent with the examples they quote.
 - After changing an example, the diagram code or anything in `lib/`, run `node scripts/build-site.js`. The site tests fail if you forget.
+- A new validation rule needs an entry in `lib/rules/catalogue.js` and a test. Then run `node scripts/build-rules-doc.js`; the tests fail if `docs/RULES.md` is stale.
 - Write documentation with one sentence per line.
 - Keep local machine paths, secrets and session artifacts out of the repo.
 - A new file in `docs/` also needs a page entry for the docs site; see [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md). The tests tell you what is missing.
