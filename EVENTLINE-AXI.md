@@ -3,6 +3,7 @@
 Agent-ergonomic CLI for the System Design DSL (`eventline`).
 
 Reads `.dsl` files and exposes actors, commands, views, boundaries, policies, and events as structured TOON output optimized for LLM agents.
+It also derives Event Modeling and system diagrams from a model.
 
 ## Install
 
@@ -33,8 +34,12 @@ npx eventline-axi deps <file> <entity>
 # Validate against checklist
 npx eventline-axi validate <file>
 
-# Export dependency graph
-npx eventline-axi graph <file>
+# Derive diagrams (eventmodel | context | containers | dataflow | deployment)
+npx eventline-axi diagram eventmodel <file> -o board.svg
+npx eventline-axi diagram containers <file> -f mermaid
+
+# Every diagram, as svg + mermaid + dot, into a folder
+npx eventline-axi diagrams <file> -o diagrams
 ```
 
 ## Output Formats

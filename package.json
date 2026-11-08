@@ -7,7 +7,7 @@
     "eventline-axi": "./bin/eventline-axi"
   },
   "scripts": {
-    "test": "node -e \"console.log('No automated test suite configured; static docs repo validation passed.');\"",
+    "test": "node --test \"test/**/*.test.js\"",
     "build": "node -e \"console.log('No build step required for this static documentation repo.');\"",
     "axi": "node bin/eventline-axi"
   },
