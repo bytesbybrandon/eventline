@@ -34,7 +34,7 @@ npx eventline-axi deps <file> <entity>
 # Validate against checklist
 npx eventline-axi validate <file>
 
-# Derive diagrams (eventmodel | context | containers | dataflow | deployment)
+# Derive diagrams (eventmodel | context | containers | dataflow | deployment | contextmap)
 npx eventline-axi diagram eventmodel <file> -o board.svg
 npx eventline-axi diagram containers <file> -f mermaid
 
@@ -59,6 +59,7 @@ npx eventline-axi diagrams examples/twitter-pure.dsl -o diagrams
 | `containers` | Command API, event store, read models, workers, outside systems | commands, `@partition`, views and `@cache`, policy workers |
 | `dataflow` | Commands and workers as processes, the event log and views as stores | the same, drawn as flows |
 | `deployment` | Each region with its shards, read models and workers | `system { region }`, boundaries, `@cost(regions=n)` |
+| `contextmap` | Contexts as boxes and the events that cross between them; dashed means the sender does not publish the event | `context` blocks, `publishes` |
 
 Each diagram is available as `svg`, `mermaid` or `dot` (`-f`), and `-t dark` gives a dark theme.
 

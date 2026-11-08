@@ -231,11 +231,15 @@ Use this section as parser-level reference for extension syntax.
 // Core
 command = actor "->" verb "(" params ")"
           [ "in" boundary_name "(" key ")" ]
+          [ annotations ]
           [ "on" "[" event_facts "]" ]
           [ "from" "[" view_facts "]" ]
           branch+
 
-branch = "--[" guard "]-->" "[" emitted_events "]"
+params = param { "," param }
+param  = name [ "?" ] [ ":" type ]
+
+branch = "--[" guard "]-->" ( "[" emitted_events "]" | "reject" CODE )
 
 event_fact = event_name "(" params ")"
            | event_name "*" "(" params ")"
@@ -278,3 +282,87 @@ Normative rules:
 5. `@time(...)` SHOULD be declared on a boundary when a windowed guard exists.
 6. If a fallback path uses stale reads, emitted events SHOULD include `@confidence(...)`.
 7. `@cost(...)` and `@ops(...)` MAY appear on boundaries, views, and policies.
+
+---
+
+## 9. Contexts, Refusals, Timers, Notes and Types
+
+These constructs are all optional.
+A model without them still parses and means what it did before.
+
+### Contexts
+
+```text
+context Billing {
+  description: Invoices and refunds
+  role: core
+  publishes: invoice-opened, invoice-refunded
+
+  user -> openInvoice(amount: number) in Invoice(invoiceId)
+    --[default]--> [invoice-opened { invoiceId, amount }]
+}
+```
+
+A context groups statements into a bounded context with its own language and rules.
+Its attributes are `description`, `role` (`core` or `adapter`) and `publishes`, the events other contexts may rely on.
+Any other `key: value` line is kept as an attribute, for example `infrastructure: Postgres`.
+The `system` block stays outside any context.
+
+A context is not a boundary.
+A boundary (section 3) is a consistency scope: the key a decision reads and writes by.
+One boundary, such as `Slice(sliceId)`, can be touched by commands in several contexts, and one context usually uses several boundaries.
+
+`eventline-axi validate` warns when a context reads an event that another context emits but does not list in `publishes`.
+`eventline-axi diagram contextmap` draws the contexts and the events that cross between them.
+
+### Refusals
+
+```text
+user -> signUp(email: text)
+  --[an account with this email exists]--> reject EMAIL_TAKEN
+  --[default]--> [account-created { email }]
+```
+
+`reject CODE` refuses the command and records nothing.
+The guard text is the reason in plain words, and the code is stable and written in capitals.
+A refusal is not an event, so it never appears in the event list.
+If a refusal should be remembered as a fact, for example for an audit trail, emit an event instead.
+`validate` points out events named `...-rejected` so you can choose on purpose.
+
+### Timers
+
+```text
+every 5 minutes
+from [StaleLeases(sessionId)]
+  -> lease-sweeper -> releaseLeases(sessionId)
+
+cron "0 * * * *"
+  -> hourly-report -> buildReport()
+```
+
+A policy can start on a schedule instead of an event, with `every N seconds|minutes|hours|days` or `cron "..."`.
+Any policy can read views first with `from [...]`, using the same facts and freshness as a command.
+
+### Notes and annotations
+
+```text
+user -> postTweet(content: text) @note("reached through POST /tweets on the Tweets API") @planned
+```
+
+`@note("...")` attaches free text to a command, view, policy or boundary.
+Use it for what the notation does not model, such as which screen or endpoint starts a command.
+Notes can repeat, and diagrams show them as tooltips.
+Other useful annotations on commands, views and policies are `@planned` for decided but not built, `@slice("name")` and `@story("...")` for tools that track slices, and `@state(...)` for state-backed work.
+
+### Types
+
+Parameters take an optional type: `signUp(name: text, age?: number, tags: list[text])`.
+A type is free text.
+The usual choices are `text`, `number`, `id`, `datetime`, `yesno`, `list[T]` and a name you define.
+
+### Event naming
+
+`event-naming: kebab | pascal | none` in the `system` block sets what `validate` expects.
+`kebab` is the default and means `{aggregate}-{verb}`.
+`pascal` accepts `AccountCreated`.
+`none` turns the check off.

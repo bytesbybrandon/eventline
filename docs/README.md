@@ -12,3 +12,4 @@ Start with the goal you have.
 | Turn a model into architecture | [TWITTER-TRANSLATION.md](./TWITTER-TRANSLATION.md) |
 | Run the CLI or draw diagrams | [EVENTLINE-AXI.md](../EVENTLINE-AXI.md) |
 | Change the code | [ARCHITECTURE.md](./ARCHITECTURE.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Add eventline import and export to a tool such as SliceRM | [DYAD-BRIEF.md](./DYAD-BRIEF.md) |

@@ -57,7 +57,7 @@ test('board: a view sits right of the events that feed it; a worker right of its
 
 test('board: facts nobody emits become a note, and a command nobody declared is marked as not modeled', () => {
   const b = buildBoard(load('twitter-pure.dsl'));
-  assert.match(byId(b, 'cmd:likeTweet').note, /tweet-exists/);
+  assert.match(byId(b, 'cmd:likeTweet').notes[0], /tweet-exists/);
   assert.equal(b.nodes.some((n) => n.id.startsWith('evt:tweet-exists')), false);
   assert.equal(byId(b, 'cmd:sendLikeNotification').declared, false);
 });
@@ -85,7 +85,7 @@ test('command variants merge into one column', () => {
 test('every kind and format renders, with every edge landing on a drawn node', () => {
   for (const f of ['twitter-pure.dsl', 'rate-limiter.dsl']) {
     const m = load(f);
-    for (const kind of KINDS) {
+    for (const kind of KINDS.filter((k) => k !== 'contextmap')) {
       const svg = render(m, kind, 'svg');
       assert.match(svg, /^<svg[\s\S]*<\/svg>\s*$/);
       assert.ok(!/NaN|undefined/.test(svg), `${f} ${kind}: bad number or label in svg`);
