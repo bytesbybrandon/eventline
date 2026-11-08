@@ -61,9 +61,9 @@
         <button type="button" class="btn" data-fire="followUser">followUser</button>
       </div>
       <div class="pf-console__code">
-        <pre class="code pf-code" data-cmd="postTweet" tabindex="0" aria-label="postTweet in eventline"><code><span class="ln" data-n="34">user -&gt; <span class="t-cmd">postTweet</span>(content, media?)</span><span class="ln" data-n="35"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln" data-n="36">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln" data-n="37">  --[default]--&gt; [</span><span class="ln" data-n="38">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln" data-n="39">  ]</span></code></pre>
-        <pre class="code pf-code" data-cmd="likeTweet" hidden tabindex="0" aria-label="likeTweet in eventline"><code><span class="ln" data-n="48">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId)</span><span class="ln" data-n="49"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln" data-n="50">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln" data-n="51">  --[default]--&gt; [</span><span class="ln" data-n="52">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln" data-n="53">  ]</span></code></pre>
-        <pre class="code pf-code" data-cmd="followUser" hidden tabindex="0" aria-label="followUser in eventline"><code><span class="ln" data-n="41">user -&gt; <span class="t-cmd">followUser</span>(targetUserId)</span><span class="ln" data-n="42"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln" data-n="43">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln" data-n="44">  --[default]--&gt; [</span><span class="ln" data-n="45">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln" data-n="46">  ]</span></code></pre>
+        <pre class="code pf-code" data-cmd="postTweet" tabindex="0" aria-label="postTweet in eventline"><code><span class="ln" data-n="34">user -&gt; <span class="t-cmd">postTweet</span>(content, media?) <span class="t-kw">in</span> UserTimeline(userId)</span><span class="ln" data-n="35"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln" data-n="36">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln" data-n="37">  --[default]--&gt; [</span><span class="ln" data-n="38">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln" data-n="39">  ]</span></code></pre>
+        <pre class="code pf-code" data-cmd="likeTweet" hidden tabindex="0" aria-label="likeTweet in eventline"><code><span class="ln" data-n="48">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln" data-n="49"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln" data-n="50">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln" data-n="51">  --[default]--&gt; [</span><span class="ln" data-n="52">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln" data-n="53">  ]</span></code></pre>
+        <pre class="code pf-code" data-cmd="followUser" hidden tabindex="0" aria-label="followUser in eventline"><code><span class="ln" data-n="41">user -&gt; <span class="t-cmd">followUser</span>(targetUserId) <span class="t-kw">in</span> UserFollows(userId)</span><span class="ln" data-n="42"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln" data-n="43">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln" data-n="44">  --[default]--&gt; [</span><span class="ln" data-n="45">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln" data-n="46">  ]</span></code></pre>
       </div>
       <p class="pf-status" id="hero-status" role="status">Pick a command. The guard on each line decides which events it emits.</p>
       <dl class="pf-views" aria-label="Views folded from the stream">
@@ -112,52 +112,17 @@
     </div>
   </section>
 
-  <!-- 3 · MODEL: pan. An Event Modeling board, with DCB drawn on it. -->
-  <section id="model" class="scene scene--mid" data-scene="model" data-sc-act="pan" data-sc-span="2.2" aria-labelledby="model-h">
+  <!-- 3 · MODEL: pan. The Event Modeling board, derived from twitter-pure.dsl by eventline itself. -->
+  <section id="model" class="scene scene--dark" data-scene="model" data-sc-act="pan" data-sc-span="2.2" aria-labelledby="model-h">
     <div data-sc-stage class="pf-board">
-      <div class="pf-board__grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-      <div class="pf-board__lanes" aria-hidden="true"><span>Command</span><span>Event</span><span>View</span><span>Policy</span></div>
       <div class="pf-board__rail" data-sc-pan="0.04">
         <div class="pf-board__lead sc-stack">
           <h2 id="model-h" class="sc-display sc-display--md">Four slices, one timeline.</h2>
-          <p class="sc-body">eventline maps one to one onto the four slice patterns of Event Modeling. Read the board left to right and you are reading time.</p>
+          <p class="sc-body">eventline maps one to one onto the four slice patterns of Event Modeling. Nobody drew this board. <code>eventline-axi diagram eventmodel</code> derived it from the 75 lines you are about to read.</p>
         </div>
-
-        <article class="slice slice--change">
-          <span class="item item--cmd">postTweet(content)</span>
-          <span class="item item--ev">tweet-created</span>
-          <div class="slice__cap"><h3>State change</h3><p>A command checks the facts and decides. The decision is recorded as events.</p></div>
-        </article>
-
-        <article class="slice slice--view">
-          <span class="item item--ev">tweet-created</span>
-          <span class="item item--view">UserTimeline(userId)</span>
-          <div class="slice__cap"><h3>State view</h3><p>A view folds events into exactly the shape a screen needs.</p></div>
-        </article>
-
-        <article class="slice slice--auto">
-          <span class="item item--cmd">sendLikeNotification</span>
-          <span class="item item--ev">tweet-liked</span>
-          <span class="item item--pol">notification-worker</span>
-          <div class="slice__cap"><h3>Automation</h3><p>An event wakes a worker, and the worker issues the next command.</p></div>
-        </article>
-
-        <article class="slice slice--xlate">
-          <span class="item item--cmd">ingestCharge(invoiceId, ...)</span>
-          <span class="item item--ev">payment-captured</span>
-          <div class="slice__cap"><h3>Translation</h3><p>A webhook from the outside enters as a command and leaves as an event.</p></div>
-        </article>
-
-        <article class="slice slice--dcb">
-          <span class="item item--ev">tweet-created</span>
-          <span class="item item--ev item--ev2">user-followed</span>
-          <span class="item item--bound">UserTimeline(userId)</span>
-          <div class="slice__cap"><h3>Consistency boundary</h3><p>A decision reads only the events behind its key. No giant aggregate, no global lock.</p></div>
-        </article>
-
-        <div class="pf-board__end sc-stack">
-          <p class="sc-lede">Boundaries can also carry time, cost, and ops notes.</p>
-        </div>
+        <figure class="pf-board__fig">
+          <img src="assets/eventmodel.svg" width="1665" height="690" alt="Event Modeling board derived from twitter-pure.dsl. Five commands each have their actor above and their events beneath, grouped into three consistency boundaries: UserTimeline, UserFollows and TweetFeed. The views UserTimeline, TweetDetails and UserProfile sit right of the events that feed them. The trending-analyzer and notification-worker policies sit in the lane below.">
+        </figure>
       </div>
     </div>
   </section>
@@ -175,11 +140,11 @@
           <div class="blk" data-blk="v1"><span class="ln"><span class="t-kw">view</span> UserTimeline(userId) = [</span><span class="ln">  <span class="t-ev">user-followed*</span>(userId, targetUserId),</span><span class="ln">  <span class="t-ev">tweet-created*</span>(targetUserId),</span><span class="ln">  <span class="t-ev">tweet-retweeted*</span>(targetUserId)</span><span class="ln">] =&gt; {</span><span class="ln">  tweetId, userId, content, media, createdAt,</span><span class="ln">  likes: count(<span class="t-ev">tweet-liked*</span>(tweetId)),</span><span class="ln">  retweets: count(<span class="t-ev">tweet-retweeted*</span>(tweetId))</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"timeline:{userId}"</span>, ttl=5m)</span></div>
           <div class="blk" data-blk="v2"><span class="ln"><span class="t-kw">view</span> TweetDetails(tweetId) = [<span class="t-ev">tweet-created</span>(tweetId)] =&gt; {</span><span class="ln">  content, media, createdAt, likes, retweets</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"tweet:{tweetId}"</span>, ttl=1h)</span></div>
           <div class="blk" data-blk="v3"><span class="ln"><span class="t-kw">view</span> UserProfile(userId) = [<span class="t-ev">user-created</span>(userId), <span class="t-ev">user-updated*</span>(userId)] =&gt; {</span><span class="ln">  name, handle, bio, followers, following</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"profile:{userId}"</span>, ttl=24h)</span></div>
-          <div class="blk" data-blk="postTweet"><span class="ln">user -&gt; <span class="t-cmd">postTweet</span>(content, media?)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln">  ]</span></div>
-          <div class="blk" data-blk="followUser"><span class="ln">user -&gt; <span class="t-cmd">followUser</span>(targetUserId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln">  ]</span></div>
-          <div class="blk" data-blk="likeTweet"><span class="ln">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln">  ]</span></div>
-          <div class="blk" data-blk="retweet"><span class="ln">user -&gt; <span class="t-cmd">retweet</span>(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyRetweeted]--&gt; [<span class="t-ev">retweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-retweeted</span> { userId, tweetId, retweetedAt: clock.wall() }</span><span class="ln">  ]</span></div>
-          <div class="blk" data-blk="deleteTweet"><span class="ln">user -&gt; <span class="t-cmd">deleteTweet</span>(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-created</span>(tweetId, userId)]</span><span class="ln">  --[!isOwner]--&gt; [<span class="t-ev">delete-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-deleted</span> { tweetId, deletedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="postTweet"><span class="ln">user -&gt; <span class="t-cmd">postTweet</span>(content, media?) <span class="t-kw">in</span> UserTimeline(userId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="followUser"><span class="ln">user -&gt; <span class="t-cmd">followUser</span>(targetUserId) <span class="t-kw">in</span> UserFollows(userId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="likeTweet"><span class="ln">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="retweet"><span class="ln">user -&gt; <span class="t-cmd">retweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyRetweeted]--&gt; [<span class="t-ev">retweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-retweeted</span> { userId, tweetId, retweetedAt: clock.wall() }</span><span class="ln">  ]</span></div>
+          <div class="blk" data-blk="deleteTweet"><span class="ln">user -&gt; <span class="t-cmd">deleteTweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-created</span>(tweetId, userId)]</span><span class="ln">  --[!isOwner]--&gt; [<span class="t-ev">delete-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-deleted</span> { tweetId, deletedAt: clock.wall() }</span><span class="ln">  ]</span></div>
           <div class="blk" data-blk="pol1"><span class="ln"><span class="t-ev">tweet-created</span> { content, hashtags }</span><span class="ln">  --[count(<span class="t-ev">tweet-created*</span>(hashtag, window: 1h)) &gt; 10000]--&gt; <span class="t-ev">trending-analyzer</span> -&gt; [</span><span class="ln">    <span class="t-ev">trend-detected</span> { hashtag, volume, window: <span class="t-str">"1h"</span>, detectedAt: clock.wall() }</span><span class="ln">  ]</span></div>
           <div class="blk" data-blk="pol2"><span class="ln"><span class="t-ev">tweet-liked</span> { userId, tweetId }</span><span class="ln">  -&gt; <span class="t-ev">notification-worker</span> -&gt; <span class="t-cmd">sendLikeNotification</span>(tweetId, userId)
 </span></div>
@@ -249,14 +214,14 @@
           <input id="cmd" type="text" readonly aria-label="Command to run" value="npx -y eventline-axi twitter-pure.dsl" spellcheck="false">
           <button type="button" class="btn btn--ink" id="copy">Copy</button>
         </div>
-        <p class="pf-run__hint" id="copy-status" role="status"><a href="twitter-pure.dsl" download>Download twitter-pure.dsl</a> first, then run the command in the same folder.</p>
+        <p class="pf-run__hint" id="copy-status" role="status"><a href="twitter-pure.dsl" download>Download twitter-pure.dsl</a> first, then run the command in the same folder. Swap in <code>diagrams</code> as the first argument to draw the model instead.</p>
       </div>
       <figure class="pf-cli" data-sc-in>
         <figcaption class="sc-label">Output, abridged</figcaption>
 <pre class="pf-cli__out" aria-label="eventline-axi output for twitter-pure.dsl"><code>counts[6]:
   actors: <span data-sc-count="0 3">3</span>
   commands: <span data-sc-count="0 5">5</span>
-  events: <span data-sc-count="0 10">10</span>
+  events: <span data-sc-count="0 16">16</span>
   views: <span data-sc-count="0 3">3</span>
   boundaries: <span data-sc-count="0 3">3</span>
   policies: <span data-sc-count="0 2">2</span>

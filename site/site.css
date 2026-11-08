@@ -225,73 +225,19 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
 .node--view { background: var(--sc-surface); border-style: double; border-width: 4px; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); font-weight: 600; }
 
 /* ---------------------------------------------------------------- board -- */
-.pf-board {
-  --cap: 9.75rem;
-  --lane-w: 6.25rem;
-  position: sticky;
-  padding: calc(var(--bar-h) + var(--sc-5)) 0 var(--sc-5);
-}
-.pf-board__grid, .pf-board__lanes {
-  position: absolute; top: calc(var(--bar-h) + var(--sc-5)); bottom: var(--sc-5); left: 0;
-  display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)) var(--cap);
-}
-.pf-board__grid { right: 0; z-index: 0; }
-.pf-board__grid span { border-top: 1px solid var(--sc-hairline); }
-.pf-board__grid span:last-child { border-bottom: 1px solid var(--sc-hairline); }
-.pf-board__grid::after { content: ""; border-top: 1px solid var(--sc-hairline); }
-.pf-board__lanes { width: var(--lane-w); z-index: 3; background: var(--sc-canvas); padding-left: var(--sc-gutter); width: calc(var(--lane-w) + var(--sc-gutter)); box-shadow: 14px 0 18px -6px var(--sc-canvas); }
-.pf-board__lanes span {
-  display: flex; align-items: center; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs);
-  letter-spacing: var(--sc-track-wide); text-transform: uppercase; color: var(--sc-ink-soft);
-}
-.pf-board__rail { display: flex; position: relative; z-index: 1; height: 100%; padding-left: calc(var(--lane-w) + var(--sc-gutter)); align-items: stretch; }
-.pf-board__lead { flex: 0 0 min(26rem, 78vw); padding: 0 var(--sc-6) 0 var(--sc-5); align-self: center; }
+/* The board is an image derived by eventline-axi from twitter-pure.dsl (scripts/build-site.js). */
+.pf-board { display: flex; align-items: center; padding: calc(var(--bar-h) + var(--sc-5)) 0 var(--sc-5); }
+.pf-board__rail { display: flex; align-items: center; height: 100%; padding-left: var(--page-pad); }
+.pf-board__lead { flex: 0 0 min(26rem, 78vw); padding-right: var(--sc-7); }
 .pf-board__lead h2 { max-width: 10ch; }
-.pf-board__lead p { max-width: 34ch; }
+.pf-board__lead p { max-width: 36ch; }
+.pf-board__lead code { font-size: 0.86em; color: var(--sc-accent); overflow-wrap: anywhere; }
+.pf-board__fig { flex: none; margin: 0; padding-right: var(--page-pad); }
+.pf-board__fig img { display: block; width: auto; max-width: none; height: min(calc(100svh - var(--bar-h) - 3rem), 52rem); border-radius: var(--r); }
 /* When the board already fits the screen there is nothing to pan, so it stops pinning and simply lays out. */
 .pf-board--flat { position: relative; height: 100vh; height: 100svh; }
-.pf-board--flat .pf-board__rail > * { flex-shrink: 1; min-width: 0; }
-.pf-board--flat .slice { flex: 1 1 0; max-width: 24rem; }
-.pf-board--flat .pf-board__grid { left: var(--page-pad); right: var(--page-pad); }
-.pf-board--flat .pf-board__lanes { left: var(--page-pad); width: var(--lane-w); padding-left: 0; box-shadow: none; }
-.pf-board--flat .pf-board__rail { padding-left: calc(var(--page-pad) + var(--lane-w)); padding-right: var(--page-pad); }
-.pf-board--flat .pf-board__lead { flex: 0 1 26rem; }
-.pf-board--flat .pf-board__end { display: none; }
-.pf-board__end { flex: 0 0 min(20rem, 70vw); align-self: center; padding: 0 var(--sc-8) 0 var(--sc-5); }
-.pf-board__end p { max-width: 18ch; }
-
-.slice {
-  position: relative; flex: 0 0 clamp(14.5rem, 20vw, 19rem);
-  display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)) var(--cap);
-  padding-inline: var(--sc-3);
-  justify-items: start; align-items: center;
-}
-.slice::before { /* the thread that joins the slice's items across lanes */
-  content: ""; position: absolute; left: calc(var(--sc-3) + 1.1rem); top: 0; bottom: var(--cap); width: 0;
-  border-left: 1.5px solid var(--sc-hairline-strong); z-index: -1;
-}
-.item {
-  font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); line-height: 1.25; padding: 0.55rem 0.7rem;
-  border-radius: 6px; max-width: 100%; overflow-wrap: anywhere; position: relative;
-}
-.item--cmd  { grid-row: 1; background: var(--sc-canvas); color: var(--sc-ink); border: 1.5px solid var(--sc-ink); box-shadow: 4px 4px 0 -1px var(--sc-hairline-strong); }
-.item--ev   { grid-row: 2; background: var(--sc-accent); color: var(--sc-accent-ink); font-weight: 600; }
-.item--view { grid-row: 3; background: var(--sc-surface); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-bottom: 4px double var(--sc-ink-soft); }
-.item--pol  { grid-row: 4; background: var(--sc-canvas); color: var(--sc-ink); border: 1.5px dashed var(--sc-ink); border-radius: 999px; padding-inline: 1rem; }
-.slice__cap { grid-row: 5; align-self: start; padding-top: var(--sc-4); }
-.slice__cap h3 { margin: 0 0 var(--sc-2); font-size: var(--sc-t-lg); font-weight: 650; letter-spacing: var(--sc-track-snug); line-height: 1.1; }
-.slice__cap p { margin: 0; font-size: var(--sc-t-sm); color: var(--sc-ink-soft); line-height: 1.45; max-width: 28ch; }
-/* DCB: the dashed key bracket encloses two events that share a key */
-.slice--dcb { flex-basis: clamp(18rem, 26vw, 24rem); }
-.slice--dcb::before { display: none; }
-.slice--dcb .item--ev { grid-row: 2; grid-column: 1; }
-.slice--dcb .item--ev2 { grid-row: 2; align-self: end; margin-top: 0; transform: translateY(calc(100% + 0.6rem)); }
-.slice--dcb .item--bound {
-  grid-row: 1 / 4; grid-column: 1; align-self: stretch; width: 100%; z-index: -1;
-  margin-block: 0.4rem; border: 1.5px dashed var(--sc-accent); border-radius: var(--r);
-  display: flex; align-items: flex-start; padding: 0.5rem 0.7rem; color: var(--sc-accent); font-weight: 600; background: transparent;
-}
-.slice--dcb .item--ev { align-self: center; margin-top: 0; }
+.pf-board--flat .pf-board__rail { justify-content: center; padding-inline: var(--page-pad); }
+.pf-board--flat .pf-board__fig { padding-right: 0; }
 
 /* --------------------------------------------------------------- proof -- */
 .pf-proof {
@@ -427,8 +373,7 @@ code, pre, kbd { font-family: var(--sc-font-mono); }
   .bar__ev { display: none; }
   .bar__log { margin-left: auto; }
   .pf-hero { padding-top: calc(var(--bar-h) + var(--sc-5)); }
-  .pf-board { --lane-w: 4.6rem; }
-  .pf-board__lanes span { font-size: 0.68rem; letter-spacing: 0.04em; }
+  .pf-board__lead { padding-right: var(--sc-5); }
   .pf-cmd { flex-wrap: wrap; }
   .pf-cmd input { flex: 1 1 100%; font-size: var(--sc-t-xs); }
   .pf-cmd .btn { flex: 1 1 100%; }
