@@ -425,6 +425,27 @@ view Totals(accountId: id) = [invoice-opened*(accountId)] => { sum: number } @pr
 A read that can find nothing the first time, such as a duplicate check before the first record, is marked `from [Existing(id) @optional]`.
 `@optional` only belongs in `from`, never in `on`.
 
+### Scenarios
+
+```text
+auditor -> failAudit(auditId: id)
+  --[default]--> [audit-failed]
+  scenario "Fail an audit" {
+    Given an audit is in progress
+    When the auditor presses Fail
+    Then the audit is recorded as failed
+  }
+```
+
+A `scenario "name" { ... }` block goes right after the command or view it checks, and there can be several.
+It is for acceptance criteria and test material, written as Gherkin or in any other plain lines.
+The body is kept exactly as written, apart from removing the common indentation, so brackets, quotes, colons and `#` are safe.
+It ends at a line that holds only `}`.
+A scenario outside a command or view, or one after a context block closes, is an error.
+
+`eventline-axi scenarios <file>` lists each scenario, what it checks and how many lines it has.
+`validate` warns about an empty scenario or a repeated name under the same command or view.
+
 ### Strings, comments and repeated blocks
 
 - Inside a string, `\"` is a quote, `\\` is a backslash and `\n` is a line break.

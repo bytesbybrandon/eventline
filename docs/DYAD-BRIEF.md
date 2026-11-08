@@ -77,6 +77,7 @@ Use the CLI only for scripts and CI.
 | Slice `status: todo` | `@planned` | |
 | Slice `storage: state` | `@state(model="...", result="...")` | |
 | Story text | `@story("As a ...")` | One line |
+| Story's Gherkin, one scenario | `scenario "Scenario name" { ...lines... }` right after the slice's command, or its view | Split the Gherkin on `Scenario:` lines; the Feature line is not written |
 | Evidence events | `on [Event, ...]` | |
 | Read-model slice, query params, fields | `view Name(p: type) = [Events] => { f: type }` | |
 | Translation slice, translator source | command with the translator as actor, `external: Name (translator)` in `system`, `@source(system="Carrier", version="v2")` | |
@@ -91,7 +92,7 @@ Export may write them as a sidecar file or leave them out, and import must keep 
 | Item | Why it stays out |
 | :--- | :--- |
 | Requirement hierarchy: epics, priority, status, links | Requirements are SliceRM's product, not part of describing a system |
-| Gherkin scenarios (115 stories) | Multi-line; a candidate for a block syntax, see section 6 |
+| Gherkin Feature line, requirement hierarchy above stories | The scenarios carry the Scenario lines only; the story title is the Feature on the way back (see F7) |
 | Flows (story replay) | Presentation state |
 | Plan levels and items (22) | Delivery planning |
 | Review scores, draft elements, agents, personas, audit log | Collaboration state |
@@ -146,11 +147,18 @@ Order is a suggestion.
 - Acceptance: a note written in the app appears as `@note("...")` on export and returns on import.
 - Acceptance: quotes and line breaks in a note survive the round trip.
 
-### F7. Scenarios in the language (decision for Brandon first)
+### F7. Scenarios (the language now has a block)
 
-The language has `@story` for one line and nothing for Gherkin.
-If scenarios should travel with the model, add a block syntax to eventline first, then support it here.
-Do not encode multi-line text in annotations.
+Eventline 1.3.0 adds `scenario "name" { ... }` under a command or view.
+The body is kept as written, so Gherkin is safe, and it is meant for acceptance criteria and test material.
+
+- Export: split each story's Gherkin into its `Scenario:` blocks.
+  The block name is the scenario's title, and the body is the lines under it, without the `Scenario:` line.
+  Write them right after the command (or the view) of the slice the story implements.
+- Import: join the scenarios of a slice back under `Feature: <story title>`, each as `Scenario: <name>` followed by its lines.
+- Acceptance: the "scenarios (Gherkin runs to many lines)" count drops to 0 for the self-model, and the Feature line is the only part rebuilt on import.
+- Acceptance: `eventline-axi scenarios` on the export lists every scenario with what it checks.
+- Acceptance: export, import, export is byte identical for a story with several scenarios.
 
 ### F8. Triggers (replaces the screen notes in F1)
 
