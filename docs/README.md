@@ -5,6 +5,7 @@ Start with the goal you have.
 | If you want to | Read |
 | :--- | :--- |
 | Learn the notation | [LANGUAGE.md](./LANGUAGE.md), then [EXAMPLES.md](./EXAMPLES.md) |
+| Understand how event storming, Event Modeling and DCB relate | [EVENT-MODELING.md](./EVENT-MODELING.md) |
 | Use it in a system design interview | [LANGUAGE.md](./LANGUAGE.md) sections 2 and 5, then [INTERVIEW_SIMULATION.md](./INTERVIEW_SIMULATION.md) |
 | Review a model you wrote | [THINKING-GUIDE.md](./THINKING-GUIDE.md) and the checklist in [LANGUAGE.md](./LANGUAGE.md) |
 | Look up a term | [GLOSSARY.md](./GLOSSARY.md) |

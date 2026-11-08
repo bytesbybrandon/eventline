@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eventline · Design systems as events</title>
-<meta name="description" content="eventline describes any system as commands, events, and views, built on Event Modeling and DCB. Fire a few commands and watch the timeline fill.">
+<meta name="description" content="A text notation for Event Modeling and Dynamic Consistency Boundaries (DCB): describe a system design as commands, events and views, then check and draw it.">
 <link rel="canonical" href="https://bytesbybrandon.github.io/eventline/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="eventline">
@@ -184,6 +184,10 @@
         <details name="faq">
           <summary>Do I need to know Event Modeling first?</summary>
           <p>No. If you do, the mapping is direct: state change, state view, automation, and translation slices each have a line shape in eventline. If you do not, start with a command, the events it can produce, and a view that reads them.</p>
+        </details>
+        <details name="faq">
+          <summary>How is this related to event storming?</summary>
+          <p>Event storming is a workshop for finding out what happens in a domain. Event Modeling continues from there and turns the events into a design you can build from. eventline writes that design as text, so it can be reviewed and checked. <a href="/eventline/docs/event-modeling/">Read how the three fit together.</a></p>
         </details>
         <details name="faq">
           <summary>What is a Dynamic Consistency Boundary?</summary>

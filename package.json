@@ -1,12 +1,24 @@
 {
   "name": "eventline-axi",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./package.json": "./package.json"
   },
   "description": "System design DSL that uses concepts from event modeling and DCB to discuss architecture. Includes eventline-axi, an agent-ergonomic CLI for inspecting DSL models.",
+  "keywords": [
+    "event-modeling",
+    "event-storming",
+    "dcb",
+    "dynamic-consistency-boundary",
+    "system-design",
+    "event-sourcing",
+    "cqrs",
+    "dsl",
+    "diagrams",
+    "cli"
+  ],
   "license": "MIT",
   "author": "Brandon D. Phillips",
   "homepage": "https://bytesbybrandon.github.io/eventline/",
