@@ -192,7 +192,7 @@ This DSL completely covers all four canonical slice patterns from Event Modeling
 
 ---
 
-## 5a. Actors & System Context (Step 0)
+## 6. Actors & System Context (Step 0)
 
 Before modeling commands, declare your actors and system context.
 

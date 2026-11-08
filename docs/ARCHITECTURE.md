@@ -5,7 +5,7 @@ A short map of the code, for people changing it.
 ## The pipeline
 
 ```text
-.dsl text  ->  parser  ->  Model  ->  commands (inspect, validate, deps)
+.dsl text  ->  parser  ->  Model  ->  commands (inspect, validate, deps, triggers, scenarios)
                                   ->  diagram builders  ->  svg | mermaid | dot
 ```
 
