@@ -31,7 +31,7 @@ program
     const model = loadModel(file);
     if (!model) return;
     const cmd = require(path.join(__dirname, '..', 'lib', 'commands', 'parse'));
-    cmd.run(model, opts);
+    cmd.run(model, opts, file);
   });
 
 program
@@ -88,10 +88,27 @@ program
   });
 
 program
-  .command('graph <file>')
-  .description('Output dependency graph as DOT')
-  .option('-f, --format <fmt>', 'Output format', 'dot')
-  .action((file, opts) => runSubcommand('graph', file, opts));
+  .command('diagram <kind> <file>')
+  .description('Draw a diagram: eventmodel | context | containers | dataflow | deployment')
+  .option('-f, --format <fmt>', 'svg | mermaid | dot', 'svg')
+  .option('-t, --theme <theme>', 'light | dark', 'light')
+  .option('-o, --out <path>', 'Write to a file instead of stdout')
+  .action((kind, file, opts) => {
+    const model = loadModel(file);
+    if (!model) return;
+    require(path.join(__dirname, '..', 'lib', 'commands', 'diagram')).run(model, opts, kind);
+  });
+
+program
+  .command('diagrams <file>')
+  .description('Write every diagram (svg, mermaid, dot) into a folder')
+  .option('-t, --theme <theme>', 'light | dark', 'light')
+  .option('-o, --out <dir>', 'Output folder', 'diagrams')
+  .action((file, opts) => {
+    const model = loadModel(file);
+    if (!model) return;
+    require(path.join(__dirname, '..', 'lib', 'commands', 'diagram')).runAll(model, opts);
+  });
 
 program
   .command('help [cmd]')
@@ -133,36 +150,25 @@ function runSubcommand(name, file, opts, ...args) {
 }
 
 function printHome(model, opts, file) {
-  const Formatter = require(path.join(__dirname, '..', 'lib', 'output'));
-  const fmt = new Formatter(opts.format);
+  const { summarize, systemLines, countLines } = require(path.join(__dirname, '..', 'lib', 'summary'));
+  if (opts.format === 'json') {
+    console.log(JSON.stringify({ file: file || null, ...summarize(model) }, null, 2));
+    return;
+  }
   const lines = [];
-  lines.push(`bin: ${process.argv[1]}`);
   lines.push(`description: System Design DSL inspector`);
   lines.push(`file: ${file || '(none)'}`);
   lines.push('');
-  lines.push(`counts[6]:`);
-  lines.push(`  actors: ${model.actors.length}`);
-  lines.push(`  commands: ${model.commands.length}`);
-  lines.push(`  events: ${model.events.size}`);
-  lines.push(`  views: ${model.views.length}`);
-  lines.push(`  boundaries: ${model.boundaries.length}`);
-  lines.push(`  policies: ${model.policies.length}`);
-  lines.push('');
-  if (model.system) {
-    lines.push(`system:`);
-    lines.push(`  name: ${model.system.name}`);
-    if (model.system.externals.length) lines.push(`  external: ${model.system.externals.join(', ')}`);
-    if (model.system.slo) lines.push(`  slo: ${model.system.slo}`);
-    if (model.system.region) lines.push(`  region: ${model.system.region}`);
-    if (model.system.dataClassification) lines.push(`  data-classification: ${model.system.dataClassification}`);
-    lines.push('');
-  }
-  lines.push(`help[5]:`);
+  lines.push(...countLines(model), '');
+  const sys = systemLines(model);
+  if (sys.length) lines.push(...sys, '');
+  lines.push(`help[6]:`);
   lines.push(`  Run \`eventline-axi parse <file>\` to inspect structure`);
-  lines.push(`  Run \`eventline-axi actors <file>\` to list actors`);
   lines.push(`  Run \`eventline-axi commands <file>\` to list commands`);
   lines.push(`  Run \`eventline-axi validate <file>\` to check DSL`);
   lines.push(`  Run \`eventline-axi deps <file> <entity>\` to trace dependencies`);
+  lines.push(`  Run \`eventline-axi diagram eventmodel <file> -o board.svg\` to draw the event model`);
+  lines.push(`  Run \`eventline-axi diagrams <file> -o diagrams\` for every diagram`);
   console.log(lines.join('\n'));
 }
 

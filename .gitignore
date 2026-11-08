@@ -18,3 +18,8 @@ coverage/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+.reactive/
+# frontstage workspace and reactive runtime state
+/frontstage/
+/.reactive/

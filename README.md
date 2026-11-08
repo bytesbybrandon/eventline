@@ -38,7 +38,7 @@ A pure decider queries past domain facts within a consistency boundary, checks i
 Use `--[default]-->` for the final happy-path branch.
 
 ```text
-Actor -> Command(Args)
+Actor -> Command(Args) in Boundary(key)
 on [Given Events(filter)]
 from [Given Views(key) as alias]
 --[Guard1]--> [Events1]
@@ -142,6 +142,7 @@ rate-limit-reached { userId }
 ### Primitive 4: Boundaries (DCB Sharding & Partitioning)
 
 Defines the dynamic consistency boundary and partition strategy without rigid aggregate roots.
+A command states the boundary it decides in with `in BoundaryName(key)` after its parameters, which is what lets tools bracket it on a diagram.
 
 ```text
 boundary BoundaryName(userId, window) @partition(shardKey="userId")
@@ -243,7 +244,7 @@ view TierLimit(tierId) = [
 } @cache(key="tier:{tierId}:limit", ttl=24h)
 
 // 4. Rate Limiter Decider
-user -> makeRequest(resourceId)
+user -> makeRequest(resourceId) in UserRateLimit(userId, currentMinute)
 on [
   user-auth-succeeded(userId, tierId),
   request-logged*(userId, window: currentMinute)
@@ -304,7 +305,7 @@ Use this quick pass before you call a model complete.
 6. Model guards: scored decisions reference explicit model/version (`scoreBy("model", ...)`).
 7. Guards: all branches use `--[guard]-->` and include `--[default]-->` when needed.
 8. Projection sources: views are projected from events, not from other views.
-9. Boundary clarity: each hot-path command states partition key and consistency boundary.
+9. Boundary clarity: each hot-path command states its partition key and consistency boundary with `in BoundaryName(key)`.
 10. Policy coverage: failure/abuse/failover reactions are expressed as policies.
 11. Time semantics: window terms (`currentMinute`, `clock.wall()`, `window.end(...)`) are defined.
 12. Cost and ops: capacity, replication risk, owners, alerts, and runbook hooks are called out.
@@ -318,6 +319,7 @@ Use this section as parser-level reference for extension syntax.
 ```text
 // Core
 command = actor "->" verb "(" params ")"
+          [ "in" boundary_name "(" key ")" ]
           [ "on" "[" event_facts "]" ]
           [ "from" "[" view_facts "]" ]
           branch+
@@ -381,7 +383,7 @@ boundary InvoicePayment(invoiceId)
   @ops(owner="billing-platform", slo="99.95%", alert="payment-webhook-delay")
 
 // 2. Translation slice: external webhook -> command
-stripe-webhook -> ingestCharge(invoiceId, stripeEventId, amount)
+stripe-webhook -> ingestCharge(invoiceId, stripeEventId, amount) in InvoicePayment(invoiceId)
 on [invoice-issued(invoiceId)]
 from [
   PaymentStatusView(invoiceId) @fresh<10s> as paymentStatus,
@@ -403,7 +405,7 @@ from [
   ]
 
 // 3. Fallback path with explicit confidence
-stripe-webhook -> ingestCharge(invoiceId, stripeEventId, amount)
+stripe-webhook -> ingestCharge(invoiceId, stripeEventId, amount) in InvoicePayment(invoiceId)
 on [invoice-issued(invoiceId)]
 from [WebhookDedupView(stripeEventId) @eventual as dedup]
   --[dedup.unavailable]--> [
@@ -455,3 +457,35 @@ Why this scenario matters:
 - [THINKING-GUIDE.md](./THINKING-GUIDE.md) - Question vocabulary for debugging designs
 - [INTERVIEW_SIMULATION.md](./INTERVIEW_SIMULATION.md) - Full interview walkthrough with the rate limiter
 - [GLOSSARY.md](./GLOSSARY.md) - Canonical terminology reference
+
+---
+
+## 11. Derived Diagrams
+
+The notation is enough to draw the system.
+`eventline-axi` reads a model and derives the diagrams, so they never drift from the file.
+
+```bash
+npx eventline-axi diagram eventmodel examples/twitter-pure.dsl -o board.svg
+npx eventline-axi diagrams examples/twitter-pure.dsl -o diagrams
+```
+
+| Diagram | Shows | Comes from |
+| :--- | :--- | :--- |
+| `eventmodel` | The Event Modeling board: actor, command, event, view and policy lanes, with consistency boundaries bracketed | commands, events, views, policies, `in Boundary(key)` |
+| `context` | The system, who uses it, and what it depends on | `actor`, `system { external }`, commands per actor |
+| `containers` | Command API, event store, read models, workers, outside systems | commands, `@partition`, views and `@cache`, policy workers |
+| `dataflow` | Commands and workers as processes, the event log and views as stores | the same, drawn as flows |
+| `deployment` | Each region with its shards, read models and workers | `system { region }`, boundaries, `@cost(regions=n)` |
+
+Each diagram is available as `svg`, `mermaid` or `dot` (`-f`), and `-t dark` gives a dark theme.
+
+Order on the board comes from causality, because a model has no clock.
+A command sits after the commands whose events or views it reads.
+A view sits right of the events that feed it, and a worker right of the event that wakes it.
+
+The diagrams only draw what the model says.
+Facts nobody emits show as a note under the command.
+A command a policy calls but nobody declared is drawn dashed and marked "not modeled".
+The model does not say which container calls an outside service, so no arrow is drawn into one.
+The deployment view needs `region:` in the system block and assumes each region runs the whole stack unless a boundary says `@cost(regions=n)`.
