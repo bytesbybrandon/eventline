@@ -1,12 +1,14 @@
 // Builds the content Starlight reads from the Markdown that lives in the repo.
-// The files in docs/ stay the source. Nothing generated here is committed.
+// The files in docs/ stay the source (the home page is the exception: it is drawn by src/components/Hub.astro). Nothing generated here is committed.
 //   - the first "# Heading" becomes the page title and is removed from the body
+//   - fenced blocks that hold eventline source are tagged eventline, so they get highlighted
 //   - links between docs become site routes; links to other repo files become GitHub links
 //   - the diagrams derived from examples/billing.dsl are added to the examples page
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { looksLikeEventline } from '../src/code/eventline-source.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +49,11 @@ export function rewriteLink(target, from) {
   const full = path.join(root, repoPath);
   const kind = fs.existsSync(full) && fs.statSync(full).isDirectory() ? 'tree' : 'blob';
   return `${REPO}/${kind}/main/${repoPath}`;
+}
+
+/* Fenced blocks with no language, or "text", that hold eventline source get the eventline language. Others stay as written. */
+export function tagEventline(body) {
+  return body.replace(/^(```)(text)?\n([\s\S]*?)^```$/gm, (m, fence, lang, code) => (looksLikeEventline(code) ? `${fence}eventline\n${code}${fence}` : m));
 }
 
 /* The short name each page has in the sidebar. */
@@ -101,6 +108,7 @@ export function convert(source, from, titles = {}) {
     const text = /\.md$/.test(label) && titles[repoPath] ? titles[repoPath] : label;
     return `[${text}](${next})`;
   });
+  body = tagEventline(body);
   const slug = PAGES[from];
   const description = DESCRIPTIONS[slug];
   if (!description) throw new Error(`${from} has no entry in DESCRIPTIONS`);
@@ -131,6 +139,14 @@ function diagrams() {
 const pair = (kind, alt) =>
   `<img class="only-light" src="${BASE}/diagrams/billing-${kind}-light.svg" alt="${alt}" />\n<img class="only-dark" src="${BASE}/diagrams/billing-${kind}-dark.svg" alt="${alt}" />`;
 
+const HERO_MODEL = `user -> postTweet(content, media?) in UserTimeline(userId)
+on [user-authenticated(userId)]
+  --[content.length > 280]--> [tweet-rejected]
+  --[default]--> [
+    tweet-created { userId, content, media, createdAt: clock.wall() }
+  ]
+`;
+
 const DERIVED = `
 
 ## Derived diagrams
@@ -154,6 +170,13 @@ export function sync() {
   for (const [from, slug] of Object.entries(PAGES)) {
     let page = convert(fs.readFileSync(path.join(root, from), 'utf8'), from, titles);
     if (slug === 'examples') page += DERIVED;
+    if (slug === 'index') {
+      // The web home is a designed hub (src/components/Hub.astro) that links to every page the README table does.
+      const end = page.indexOf('\n---\n', 4) + 5;
+      page = `---\ntemplate: splash\n${page.slice(4, end)}\nimport Hub from '../../components/Hub.astro';\n\n<Hub>\n\n\`\`\`eventline\n${HERO_MODEL}\`\`\`\n\n</Hub>\n`;
+      fs.writeFileSync(path.join(out, 'index.mdx'), page);
+      continue;
+    }
     fs.writeFileSync(path.join(out, `${slug}.md`), page);
   }
   fs.writeFileSync(path.join(out, '404.md'), `---\ntitle: Page not found\n---\n\nThat page is not here.\nTry the [documentation index](${route('index')}) or the search box.\n`);

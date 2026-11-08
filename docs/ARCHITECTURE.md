@@ -35,20 +35,24 @@ That is how `in Boundary(key)` came to exist.
 ## The site
 
 `site/` is the GitHub Pages site and is published by `.github/workflows/pages.yml`.
-Its example file and its board image come from the model, so run this after changing an example or the diagram code:
+Its example file, its board image and the playground's bundle come from the model, so run this after changing an example, the diagram code or anything in `lib/`:
 
 ```bash
 node scripts/build-site.js
 ```
 
-`test/site.test.js` fails when the page's counts, DSL listing or board drift from `examples/twitter-pure.dsl`.
+The playground on the landing page runs `site/eventline.js`, which is `lib/index.js` bundled for the browser, so it uses the same parser, checks and board renderer as the CLI.
+The board SVG tags every node and edge with `data-id`, `data-from` and `data-to`, which the page uses to light a box's lineage.
+`test/site.test.js` fails when the page's counts, DSL listing, board, bundle or example copies drift from `examples/`.
+A model can be shared as `/eventline/#play=<base64url of the text>`; the docs use the same link.
 
 ## The docs site
 
 `docs-site/` builds the documentation site at `/eventline/docs/` with Astro Starlight.
 The Markdown in `docs/`, `EVENTLINE-AXI.md` and `CONTRIBUTING.md` stays the source.
 `docs-site/scripts/sync-docs.mjs` turns it into Starlight pages when the site builds:
-it takes the title from the first heading, turns links between docs into site routes, and renders the diagrams derived from `examples/billing.dsl`.
+it takes the title from the first heading, turns links between docs into site routes, tags code blocks that hold eventline source so they are highlighted, and renders the diagrams derived from `examples/billing.dsl`.
+A block that parses as a model with a command, view or policy also gets an Open in playground link.
 Nothing it writes is committed.
 The build fails on a broken link between pages.
 `.github/workflows/pages.yml` builds the docs next to the landing page and deploys both as one Pages artifact.

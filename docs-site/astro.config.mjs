@@ -14,7 +14,10 @@ export default defineConfig({
       favicon: '/favicon.svg',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/bytesbybrandon/eventline' }],
       customCss: ['./src/styles/theme.css'],
+      components: { Header: './src/components/Header.astro', PageTitle: './src/components/PageTitle.astro' },
       head: [
+        // The landing page is dark, so the docs open dark. A visitor's own choice, once made, wins.
+        { tag: 'script', content: "try{if(!localStorage.getItem('starlight-theme'))localStorage.setItem('starlight-theme','dark')}catch(e){}" },
         { tag: 'meta', attrs: { property: 'og:image', content: 'https://bytesbybrandon.github.io/eventline/og.png' } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
         { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },

@@ -1,0 +1,16 @@
+{
+  "name": "eventline-dark",
+  "type": "dark",
+  "colors": { "editor.background": "#0b1020", "editor.foreground": "#e4e8f3" },
+  "tokenColors": [
+    { "scope": ["comment"], "settings": { "foreground": "#8b96b4", "fontStyle": "italic" } },
+    { "scope": ["keyword.control"], "settings": { "foreground": "#c3cbe0", "fontStyle": "bold" } },
+    { "scope": ["keyword.operator"], "settings": { "foreground": "#98a3c0" } },
+    { "scope": ["entity.name.function.command"], "settings": { "foreground": "#ffffff", "fontStyle": "bold" } },
+    { "scope": ["entity.name.type"], "settings": { "foreground": "#ffffff", "fontStyle": "bold" } },
+    { "scope": ["variable.other.event"], "settings": { "foreground": "#ffd400" } },
+    { "scope": ["storage.type.annotation"], "settings": { "foreground": "#c3cbe0", "fontStyle": "italic" } },
+    { "scope": ["string"], "settings": { "foreground": "#b8c2dc" } },
+    { "scope": ["constant.numeric"], "settings": { "foreground": "#e4e8f3" } }
+  ]
+}

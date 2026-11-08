@@ -1,0 +1,70 @@
+---
+// The docs home. Every route here is one the old overview table linked to.
+// The hero snippet is the slot: a fenced eventline block written in index.mdx, so it goes through the normal highlighting.
+
+const base = '/eventline/docs';
+const primitives = [
+  { shape: 'command', name: 'Commands decide', text: 'Someone asks for something. The guards on its edges choose what is recorded.', href: `${base}/glossary/` },
+  { shape: 'event', name: 'Events remember', text: 'What happened, as a fact. Events are all that is stored.', href: `${base}/language/` },
+  { shape: 'view', name: 'Views answer', text: 'A fold over events that answers a question without asking the command.', href: `${base}/glossary/` },
+  { shape: 'policy', name: 'Policies react', text: 'Watch an event, issue the next command.', href: `${base}/language/` },
+];
+
+const paths = [
+  { shape: 'event', intent: 'I am new to Event Modeling', go: [['Event storming, Event Modeling and DCB', 'event-modeling'], ['Thinking guide', 'thinking-guide']] },
+  { shape: 'command', intent: 'I want to learn the notation', go: [['Language reference', 'language'], ['Worked examples', 'examples']] },
+  { shape: 'policy', intent: 'I have an interview coming up', go: [['Language reference, sections 2 and 5', 'language'], ['Interview simulation: rate limiter', 'interview-simulation']] },
+  { shape: 'view', intent: 'I want to review a model I wrote', go: [['Thinking guide', 'thinking-guide'], ['The checklist in the language reference', 'language']] },
+  { shape: 'event', intent: 'I need to declare actors or context', go: [['Actors', 'actors'], ['System context', 'system-context']] },
+  { shape: 'command', intent: 'I want to see a whole system', go: [['Design Twitter, DSL to architecture', 'twitter-translation']] },
+  { shape: 'policy', intent: 'I want to run it on my model', go: [['The CLI', 'eventline-axi']] },
+  { shape: 'view', intent: 'I need to look up a term', go: [['Glossary', 'glossary']] },
+  { shape: 'event', intent: 'I want to change the code', go: [['Architecture', 'architecture'], ['Contributing', 'contributing']] },
+];
+---
+
+<div class="hub not-content">
+  <header class="hub-hero">
+    <div class="hub-hero__copy">
+      <p class="hub-kicker">eventline documentation</p>
+      <h1 id="_top">Design systems the way they happen.</h1>
+      <p class="hub-lede">
+        eventline is a small notation for commands, events and views, built on Event Modeling and Dynamic Consistency Boundaries.
+        Write a model, check it, and draw it.
+      </p>
+      <div class="hub-actions">
+        <a class="hub-btn hub-btn--go" href="/eventline/#play">Open the playground</a>
+        <a class="hub-btn" href={`${base}/language/`}>Read the language reference</a>
+      </div>
+    </div>
+    <div class="hub-hero__code">
+      <p class="hub-kicker">One decision, six lines</p>
+      <slot />
+    </div>
+  </header>
+
+  <section class="hub-prims" aria-label="The four primitives">
+    {primitives.map((p) => (
+      <a class="hub-prim" href={p.href}>
+        <span class={`shape shape--${p.shape}`} aria-hidden="true"></span>
+        <span class="hub-prim__name">{p.name}</span>
+        <span class="hub-prim__text">{p.text}</span>
+      </a>
+    ))}
+  </section>
+
+  <section class="hub-paths" aria-labelledby="hub-paths-h">
+    <h2 id="hub-paths-h">Start from what you need.</h2>
+    <ol>
+      {paths.map((p) => (
+        <li>
+          <span class={`shape shape--${p.shape}`} aria-hidden="true"></span>
+          <span class="hub-intent">{p.intent}</span>
+          <span class="hub-go">
+            {p.go.map(([label, slug]) => <a href={`${base}/${slug}/`}>{label}</a>)}
+          </span>
+        </li>
+      ))}
+    </ol>
+  </section>
+</div>

@@ -36,80 +36,100 @@
     <a href="#premise">Why events</a>
     <a href="#model">Model</a>
     <a href="#proof">Proof</a>
+    <a href="#play">Playground</a>
     <a href="#faq">FAQ</a>
     <a href="/eventline/docs/">Docs</a>
   </nav>
   <span class="bar__ev" id="rail-ev" aria-hidden="true">page-opened</span>
   <button class="bar__log" id="log-open" type="button" aria-haspopup="dialog">Event log</button>
-  <a class="cta cta--bar" href="#run">Run it</a>
+  <a class="cta cta--bar" href="#play">Write one</a>
 </header>
 
 <main id="top">
 
-  <!-- 1 · SPARK: pointer. The hero is the surface already in a state. -->
+  <!-- 1 · SPARK: pointer. The hero is the surface already in a state, and time is something you can hold. -->
   <section id="spark" class="scene scene--dark pf-hero" data-scene="spark" aria-labelledby="spark-h">
-    <div class="pf-hero__copy sc-stack">
-      <h1 id="spark-h" class="sc-display sc-display--xl" elementtiming="hero">Design systems the way they happen.</h1>
-      <p class="sc-lede">eventline describes any system as commands, events, and views. Fire a few and watch the timeline fill.</p>
-      <a class="cta" href="#run">Run it</a>
+    <div class="pf-hero__top">
+      <div class="pf-hero__copy sc-stack">
+        <h1 id="spark-h" class="sc-display sc-display--xl" elementtiming="hero">Design systems the way they happen.</h1>
+        <p class="sc-lede">Describe any system as commands, events and views. Fire one, then drag the timeline back: state is only ever a fold of what already happened.</p>
+        <div class="pf-actions">
+          <a class="cta" href="#play">Write your own</a>
+          <button type="button" class="pf-copy" id="hero-copy" aria-label="Copy the command npx -y eventline-axi"><code>npx -y eventline-axi</code><span id="hero-copy-s">Copy</span></button>
+        </div>
+      </div>
+
+      <div class="pf-console" role="group" aria-labelledby="console-h">
+        <p id="console-h" class="sc-label">Try it. Sample data, running in your browser.</p>
+        <div class="pf-console__btns">
+          <button type="button" class="btn" data-fire="postTweet">postTweet</button>
+          <button type="button" class="btn" data-fire="likeTweet">likeTweet</button>
+          <button type="button" class="btn" data-fire="followUser">followUser</button>
+        </div>
+        <div class="pf-console__code">
+          <pre class="code pf-code" data-cmd="postTweet" tabindex="0" aria-label="postTweet in eventline"><code><span class="ln" data-n="34">user -&gt; <span class="t-cmd">postTweet</span>(content, media?) <span class="t-kw">in</span> UserTimeline(userId)</span><span class="ln" data-n="35"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln" data-n="36">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln" data-n="37">  --[default]--&gt; [</span><span class="ln" data-n="38">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln" data-n="39">  ]</span></code></pre>
+          <pre class="code pf-code" data-cmd="likeTweet" hidden tabindex="0" aria-label="likeTweet in eventline"><code><span class="ln" data-n="48">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln" data-n="49"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln" data-n="50">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln" data-n="51">  --[default]--&gt; [</span><span class="ln" data-n="52">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln" data-n="53">  ]</span></code></pre>
+          <pre class="code pf-code" data-cmd="followUser" hidden tabindex="0" aria-label="followUser in eventline"><code><span class="ln" data-n="41">user -&gt; <span class="t-cmd">followUser</span>(targetUserId) <span class="t-kw">in</span> UserFollows(userId)</span><span class="ln" data-n="42"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln" data-n="43">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln" data-n="44">  --[default]--&gt; [</span><span class="ln" data-n="45">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln" data-n="46">  ]</span></code></pre>
+        </div>
+        <p class="pf-status" id="hero-status" role="status">Pick a command. The guard on each line decides which events it emits.</p>
+      </div>
     </div>
 
-    <div class="pf-console" role="group" aria-labelledby="console-h">
-      <p id="console-h" class="sc-label">Try it. Sample data, running in your browser.</p>
-      <div class="pf-console__btns">
-        <button type="button" class="btn" data-fire="postTweet">postTweet</button>
-        <button type="button" class="btn" data-fire="likeTweet">likeTweet</button>
-        <button type="button" class="btn" data-fire="followUser">followUser</button>
+    <div class="pf-river" role="group" aria-labelledby="river-h">
+      <div class="pf-river__head">
+        <p id="river-h" class="sc-label">Event stream, sample traffic plus yours</p>
+        <dl class="pf-views" id="views" aria-label="Views folded from the stream, as of the playhead">
+          <div><dt>UserTimeline</dt><dd id="v-tweets">0 tweets</dd></div>
+          <div><dt>Likes</dt><dd id="v-likes">0</dd></div>
+          <div><dt>Follows</dt><dd id="v-follows">0</dd></div>
+        </dl>
+        <div class="pf-river__tools">
+          <span class="pf-asof is-live" id="asof" aria-hidden="true">live</span>
+          <button type="button" class="btn btn--go" id="lane-now" hidden>Return to now</button>
+          <button type="button" class="btn btn--quiet" id="lane-pause" aria-pressed="false">Pause stream</button>
+        </div>
       </div>
-      <div class="pf-console__code">
-        <pre class="code pf-code" data-cmd="postTweet" tabindex="0" aria-label="postTweet in eventline"><code><span class="ln" data-n="34">user -&gt; <span class="t-cmd">postTweet</span>(content, media?) <span class="t-kw">in</span> UserTimeline(userId)</span><span class="ln" data-n="35"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln" data-n="36">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln" data-n="37">  --[default]--&gt; [</span><span class="ln" data-n="38">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln" data-n="39">  ]</span></code></pre>
-        <pre class="code pf-code" data-cmd="likeTweet" hidden tabindex="0" aria-label="likeTweet in eventline"><code><span class="ln" data-n="48">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln" data-n="49"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln" data-n="50">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln" data-n="51">  --[default]--&gt; [</span><span class="ln" data-n="52">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln" data-n="53">  ]</span></code></pre>
-        <pre class="code pf-code" data-cmd="followUser" hidden tabindex="0" aria-label="followUser in eventline"><code><span class="ln" data-n="41">user -&gt; <span class="t-cmd">followUser</span>(targetUserId) <span class="t-kw">in</span> UserFollows(userId)</span><span class="ln" data-n="42"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln" data-n="43">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln" data-n="44">  --[default]--&gt; [</span><span class="ln" data-n="45">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln" data-n="46">  ]</span></code></pre>
+      <div class="pf-lane__view" id="lane-view">
+        <div class="pf-lane__future" aria-hidden="true"></div>
+        <div class="pf-lane__track" id="lane-track" aria-hidden="true"></div>
+        <div class="pf-play" id="playhead" role="slider" tabindex="0" aria-label="Playhead. Drag the timeline, or use the arrow keys, to see the views as of an earlier event." aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="live">
+          <span class="pf-play__tag" id="play-tag">now</span>
+        </div>
+        <p class="pf-lane__cue" id="lane-cue" aria-hidden="true">Drag to travel back in time</p>
       </div>
-      <p class="pf-status" id="hero-status" role="status">Pick a command. The guard on each line decides which events it emits.</p>
-      <dl class="pf-views" aria-label="Views folded from the stream">
-        <div><dt>UserTimeline</dt><dd id="v-tweets">0 tweets</dd></div>
-        <div><dt>Likes</dt><dd id="v-likes">0</dd></div>
-        <div><dt>Follows</dt><dd id="v-follows">0</dd></div>
-      </dl>
-    </div>
-
-    <div class="pf-lane">
-      <div class="pf-lane__head">
-        <span class="sc-label">Event stream, sample traffic plus yours</span>
-        <button type="button" class="btn btn--quiet" id="lane-pause" aria-pressed="false">Pause stream</button>
-      </div>
-      <div class="pf-lane__view" id="lane-view" aria-hidden="true"><div class="pf-lane__track" id="lane-track"></div></div>
     </div>
   </section>
 
-  <!-- 2 · PREMISE: reveal. A wipe is a change of state. -->
-  <section id="premise" class="scene scene--light" data-scene="premise" data-sc-act="pin" data-sc-span="1.7" aria-labelledby="premise-h">
-    <div data-sc-stage class="pf-premise">
-      <div class="pf-premise__copy sc-stack">
-        <h2 id="premise-h" class="sc-display sc-display--lg" data-sc-cue="0 0.94 0">Boxes show where. Events show what happened.</h2>
-        <p class="sc-body" data-sc-cue="0 0.94 0">Draw a rate limiter as services and it looks like nothing else you have drawn. Write it as events and it looks like every other system.</p>
+  <!-- 2 · PREMISE: reveal. One system, two lenses. The edge of the wipe is a change of state. -->
+  <section id="premise" class="scene scene--light" data-scene="premise" data-sc-act="pin" data-sc-span="1.9" aria-labelledby="premise-h">
+    <div data-sc-stage class="pf-lens">
+      <div class="pf-lens__a">
+        <div class="pf-lens__copy">
+          <h2 id="premise-h" class="sc-display">Boxes show where.</h2>
+          <p class="sc-lede">Draw a rate limiter as services and it looks like nothing else you have drawn.</p>
+        </div>
+        <ol class="pf-lens__row" aria-label="The rate limiter drawn as boxes">
+          <li><span class="lens-node lens-node--box">Client</span></li>
+          <li><span class="lens-node lens-node--box">API gateway</span></li>
+          <li><span class="lens-node lens-node--box">Rate limiter</span></li>
+          <li><span class="lens-node lens-node--box">Redis</span></li>
+        </ol>
+        <p class="sc-label pf-lens__cap">Drawn as boxes</p>
       </div>
-      <figure class="pf-swap" aria-label="The same rate limiter, drawn as boxes and then written as events">
-        <div class="pf-swap__a">
-          <p class="sc-label">Drawn as boxes</p>
-          <ol class="pf-chain">
-            <li><span class="node node--box">Client</span></li>
-            <li><span class="node node--box">API gateway</span></li>
-            <li><span class="node node--box">Rate limiter</span></li>
-            <li><span class="node node--box">Redis</span></li>
-          </ol>
+      <div class="pf-lens__b" data-sc-reveal="left" data-sc-reveal-at="0.18 0.74" id="lens-b">
+        <div class="pf-lens__copy">
+          <h2 class="sc-display">Events show what happened.</h2>
+          <p class="sc-lede">Write it as events and it looks like every other system.</p>
         </div>
-        <div class="pf-swap__b" data-sc-reveal="left" data-sc-reveal-at="0.2 0.68">
-          <p class="sc-label">Written as events</p>
-          <ol class="pf-chain">
-            <li><span class="node node--ev">user-authenticated</span><code>{&nbsp;userId&nbsp;}</code></li>
-            <li><span class="node node--ev">request-logged</span><code>{&nbsp;userId, resourceId&nbsp;}</code></li>
-            <li><span class="node node--ev">rate-limit-reached</span><code>{&nbsp;userId, retryAfter:&nbsp;60s&nbsp;}</code></li>
-            <li><span class="node node--view">UserQuota(userId)</span><span class="pf-chain__note">A view folded from the events above.</span></li>
-          </ol>
-        </div>
-      </figure>
+        <ol class="pf-lens__row" aria-label="The same rate limiter written as events">
+          <li><span class="lens-node lens-node--ev">user-authenticated</span><code>{&nbsp;userId&nbsp;}</code></li>
+          <li><span class="lens-node lens-node--ev">request-logged</span><code>{&nbsp;userId, resourceId&nbsp;}</code></li>
+          <li><span class="lens-node lens-node--ev">rate-limit-reached</span><code>{&nbsp;userId, retryAfter:&nbsp;60s&nbsp;}</code></li>
+          <li><span class="lens-node lens-node--view">UserQuota(userId)</span><span class="pf-lens__note">A view folded from the events before it.</span></li>
+        </ol>
+        <p class="sc-label pf-lens__cap">Written as events</p>
+      </div>
+      <span class="pf-lens__edge" id="lens-edge" aria-hidden="true"></span>
     </div>
   </section>
 
@@ -119,12 +139,13 @@
       <div class="pf-board__rail" data-sc-pan="0.04">
         <div class="pf-board__lead sc-stack">
           <h2 id="model-h" class="sc-display sc-display--md">Four slices, one timeline.</h2>
-          <p class="sc-body">eventline maps one to one onto the four slice patterns of Event Modeling. Nobody drew this board. <code>eventline-axi diagram eventmodel</code> derived it from the 75 lines you are about to read.</p>
+          <p class="sc-body">eventline maps one to one onto the four slice patterns of Event Modeling. Nobody drew this board, and it is not a picture: point at a box and the board traces its lineage. <code>eventline-axi diagram eventmodel</code> derived it from the 75 lines you are about to read.</p>
         </div>
         <figure class="pf-board__fig">
-          <img src="assets/eventmodel.svg" width="1665" height="690" alt="Event Modeling board derived from twitter-pure.dsl. Five commands each have their actor above and their events beneath, grouped into three consistency boundaries: UserTimeline, UserFollows and TweetFeed. The views UserTimeline, TweetDetails and UserProfile sit right of the events that feed them. The trending-analyzer and notification-worker policies sit in the lane below.">
+          <img src="assets/eventmodel.svg" width="1665" height="726" alt="Event Modeling board derived from twitter-pure.dsl. Five commands each have their actor above and their events beneath, grouped into three consistency boundaries: UserTimeline, UserFollows and TweetFeed. The views UserTimeline, TweetDetails and UserProfile sit right of the events that feed them. The trending-analyzer and notification-worker policies sit in the lane below.">
         </figure>
       </div>
+      <p class="pf-trace" id="trace" role="status" aria-live="polite">Point at any box to trace what feeds it and what reads it.</p>
     </div>
   </section>
 
@@ -172,6 +193,56 @@
     </div>
   </section>
 
+  <!-- 5 · PLAY: pointer. Your turn. The page runs the real parser and board renderer on whatever you type. -->
+  <section id="play" class="scene scene--mid pg" data-scene="play" aria-labelledby="play-h">
+    <div class="pg__head">
+      <div class="pg__title sc-stack">
+        <p class="sc-label">The same code the CLI runs</p>
+        <h2 id="play-h" class="sc-display sc-display--lg">Now you write one.</h2>
+        <p class="sc-lede">Edit the model. eventline's own parser and renderer, bundled into this page, redraw the board on every keystroke. Nothing leaves your browser.</p>
+      </div>
+      <div class="pg__presets" role="group" aria-label="Start from a model">
+        <button type="button" class="pg__tab" data-preset="start" aria-pressed="true">Start small</button>
+        <button type="button" class="pg__tab" data-preset="rate-limiter" aria-pressed="false">Rate limiter</button>
+        <button type="button" class="pg__tab" data-preset="payment-webhook" aria-pressed="false">Webhook</button>
+        <button type="button" class="pg__tab" data-preset="billing" aria-pressed="false">Billing</button>
+        <button type="button" class="pg__tab" data-preset="twitter-pure" aria-pressed="false">Twitter</button>
+      </div>
+    </div>
+
+    <div class="pg__grid" id="pg" data-state="idle">
+      <div class="pg__ed">
+        <div class="pg__bar"><span class="sc-label">model.dsl</span><span class="pg__hint">Editable</span></div>
+        <div class="pg__code">
+          <pre class="pg__mirror" id="pg-mirror" aria-hidden="true"><code></code></pre>
+          <textarea id="pg-text" class="pg__area" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="eventline model, editable. The board beside it updates as you type." aria-describedby="pg-status"></textarea>
+        </div>
+      </div>
+      <div class="pg__bd">
+        <div class="pg__bar">
+          <span class="sc-label">Event Modeling board</span>
+          <span class="pg__tools">
+            <button type="button" class="btn btn--quiet" id="pg-fit" aria-pressed="true">Fit to panel</button>
+          </span>
+        </div>
+        <div class="pg__board is-fit" id="pg-board"><p class="pg__empty">The board appears here. Scroll this section into view and it loads.</p></div>
+      </div>
+    </div>
+
+    <div class="pg__foot">
+      <div class="pg__read">
+        <p class="pg__status" id="pg-status" role="status">Loading the parser.</p>
+        <p class="pg__trace" id="pg-trace" aria-live="polite">Point at a box on the board to trace its lineage.</p>
+        <ul class="pg__issues" id="pg-issues" aria-label="Checks on this model"></ul>
+      </div>
+      <div class="pg__out">
+        <button type="button" class="btn" id="pg-share">Copy share link</button>
+        <button type="button" class="btn" id="pg-dsl">Download .dsl</button>
+        <button type="button" class="btn" id="pg-svg">Download board.svg</button>
+      </div>
+    </div>
+  </section>
+
   <!-- 5 · ANSWERS: flow. -->
   <section id="faq" class="scene scene--light pf-faq" data-scene="faq" aria-labelledby="faq-h">
     <div class="sc-wrap pf-faq__wrap">
@@ -214,16 +285,18 @@
     <div class="sc-wrap pf-run__wrap">
       <div class="pf-run__copy sc-stack" data-sc-in data-sc-stagger="70">
         <h2 id="run-h" class="sc-display sc-display--lg">Run it on a real model.</h2>
-        <p class="sc-lede">Download the example from this page, point the CLI at it, and get the whole model back.</p>
+        <p class="sc-lede">One line downloads the example and points the CLI at it. You get the whole model back.</p>
         <div class="pf-cmd">
-          <input id="cmd" type="text" readonly aria-label="Command to run" value="npx -y eventline-axi twitter-pure.dsl" spellcheck="false">
+          <code id="cmd" tabindex="0" aria-label="Command to run">curl -sO https://bytesbybrandon.github.io/eventline/twitter-pure.dsl &amp;&amp; npx -y eventline-axi twitter-pure.dsl</code>
           <button type="button" class="btn btn--ink" id="copy">Copy</button>
         </div>
-        <p class="pf-run__hint" id="copy-status" role="status"><a href="twitter-pure.dsl" download>Download twitter-pure.dsl</a> first, then run the command in the same folder. Swap in <code>diagrams</code> as the first argument to draw the model instead.</p>
+        <p class="pf-run__hint" id="copy-status" role="status">Needs Node 18 or later. Swap <code>diagrams</code> in as the first argument to draw the model instead, or <a href="#play">write your own in the playground</a>.</p>
       </div>
       <figure class="pf-cli" data-sc-in>
-        <figcaption class="sc-label">Output, abridged</figcaption>
-<pre class="pf-cli__out" aria-label="eventline-axi output for twitter-pure.dsl"><code>counts[6]:
+        <figcaption class="sc-label">What it prints, abridged</figcaption>
+<pre class="pf-cli__out" aria-label="eventline-axi output for twitter-pure.dsl"><code><span class="pf-cli__ps">$ npx -y eventline-axi twitter-pure.dsl</span>
+
+counts[6]:
   actors: <span data-sc-count="0 3">3</span>
   commands: <span data-sc-count="0 5">5</span>
   events: <span data-sc-count="0 16">16</span>
@@ -237,7 +310,7 @@ system:
     </div>
     <footer class="pf-foot">
       <p>eventline is MIT licensed. The live demos on this page run sample data in your browser.</p>
-      <p><a href="/eventline/docs/">Read the docs</a> · <a href="https://github.com/bytesbybrandon/eventline">Source on GitHub</a></p>
+      <p><a href="/eventline/docs/">Read the docs</a> · <a href="#play">Playground</a> · <a href="https://www.npmjs.com/package/eventline-axi">npm</a> · <a href="https://github.com/bytesbybrandon/eventline">Source on GitHub</a></p>
     </footer>
   </section>
 
