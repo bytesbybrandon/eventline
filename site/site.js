@@ -756,6 +756,32 @@
 
   let eventline = null;       // window.eventline once the bundle has loaded
   let lastSvg = '';
+  let pgKind = 'eventmodel';  // which diagram of the model is on the board
+  let pgLinks = false;        // whether boxes link to the same thing in another diagram
+  let pgDirty = false;        // the text was edited or came from a link, so the address must carry it
+  const KIND_FILE = { eventmodel: 'event-model', context: 'context', containers: 'containers', dataflow: 'data-flow', deployment: 'deployment', contextmap: 'context-map' };
+  /* A link inside the page: #d=<diagram>&n=<box>. Addresses outside the page stay as they are. */
+  const hrefFor = (t) => t.url || ('#d=' + t.diagram + (t.node ? '&n=' + encodeURIComponent(t.node) : ''));
+  const renderOpts = () => (pgLinks ? { links: true, href: hrefFor } : {});
+  const kindTabs = $$('.pg__kind');
+  const linksBtn = $('#pg-links');
+  function paintKinds() {
+    kindTabs.forEach((b) => {
+      const on = b.dataset.kind === pgKind;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    linksBtn.setAttribute('aria-pressed', String(pgLinks));
+    $('#pg-svg').textContent = 'Download ' + KIND_FILE[pgKind] + '.svg';
+  }
+  /* The address says where you are: the text when it is not a preset, the diagram, and whether links are on. */
+  function currentHash(forceText) {
+    let h = (forceText || pgDirty || pgKind !== 'eventmodel' || pgLinks) ? '#play=' + b64.enc(pgEl.text.value) : '#play';
+    if (pgKind !== 'eventmodel') h += '&d=' + pgKind;
+    if (pgLinks) h += '&links=1';
+    return h;
+  }
+  function setKind(kind) { pgKind = kind; paintKinds(); }
   let timer = 0;
   const plural = (n, w) => n + ' ' + (n === 1 ? w : (w.endsWith('y') ? w.slice(0, -1) + 'ies' : w + 's'));
   function drawBoard() {
@@ -781,18 +807,32 @@
       lastSvg = '';
       return;
     }
+    const can = { deployment: !!(model.system && model.system.regions.length), contextmap: model.contexts.length > 0 };
+    const why = { deployment: 'Add region: a, b to the system block to draw this', contextmap: 'Wrap statements in context Name { ... } to draw this' };
+    kindTabs.forEach((b) => { const off = b.dataset.kind in can && !can[b.dataset.kind]; b.disabled = off; b.title = off ? why[b.dataset.kind] : ''; });
+    if (pgKind in can && !can[pgKind]) setKind('eventmodel');
     let svgText;
-    try { svgText = eventline.render(model, 'eventmodel', 'svg', 'dark'); } catch (err) {
+    try { svgText = eventline.render(model, pgKind, 'svg', 'dark', renderOpts()); } catch (err) {
       pgEl.grid.dataset.state = 'error'; pgEl.status.classList.add('is-error'); pgEl.status.textContent = err.message; return;
     }
     lastSvg = svgText;
     const svg = inlineSvg(svgText);
     svg.removeAttribute('width'); svg.removeAttribute('height');
+    for (const a of $$('a', svg)) {
+      if (a.classList.contains('lnk')) a.setAttribute('tabindex', '-1');
+      else a.setAttribute('aria-label', (a.querySelector('title') || {}).textContent || 'Open');
+      if (!(a.getAttribute('href') || '').startsWith('#')) { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener'); }
+    }
     pgEl.board.replaceChildren(svg);
     pgEl.grid.dataset.state = 'ok';
     pgBoard = { svg, tracer: traceBoard(svg, pgEl.trace, IDLE, { focusable: true, onSelect: onBoardSelect, suppressClick: () => panMoved }) };
     applyZoom();
+    const wanted = pgSel; // restoreSelection forgets a target that is a group, not a box
     restoreSelection();
+    if (wanted && !pgBoard.tracer.nodes.has(wanted)) {
+      const grp = $$('.gp', svg).find((g) => g.dataset.id === wanted);
+      if (grp) { grp.classList.add('is-flash'); setTimeout(() => grp.classList.remove('is-flash'), 1400); }
+    }
     pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'view'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
     const issues = eventline.check(model).slice(0, 5);
     for (const it of issues) {
@@ -814,7 +854,7 @@
     clearTimeout(timer);
     timer = setTimeout(() => {
       drawBoard();
-      if (fromUser) history.replaceState(null, '', '#play=' + b64.enc(pgEl.text.value));
+      if (fromUser) { pgDirty = true; history.replaceState(null, '', currentHash(true)); }
     }, fromUser ? 140 : 0);
   }
   pgEl.text.addEventListener('input', () => {
@@ -825,11 +865,12 @@
   const presetCache = {};
   async function loadPreset(name) {
     $$('.pg__tab').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.preset === name)));
-    if (name === 'start') { setText(START, false); history.replaceState(null, '', '#play'); return; }
+    pgDirty = false;
+    if (name === 'start') { setText(START, false); history.replaceState(null, '', currentHash(false)); return; }
     try {
       if (!presetCache[name]) presetCache[name] = await (await fetch('examples/' + name + '.dsl')).text();
       setText(presetCache[name], false);
-      history.replaceState(null, '', '#play');
+      history.replaceState(null, '', currentHash(false));
     } catch { pgEl.status.textContent = 'Could not load that example. Check your connection.'; }
   }
   $$('.pg__tab').forEach((t) => t.addEventListener('click', () => loadPreset(t.dataset.preset)));
@@ -969,7 +1010,8 @@
   }, { passive: false });
   pgEl.board.setAttribute('tabindex', '0');
   pgEl.board.setAttribute('role', 'region');
-  pgEl.board.setAttribute('aria-label', 'Event Modeling board. Plus and minus zoom, zero fits, arrow keys scroll.');
+  pgEl.board.setAttribute('aria-label', 'Diagram. Ctrl and scroll zoom, plus and minus zoom, zero fits, arrow keys scroll.');
+  pgEl.board.title = 'Ctrl + scroll to zoom, drag to pan';
   pgEl.board.addEventListener('keydown', (ev) => {
     if (!pgBoard || ev.target.closest('.nd') || ev.ctrlKey || ev.metaKey) return;
     if (ev.key === '+' || ev.key === '=') { ev.preventDefault(); zoomTo(curScale() * 1.25, ...boardCentre()); }
@@ -1003,7 +1045,7 @@
   }
   const flash = (btn) => { btn.dataset.done = '1'; setTimeout(() => { delete btn.dataset.done; }, 1800); };
   $('#pg-share').addEventListener('click', async (ev) => {
-    history.replaceState(null, '', '#play=' + b64.enc(pgEl.text.value));
+    history.replaceState(null, '', currentHash(true));
     const ok = await copyText(location.href);
     if (ok) flash(ev.currentTarget); else pgEl.status.textContent = 'Copy the address bar: it already holds this model.';
   });
@@ -1013,21 +1055,74 @@
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
   $('#pg-dsl').addEventListener('click', (ev) => { download('model.dsl', 'text/plain', pgEl.text.value); flash(ev.currentTarget); });
-  $('#pg-svg').addEventListener('click', (ev) => { if (lastSvg) { download('board.svg', 'image/svg+xml', lastSvg); flash(ev.currentTarget); } });
-
-  /* Deep links: #play=<base64url of the model text>, written by the share button and the docs. */
-  function fromHash() {
-    const m = /^#play=([A-Za-z0-9_-]+)$/.exec(location.hash);
-    if (!m) return false;
+  /* The download is the diagram as the CLI writes it: with links on, they point at <diagram>.svg beside the file. */
+  $('#pg-svg').addEventListener('click', (ev) => {
+    if (!eventline) return;
     try {
-      $$('.pg__tab').forEach((t) => t.setAttribute('aria-pressed', 'false'));
-      setText(b64.dec(m[1]), false);
+      const svg = eventline.render(eventline.parse(pgEl.text.value), pgKind, 'svg', 'dark', pgLinks ? { links: true } : {});
+      download(KIND_FILE[pgKind] + '.svg', 'image/svg+xml', svg); flash(ev.currentTarget);
+    } catch (err) { pgEl.status.textContent = err.message; }
+  });
+
+  /* Addresses: #play (a preset), #play=<base64url of the model text>, then optional &d=<diagram>, &n=<box>, &links=1.
+     The share button and the docs write them; the back button walks the links you followed. */
+  const HASH = /^#play(?:=([A-Za-z0-9_-]+))?((?:&[a-z]+=[^&]*)*)$/;
+  function parseHash() {
+    const m = HASH.exec(location.hash);
+    if (!m) return null;
+    const p = new URLSearchParams((m[2] || '').replace(/^&/, ''));
+    return { text: m[1] || null, kind: p.get('d'), node: p.get('n'), links: p.get('links') === '1' };
+  }
+  function applyHash() {
+    const h = parseHash();
+    if (!h || (h.text === null && !h.kind)) return false; // a bare #play is just the section
+    try {
+      if (h.kind && kindTabs.some((t) => t.dataset.kind === h.kind)) pgKind = h.kind; else if (!h.kind) pgKind = 'eventmodel';
+      pgLinks = h.links;
+      pgSel = h.node;
+      paintKinds();
+      if (h.text !== null) {
+        const text = b64.dec(h.text);
+        if (text !== pgEl.text.value) { $$('.pg__tab').forEach((t) => t.setAttribute('aria-pressed', 'false')); pgDirty = true; setText(text, false); return true; }
+      }
+      if (eventline) drawBoard();
       return true;
     } catch { return false; }
   }
-  const hashed = fromHash();
-  if (!hashed) { pgEl.text.value = START; paintMirror(); }
-  window.addEventListener('hashchange', () => { if (fromHash()) $('#play').scrollIntoView(); });
+  /* follow a link to another diagram, keeping the model; the previous diagram stays one back-button away */
+  function goTo(kind, node) {
+    history.replaceState(null, '', currentHash(true)); // so back returns here, text and all
+    pgKind = kind; pgSel = node || null; pgDirty = true;
+    paintKinds();
+    drawBoard();
+    history.pushState(null, '', currentHash(true) + (node ? '&n=' + encodeURIComponent(node) : ''));
+  }
+  pgEl.board.addEventListener('click', (ev) => {
+    const a = ev.target.closest && ev.target.closest('a.lnk, a.lnk-badge');
+    if (!a) return;
+    ev.stopPropagation();
+    const m = /^#d=([a-z]+)(?:&n=(.+))?$/.exec(a.getAttribute('href') || '');
+    if (!m) return; // an address outside the page: the browser follows it
+    ev.preventDefault();
+    goTo(m[1], m[2] && decodeURIComponent(m[2]));
+  }, true);
+  kindTabs.forEach((b, i) => {
+    b.addEventListener('click', () => { if (b.disabled) return; setKind(b.dataset.kind); pgSel = null; drawBoard(); history.replaceState(null, '', currentHash(false)); });
+    b.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+      ev.preventDefault();
+      const step = ev.key === 'ArrowRight' ? 1 : -1;
+      for (let k = 1; k <= kindTabs.length; k++) {
+        const next = kindTabs[(i + step * k + kindTabs.length * k) % kindTabs.length];
+        if (!next.disabled) { next.focus(); next.click(); return; }
+      }
+    });
+  });
+  linksBtn.addEventListener('click', () => { pgLinks = !pgLinks; paintKinds(); drawBoard(); history.replaceState(null, '', currentHash(false)); });
+
+  const hashed = applyHash();
+  if (!pgEl.text.value) { pgEl.text.value = START; paintMirror(); }
+  window.addEventListener('hashchange', () => { if (applyHash()) $('#play').scrollIntoView(); });
 
   let loading = false;
   function loadBundle() {

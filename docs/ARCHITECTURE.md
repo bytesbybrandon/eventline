@@ -34,6 +34,9 @@ That is how `in Boundary(key)` came to exist.
 
 ## The site
 
+Links between diagrams are in `lib/diagram/links.js`: one place that knows how the six diagrams name the same box, with `@link` annotations overriding what it derives.
+`render(..., { links: true })` hands the result to the SVG, Mermaid and DOT writers.
+
 `site/` is the GitHub Pages site and is published by `.github/workflows/pages.yml`.
 Its example file, its board image and the playground's bundle come from the model, so run this after changing an example, the diagram code or anything in `lib/`:
 
@@ -46,6 +49,8 @@ The board SVG tags every node and edge with `data-id`, `data-from` and `data-to`
 Command, view and policy nodes also carry `data-lines`, the source lines the parser recorded (`line` to `endLine`), so a click on a box finds its text in the playground editor and the caret finds its box.
 `test/site.test.js` fails when the page's counts, DSL listing, board, bundle or example copies drift from `examples/`.
 A model can be shared as `/eventline/#play=<base64url of the text>`; the docs use the same link.
+The link can also name a diagram and a box, `&d=containers&n=view%3AOrders`, and turn on links between diagrams, `&links=1`.
+The playground's diagram tabs and Links button read and write those parts, and the back button walks the links you followed.
 
 ## The docs site
 

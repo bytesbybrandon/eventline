@@ -446,6 +446,24 @@ A scenario outside a command or view, or one after a context block closes, is an
 `eventline-axi scenarios <file>` lists each scenario, what it checks and how many lines it has.
 `validate` warns about an empty scenario or a repeated name under the same command or view.
 
+### Linking diagrams
+
+`eventline-axi diagram --links` turns a box into a link to the same thing in another diagram.
+The links are derived: the system context opens the containers, a container opens its data flow and its place on the board, a shard opens the boundary it holds, and each of those opens the way back up.
+`@link` on a command, view, policy or boundary replaces the derived links of that element, in every diagram where it appears:
+
+```eventline
+view Orders(orderId) = [order-placed*(orderId)] => { status: text }
+  @link(to="containers", node="view:Orders", label="Where Orders is stored")
+  @link(url="https://wiki.example.com/runbooks/orders")
+```
+
+- `to` is a diagram: `eventmodel`, `context`, `containers`, `dataflow`, `deployment` or `contextmap`.
+  `node` is a box id on it, such as `view:Orders`, `cmd:postTweet`, `worker:mailer` or `api`; leave it out to open the whole diagram.
+- `url` is an address instead, and `label` is the tooltip.
+- A box with several links shows one arrow badge for each, and the box itself opens the first.
+- `validate` warns about a link to a diagram or box that does not exist, or to a diagram the model cannot draw yet.
+
 ### Strings, comments and repeated blocks
 
 - Inside a string, `\"` is a quote, `\\` is a backslash and `\n` is a line break.

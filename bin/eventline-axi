@@ -107,6 +107,8 @@ program
   .option('-f, --format <fmt>', 'svg | mermaid | dot', 'svg')
   .option('-t, --theme <theme>', 'light | dark', 'light')
   .option('-o, --out <path>', 'Write to a file instead of stdout')
+  .option('--links', 'Link each box to the same thing in another diagram (<diagram>.<ext>#<box>, beside this file)')
+  .option('--link-base <prefix>', 'Put this in front of every link, such as a folder or a site path')
   .action((kind, file, opts) => {
     const model = loadModel(file);
     if (!model) return;
@@ -118,6 +120,8 @@ program
   .description('Write every diagram (svg, mermaid, dot) into a folder')
   .option('-t, --theme <theme>', 'light | dark', 'light')
   .option('-o, --out <dir>', 'Output folder', 'diagrams')
+  .option('--links', 'Link each box to the same thing in another diagram of the folder')
+  .option('--link-base <prefix>', 'Put this in front of every link, such as a site path')
   .action((file, opts) => {
     const model = loadModel(file);
     if (!model) return;
