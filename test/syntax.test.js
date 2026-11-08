@@ -215,3 +215,40 @@ test('from [...] can mark a read @optional, shown on the board; on [...] cannot'
   assert.ok(check(m).some((i) => i.rule === 'optional-on' && /two/.test(i.message)));
   assert.equal(buildBoard(m).edges.find((e) => e.kind === 'reads').label, 'fresh 5s, may be empty');
 });
+
+const SC = 'auditor -> fail()\n  --[default]--> [audit-failed]\n  scenario "Fail an audit" {\n    Given an audit is in progress # {not} [parsed]\n    When the auditor presses "Fail"\n      And more: detail\n    Then it is failed\n  }\n  scenario "Second" {\n    Given x\n  }\nview V(id) = [audit-failed] => { x }\nscenario "Shown" {\n  Then shown\n}\n';
+
+test('scenarios: a block under a command or view keeps its lines as written, dedented', () => {
+  const m = parse(SC);
+  assert.deepEqual(m.commands[0].scenarios.map((s) => s.name), ['Fail an audit', 'Second']);
+  assert.equal(m.commands[0].scenarios[0].text, 'Given an audit is in progress # {not} [parsed]\nWhen the auditor presses "Fail"\n  And more: detail\nThen it is failed');
+  assert.deepEqual(m.views[0].scenarios.map((s) => [s.name, s.text]), [['Shown', 'Then shown']]);
+  assert.deepEqual(parse('u -> a()\n  --[default]--> [a-b]\n').commands[0].scenarios, []);
+});
+
+test('scenarios: inside a context they stay with their own command, and cannot float free', () => {
+  const m = parse('context A {\n  u -> a()\n    --[default]--> [a-b]\n  scenario "in" {\n    Given x\n  }\n}\nu -> b()\n  --[default]--> [b-c]\n');
+  assert.equal(m.commands[0].scenarios.length, 1);
+  assert.equal(m.commands[1].scenarios.length, 0);
+  const bad = (s, re) => assert.throws(() => parse(s), (e) => e instanceof ParseError && re.test(e.message));
+  bad('scenario "x" {\n a\n}\n', /right after the command or view/);
+  bad('context A {\n  u -> a()\n    --[default]--> [a-b]\n}\nscenario "x" {\n a\n}\n', /right after the command or view/);
+  bad('u -> a()\n  --[default]--> [a-b]\nscenario "x" {\n a\n', /Unclosed/);
+  bad('u -> a()\n  --[default]--> [a-b]\nscenario "x" { a }\n', /scenario "name" \{/);
+});
+
+test('scenarios: an event can still be called scenario', () => {
+  assert.equal(parse('scenario { x }\n  -> w -> go()\n').policies[0].trigger.event, 'scenario');
+});
+
+test('scenarios: validate flags an empty body and a repeated name', () => {
+  const r = (b) => rules(`u -> a()\n  --[default]--> [a-b]\n${b}`);
+  assert.ok(r('scenario "e" {\n}\n').includes('warn:scenario-empty'));
+  assert.ok(r('scenario "d" {\n x\n}\nscenario "d" {\n y\n}\n').includes('warn:scenario-duplicate'));
+  assert.ok(!r('scenario "ok" {\n x\n}\n').some((x) => x.includes('scenario')));
+});
+
+test('scenarios command lists what each command or view checks', () => {
+  const { rows } = require('../lib/commands/scenarios');
+  assert.deepEqual(rows(parse(SC)).map((r) => [r.checks, r.scenario, r.lines]), [['fail()', 'Fail an audit', 4], ['fail()', 'Second', 1], ['view V', 'Shown', 1]]);
+});

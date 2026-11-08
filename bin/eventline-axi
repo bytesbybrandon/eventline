@@ -79,6 +79,12 @@ program
   .action((file, opts) => runSubcommand('triggers', file, opts));
 
 program
+  .command('scenarios <file>')
+  .description('List the scenarios written under commands and views')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .action((file, opts) => runSubcommand('scenarios', file, opts));
+
+program
   .command('deps <file> <entity>')
   .description('Show dependencies for an entity (event|view|command)')
   .option('-f, --format <fmt>', 'Output format', 'toon')
