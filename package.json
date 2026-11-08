@@ -2,6 +2,16 @@
   "name": "eventline-axi",
   "version": "1.0.0",
   "description": "System design DSL that uses concepts from event modeling and DCB to discuss architecture. Includes eventline-axi, an agent-ergonomic CLI for inspecting DSL models.",
+  "license": "MIT",
+  "author": "Brandon D. Phillips",
+  "homepage": "https://bytesbybrandon.github.io/eventline/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bytesbybrandon/eventline.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bytesbybrandon/eventline/issues"
+  },
   "files": [
     "bin",
     "lib",

@@ -12,7 +12,7 @@ This document shows how each DSL primitive maps to real infrastructure component
 4. **Views → Caches / Read Models**: How we serve reads
 5. **Policies → Async Workers / Message Queues**: What happens in the background
 
-The DSL doesn't draw the diagram for you. It tells you *what* to draw.
+`eventline-axi diagrams <file>` draws these views from a model. This page explains what each one means and why it has the shape it has.
 
 ---
 

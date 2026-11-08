@@ -1,8 +1,86 @@
 {
   "schemaVersion": 1,
-  "plan_hash": "8f6e347d278b486aa622066528deb80ec96fdf47dc52d99fb2b76ba14580748f",
-  "source_fingerprint": "21a174f2516c89eadb47549be8f831a9d77472716218ad6f4596b12945b1e027",
-  "checkpoint_hash": null,
+  "plan_hash": "186fb0b760057eaad85ead03c25de904c65878730a5d3f75f9f4c16751509687",
+  "source_fingerprint": "58855575438f1afeb901ed7d37f834d90ffad01189eeeb1ea1d9a25af2e1681f",
+  "checkpoint_hash": "68c4bea1367f303babbe27bfb950c54e750e98f2bf6e5bc786205df74c8ea566",
   "status": "verified",
-  "operations": []
+  "operations": [
+    {
+      "id": "OP-001",
+      "type": "create",
+      "path": "docs/LANGUAGE.md",
+      "status": "completed",
+      "output_hash": "a436713071a5f587e356e1e91109eca479a39a1c14e8c2e3114c72015cca85ba"
+    },
+    {
+      "id": "OP-002",
+      "type": "create",
+      "path": "docs/EXAMPLES.md",
+      "status": "completed",
+      "output_hash": "899933407f4cf61813bf4277aaf578f2f05253a343e217c49b2e133f3913fd00"
+    },
+    {
+      "id": "OP-003",
+      "type": "create",
+      "path": "docs/README.md",
+      "status": "completed",
+      "output_hash": "460df86bec9f1532f8816c8a907632530b2a864088caede7ecba3bac51a7a79e"
+    },
+    {
+      "id": "OP-004",
+      "type": "create",
+      "path": "docs/ARCHITECTURE.md",
+      "status": "completed",
+      "output_hash": "bf7d41e1d9d21926d42b2bfaacc0a2fb6b5c54d1678084933d65afda5dcc70c8"
+    },
+    {
+      "id": "OP-005",
+      "type": "edit",
+      "path": "README.md",
+      "status": "completed",
+      "output_hash": "a21db5b9a267d88611fa0752660422d90fbfc53cedba10db7658207ea6cb9e22"
+    },
+    {
+      "id": "OP-006",
+      "type": "edit",
+      "path": "EVENTLINE-AXI.md",
+      "status": "completed",
+      "output_hash": "26c4e554352c83b46051e3e0caf3e9936ec39a709ee31fa04c7932795a10406b"
+    },
+    {
+      "id": "OP-007",
+      "type": "edit",
+      "path": "CONTRIBUTING.md",
+      "status": "completed",
+      "output_hash": "638ffa8178f22954c9c482f421066378b440917d65a1ca2a3e661ab47acd2a77"
+    },
+    {
+      "id": "OP-008",
+      "type": "edit",
+      "path": "docs/TWITTER-TRANSLATION.md",
+      "status": "completed",
+      "output_hash": "c92dc64d55dee33dc8c7ea3e84cb0d8e50bfd12d55f9092544f68c3defa43f74"
+    },
+    {
+      "id": "OP-009",
+      "type": "edit",
+      "path": "docs/GLOSSARY.md",
+      "status": "completed",
+      "output_hash": "1cd89c3cb2e9de92883fea91e21c345c40885d4e0534b6b0bf26798471c7d2c9"
+    },
+    {
+      "id": "OP-010",
+      "type": "edit",
+      "path": "LICENSE",
+      "status": "completed",
+      "output_hash": "b593000c982092c17884a487a41a9002b18438d2c2052495f45da44a09e93d91"
+    },
+    {
+      "id": "OP-011",
+      "type": "edit",
+      "path": "package.json",
+      "status": "completed",
+      "output_hash": "d5970ccd4d5c26977ef3134014990bccf6fdc300fa4280d372c00dab51a147fe"
+    }
+  ]
 }
