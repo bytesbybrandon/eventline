@@ -7,7 +7,8 @@ npx -y eventline-axi validate examples/rate-limiter.dsl
 npx -y eventline-axi diagrams examples/rate-limiter.dsl -o diagrams
 ```
 
-`examples/twitter-pure.dsl` is the third example and is the one the site uses.
+`examples/twitter-pure.dsl` is the one the site uses.
+`examples/billing.dsl` shows contexts, `reject`, timers, notes and typed parameters.
 
 ---
 
