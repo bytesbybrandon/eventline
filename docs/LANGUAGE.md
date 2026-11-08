@@ -343,10 +343,43 @@ cron "0 * * * *"
 A policy can start on a schedule instead of an event, with `every N seconds|minutes|hours|days` or `cron "..."`.
 Any policy can read views first with `from [...]`, using the same facts and freshness as a command.
 
+### Triggers
+
+```text
+auditor -> failAudit(auditId: id)
+  @trigger(type=ui, name="AuditingScreen", part="Fail button", route="POST /audits/{id}/fail")
+  on [audit-started]
+  --[default]--> [audit-failed]
+
+translation-engine -> submitTranslation(text: text)
+  @trigger(type=endpoint, name="Translation API", route="PUT /translations/{id}")
+  --[default]--> [translation-submitted]
+```
+
+`@trigger(...)` says what an actor uses to reach a command, or where a view is read.
+The actor is the one who uses it, and the trigger is the thing used.
+
+| Key | Meaning |
+| :--- | :--- |
+| `type` | `ui`, `endpoint`, `cli` or `agent` |
+| `name` | The screen, API, command line tool or agent, such as `AuditingScreen` |
+| `part` | Optional. The part of it: a button, a toggled view, a permission-filtered view |
+| `route` | Optional, `ui` and `endpoint` only. `METHOD /path` that this use calls |
+
+A command or view can have several `@trigger` annotations.
+Two commands can use the same screen with different parts and routes, because a route belongs to the use and not to the screen.
+A job that starts on a schedule is not a trigger.
+Write it as a timer policy.
+
+`eventline-axi triggers <file>` lists every trigger, its part and route, who uses it and what it reaches.
+The board writes the trigger on the arrow from the actor to the command, and under a view that is read through one.
+`validate` warns about an unknown `type`, a missing `name`, a route that is not `METHOD /path`, and a route on a `cli` or `agent` trigger.
+It adds an info note for a command with no trigger once any other command has one.
+
 ### Notes and annotations
 
 ```text
-user -> postTweet(content: text) @note("reached through POST /tweets on the Tweets API") @planned
+user -> postTweet(content: text) @note("the retry is safe because the id is a client token") @planned
 ```
 
 `@note("...")` attaches free text to a command, view, policy or boundary.

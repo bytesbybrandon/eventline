@@ -123,3 +123,49 @@ test('examples/billing.dsl uses every new construct, validates clean of errors, 
     for (const f of ['svg', 'mermaid', 'dot']) assert.ok(render(m, kind, f).length > 50, `${kind} ${f}`);
   }
 });
+
+const T = '@trigger(type=ui, name="AuditingScreen", part="Fail button", route="POST /audits/{id}/fail")';
+
+test('triggers: a command or view says what is used to reach it; several are allowed', () => {
+  const m = parse(`auditor -> failAudit() ${T} @trigger(type=cli, name="audit-cli")\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`);
+  assert.deepEqual(m.commands[0].triggers, [
+    { type: 'ui', name: 'AuditingScreen', part: 'Fail button', route: 'POST /audits/{id}/fail' },
+    { type: 'cli', name: 'audit-cli', part: null, route: null },
+  ]);
+  assert.deepEqual(m.views[0].triggers, [{ type: 'ui', name: 'AuditingScreen', part: null, route: null }]);
+  assert.deepEqual(parse('user -> go()\n  --[default]--> [a-b]\n').commands[0].triggers, []);
+});
+
+test('triggers: validate rejects an unknown type, a missing name, and a route that is not METHOD /path', () => {
+  const r = (t) => rules(`user -> go() ${t}\n  --[default]--> [a-b]\n`);
+  assert.ok(!r(T).some((x) => x.startsWith('warn:trigger')));
+  assert.ok(r('@trigger(type=widget, name="X")').includes('warn:trigger-type'));
+  assert.ok(r('@trigger(type=ui)').includes('warn:trigger-name'));
+  assert.ok(r('@trigger(type=ui, name="X", route="fetch")').includes('warn:trigger-route'));
+  assert.ok(r('@trigger(type=cli, name="X", route="GET /x")').includes('warn:trigger-route'));
+  assert.ok(!r('@trigger(type=endpoint, name="X", route="PUT /x/{id}")').includes('warn:trigger-route'));
+});
+
+test('triggers: once some are declared, a command with none gets an info, unless a policy runs it', () => {
+  const src = `user -> a() ${T}\n  --[default]--> [a-b]\nuser -> b()\n  --[default]--> [b-c]\nuser -> c()\n  --[default]--> [c-d]\nevery 1 hours\n  -> job -> c()\n`;
+  const found = check(parse(src)).filter((i) => i.rule === 'command-trigger').map((i) => i.message);
+  assert.equal(found.length, 1);
+  assert.match(found[0], /user -> b/);
+  assert.ok(!rules('user -> a()\n  --[default]--> [a-b]\n').includes('info:command-trigger'));
+});
+
+test('triggers: the board names what the actor uses on the arrow to the command, and where a view is read', () => {
+  const m = parse(`auditor -> failAudit() ${T}\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`);
+  const b = buildBoard(m);
+  assert.equal(b.edges.find((e) => e.from === 'actor:failAudit' && e.to === 'cmd:failAudit').label, 'AuditingScreen > Fail button');
+  assert.ok(b.nodes.find((n) => n.id === 'view:V').notes.includes('read in AuditingScreen'));
+});
+
+test('triggers command lists each screen, endpoint or other trigger with who uses it', () => {
+  const { rows } = require('../lib/commands/triggers');
+  const out = rows(parse(`auditor -> failAudit() ${T}\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`));
+  assert.deepEqual(out.map((r) => [r.trigger, r.part, r.actor, r.reaches]), [
+    ['AuditingScreen', 'Fail button', 'auditor', 'failAudit()'],
+    ['AuditingScreen', '', '', 'view V'],
+  ]);
+});
