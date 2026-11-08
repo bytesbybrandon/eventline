@@ -71,7 +71,7 @@ Use the CLI only for scripts and CI.
 | Rejection `{code, rule}` | `--[rule]--> reject CODE` | Records no event |
 | Event, fields | `[EventName { field: type }]` on the default branch | |
 | Consistency tag `root:key` | `in Root(key)` plus `boundary Root(key)` | A boundary is not a context |
-| Screen | `@note("Lane uses ScreenName")` on the command | No first-class screen yet; see section 6 |
+| Trigger (screen element, `triggerType`, parts, route) | `@trigger(type=ui, name="Screen", part="Button", route="POST /path")` on the command, and on the view for a state view | `type` is `ui`, `endpoint`, `cli` or `agent`; a part is a trigger view; `route` is the use's exposure as `METHOD /path` |
 | Slice name | `@slice("name")` | Identity for round trip |
 | Slice `notes` | `@note("...")` | Repeatable |
 | Slice `status: todo` | `@planned` | |
@@ -79,7 +79,7 @@ Use the CLI only for scripts and CI.
 | Story text | `@story("As a ...")` | One line |
 | Evidence events | `on [Event, ...]` | |
 | Read-model slice, query params, fields | `view Name(p: type) = [Events] => { f: type }` | |
-| Translation slice, translator source | command with the translator as actor, `external: Name (translator)` in `system`, `@note("translates from System vN")` | |
+| Translation slice, translator source | command with the translator as actor, `external: Name (translator)` in `system`, `@source(system="Carrier", version="v2")` | |
 | Automation, interval schedule | `every N unit` then `from [ReadModel]` then `-> Worker -> command()` | |
 | Automation reads a read model | `from [View]` | |
 
@@ -97,7 +97,7 @@ Export may write them as a sidecar file or leave them out, and import must keep 
 | Review scores, draft elements, agents, personas, audit log | Collaboration state |
 | Board layout: lanes order, beats, placements, parked lanes | Derived; eventline lays the board out itself |
 | Named types and field definitions | Types are free text; definitions are not carried |
-| Read-model query `returns` cardinality (3 cases) | No place for it yet |
+| Read-model query specification | Carried by `@query(returns, spec)`; only the shape of results beyond that is not |
 | Read models used by an automation but with no view slice (2) | `validate` flags them as `from-facts`; declare a view for each |
 
 ## 6. Candidate SliceRM features
@@ -142,7 +142,7 @@ Order is a suggestion.
 
 ### F6. Notes as a first-class field
 
-- A slice, view or automation can carry several notes, and screens can be recorded as notes today.
+- A slice, view or automation can carry several notes.
 - Acceptance: a note written in the app appears as `@note("...")` on export and returns on import.
 - Acceptance: quotes and line breaks in a note survive the round trip.
 
@@ -151,6 +151,21 @@ Order is a suggestion.
 The language has `@story` for one line and nothing for Gherkin.
 If scenarios should travel with the model, add a block syntax to eventline first, then support it here.
 Do not encode multi-line text in annotations.
+
+### F8. Triggers (replaces the screen notes in F1)
+
+Eventline 1.2.0 adds `@trigger(type, name, part, route)`.
+It carries what F1 currently writes as `@note("Lane uses ScreenName")` and counts as not carried: trigger type, parts and routes.
+
+- Export: a `screen` element becomes `@trigger(...)` on its slice's command, and on the view for a state view.
+  `type` is `triggerType` (unset means `ui`), `name` is the element name, `part` is the names of the trigger views the use points at (comma separated when several), and `route` is the use's exposure written `METHOD /path`.
+- Import: each `@trigger` becomes a trigger element with that type, its parts as trigger views, and the route as the use's exposure.
+- Automations and translators are not triggers.
+  An automation stays a timer policy.
+  A translator stays an external actor, with `@source(system, version)` for where it translates from.
+- Acceptance: the "trigger types and routes" and "what a trigger reads" counts drop to what the language cannot hold.
+- Acceptance: `eventline-axi triggers` on the export lists every screen with its parts and routes.
+- Acceptance: export, import, export is byte identical for a model with several parts and routes on one screen.
 
 ## 7. New things from eventline worth adopting
 

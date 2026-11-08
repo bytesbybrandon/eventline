@@ -343,10 +343,43 @@ cron "0 * * * *"
 A policy can start on a schedule instead of an event, with `every N seconds|minutes|hours|days` or `cron "..."`.
 Any policy can read views first with `from [...]`, using the same facts and freshness as a command.
 
+### Triggers
+
+```text
+auditor -> failAudit(auditId: id)
+  @trigger(type=ui, name="AuditingScreen", part="Fail button", route="POST /audits/{id}/fail")
+  on [audit-started]
+  --[default]--> [audit-failed]
+
+translation-engine -> submitTranslation(text: text)
+  @trigger(type=endpoint, name="Translation API", route="PUT /translations/{id}")
+  --[default]--> [translation-submitted]
+```
+
+`@trigger(...)` says what an actor uses to reach a command, or where a view is read.
+The actor is the one who uses it, and the trigger is the thing used.
+
+| Key | Meaning |
+| :--- | :--- |
+| `type` | `ui`, `endpoint`, `cli` or `agent` |
+| `name` | The screen, API, command line tool or agent, such as `AuditingScreen` |
+| `part` | Optional. The part of it: a button, a toggled view, a permission-filtered view |
+| `route` | Optional, `ui` and `endpoint` only. `METHOD /path` that this use calls |
+
+A command or view can have several `@trigger` annotations.
+Two commands can use the same screen with different parts and routes, because a route belongs to the use and not to the screen.
+A job that starts on a schedule is not a trigger.
+Write it as a timer policy.
+
+`eventline-axi triggers <file>` lists every trigger, its part and route, who uses it and what it reaches.
+The board writes the trigger on the arrow from the actor to the command, and under a view that is read through one.
+`validate` warns about an unknown `type`, a missing `name`, a route that is not `METHOD /path`, and a route on a `cli` or `agent` trigger.
+It adds an info note for a command with no trigger once any other command has one.
+
 ### Notes and annotations
 
 ```text
-user -> postTweet(content: text) @note("reached through POST /tweets on the Tweets API") @planned
+user -> postTweet(content: text) @note("the retry is safe because the id is a client token") @planned
 ```
 
 `@note("...")` attaches free text to a command, view, policy or boundary.
@@ -366,3 +399,46 @@ The usual choices are `text`, `number`, `id`, `datetime`, `yesno`, `list[T]` and
 `kebab` is the default and means `{aggregate}-{verb}`.
 `pascal` accepts `AccountCreated`.
 `none` turns the check off.
+
+### Translation source
+
+```text
+carrier -> acceptShipment(shipmentId: id) @source(system="Carrier", version="v2")
+  --[default]--> [shipment-accepted]
+```
+
+`@source(system, version)` on a command says which outside system, and which version of its contract, the command translates from.
+The actor is the translator, declared in `system { external: carrier (translator) }`.
+`validate` warns when `system` is missing.
+
+### Reading a view
+
+```text
+view OpenInvoices(accountId: id) = [invoice-opened*(accountId)] => { invoiceId: id } @query(returns=list, spec="the open invoices of an account")
+view Totals(accountId: id) = [invoice-opened*(accountId)] => { sum: number } @projection
+```
+
+`@query(returns, spec)` says how a view is read: `returns` is `one`, `list` or `page`, and `spec` is a line of plain words.
+`@projection` marks a view that other parts of the model read and no screen ever shows.
+`validate` warns when a `@projection` view has a `@trigger`, or a `@query` has another `returns` value.
+
+A read that can find nothing the first time, such as a duplicate check before the first record, is marked `from [Existing(id) @optional]`.
+`@optional` only belongs in `from`, never in `on`.
+
+### Strings, comments and repeated blocks
+
+- Inside a string, `\"` is a quote, `\\` is a backslash and `\n` is a line break.
+- A comment starts at `//` when it begins a line or follows a space, so `https://example.com` and `db://host` are safe in values.
+- A command written twice with the same actor and name is one command with more branches and facts.
+  Each block keeps its own annotations, such as its own `@slice`, and the board draws one command.
+
+### Conventions that need no syntax
+
+These are plain attributes or annotations that tools can rely on.
+
+- `ports: a, b` and `implements: a` on a context keep the ports a core declares and the ports an adapter implements.
+  `validate` does not check them yet.
+- `language: 1.2` in the `system` block records which version of the language wrote the file.
+  A tool can refuse a file that names a newer one than it knows.
+- `@description("...")` on a command or view holds free text.
+  Events have no place for one.

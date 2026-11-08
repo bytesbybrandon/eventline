@@ -183,11 +183,16 @@ Use an event instead when the refusal must be remembered.
 
 ### Note
 
-`@note("...")` free text on a command, view, policy or boundary, for what the notation does not model, such as which endpoint starts a command.
+`@note("...")` free text on a command, view, policy or boundary, for what the notation does not model.
 
 ### Timer
 
 `every N unit` or `cron "..."` starts a policy on a schedule instead of an event.
+
+### Trigger
+
+`@trigger(type, name, part, route)` on a command or view: the screen, endpoint, command line tool or agent an actor uses to reach it, the part of it (a button, a toggled view), and the route it calls.
+A scheduled job is a [timer](#timer), not a trigger.
 
 ## Derived Concepts
 

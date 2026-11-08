@@ -123,3 +123,95 @@ test('examples/billing.dsl uses every new construct, validates clean of errors, 
     for (const f of ['svg', 'mermaid', 'dot']) assert.ok(render(m, kind, f).length > 50, `${kind} ${f}`);
   }
 });
+
+const T = '@trigger(type=ui, name="AuditingScreen", part="Fail button", route="POST /audits/{id}/fail")';
+
+test('triggers: a command or view says what is used to reach it; several are allowed', () => {
+  const m = parse(`auditor -> failAudit() ${T} @trigger(type=cli, name="audit-cli")\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`);
+  assert.deepEqual(m.commands[0].triggers, [
+    { type: 'ui', name: 'AuditingScreen', part: 'Fail button', route: 'POST /audits/{id}/fail' },
+    { type: 'cli', name: 'audit-cli', part: null, route: null },
+  ]);
+  assert.deepEqual(m.views[0].triggers, [{ type: 'ui', name: 'AuditingScreen', part: null, route: null }]);
+  assert.deepEqual(parse('user -> go()\n  --[default]--> [a-b]\n').commands[0].triggers, []);
+});
+
+test('triggers: validate rejects an unknown type, a missing name, and a route that is not METHOD /path', () => {
+  const r = (t) => rules(`user -> go() ${t}\n  --[default]--> [a-b]\n`);
+  assert.ok(!r(T).some((x) => x.startsWith('warn:trigger')));
+  assert.ok(r('@trigger(type=widget, name="X")').includes('warn:trigger-type'));
+  assert.ok(r('@trigger(type=ui)').includes('warn:trigger-name'));
+  assert.ok(r('@trigger(type=ui, name="X", route="fetch")').includes('warn:trigger-route'));
+  assert.ok(r('@trigger(type=cli, name="X", route="GET /x")').includes('warn:trigger-route'));
+  assert.ok(!r('@trigger(type=endpoint, name="X", route="PUT /x/{id}")').includes('warn:trigger-route'));
+});
+
+test('triggers: once some are declared, a command with none gets an info, unless a policy runs it', () => {
+  const src = `user -> a() ${T}\n  --[default]--> [a-b]\nuser -> b()\n  --[default]--> [b-c]\nuser -> c()\n  --[default]--> [c-d]\nevery 1 hours\n  -> job -> c()\n`;
+  const found = check(parse(src)).filter((i) => i.rule === 'command-trigger').map((i) => i.message);
+  assert.equal(found.length, 1);
+  assert.match(found[0], /user -> b/);
+  assert.ok(!rules('user -> a()\n  --[default]--> [a-b]\n').includes('info:command-trigger'));
+});
+
+test('triggers: the board names what the actor uses on the arrow to the command, and where a view is read', () => {
+  const m = parse(`auditor -> failAudit() ${T}\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`);
+  const b = buildBoard(m);
+  assert.equal(b.edges.find((e) => e.from === 'actor:failAudit' && e.to === 'cmd:failAudit').label, 'AuditingScreen > Fail button');
+  assert.ok(b.nodes.find((n) => n.id === 'view:V').notes.includes('read in AuditingScreen'));
+});
+
+test('triggers command lists each screen, endpoint or other trigger with who uses it', () => {
+  const { rows } = require('../lib/commands/triggers');
+  const out = rows(parse(`auditor -> failAudit() ${T}\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`));
+  assert.deepEqual(out.map((r) => [r.trigger, r.part, r.actor, r.reaches]), [
+    ['AuditingScreen', 'Fail button', 'auditor', 'failAudit()'],
+    ['AuditingScreen', '', '', 'view V'],
+  ]);
+});
+
+test('strings: \\" \\\\ and \\n are unescaped, and a quote or comma inside a string does not end the value', () => {
+  const m = parse('user -> go() @note("say \\"hi, there\\" and \\\\ back\\nnext") @story("a \\"b\\"")\n  --[default]--> [a-b]\n');
+  assert.deepEqual(m.commands[0].notes, ['say "hi, there" and \\ back\nnext']);
+  assert.equal(m.commands[0].annotations.story._[0], 'a "b"');
+});
+
+test('comments: // starts one after a space or at a line start, never inside a URL', () => {
+  const m = parse('context A {\n  description: See https://x.dev/y for more // a comment\n  infrastructure: db://host\n  user -> go() @note("http://x") // trailing\n    --[default]--> [a-b]\n}\n');
+  assert.equal(m.contexts[0].description, 'See https://x.dev/y for more');
+  assert.equal(m.contexts[0].attrs.infrastructure, 'db://host');
+  assert.deepEqual(m.commands[0].notes, ['http://x']);
+});
+
+test('@source names where a translation comes from, and validate wants a system', () => {
+  const src = (a) => `system S { external: carrier (translator) }\ncarrier -> accept() ${a}\n  --[default]--> [a-b]\n`;
+  assert.deepEqual(parse(src('@source(system="Carrier", version="v2")')).commands[0].source, { system: 'Carrier', version: 'v2' });
+  assert.equal(parse(src('')).commands[0].source, null);
+  assert.ok(rules(src('@source(version="v2")')).includes('warn:source-system'));
+  assert.ok(!rules(src('@source(system="Carrier", version="v2")')).includes('warn:source-system'));
+  const b = buildBoard(parse(src('@source(system="Carrier", version="v2")')));
+  assert.ok(b.nodes.find((n) => n.id === 'cmd:accept').notes.includes('translates from Carrier v2'));
+});
+
+test('@query says how a view is read, and validate wants one, list or page', () => {
+  const v = (q) => `view V(id) = [a-b] => { x } ${q}\n`;
+  assert.deepEqual(parse(v('@query(returns=list, spec="the open ones")')).views[0].query, { returns: 'list', spec: 'the open ones' });
+  assert.equal(parse(v('')).views[0].query, null);
+  assert.ok(rules(v('@query(returns=many)')).includes('warn:query-returns'));
+  assert.ok(!rules(v('@query(returns=page)')).includes('warn:query-returns'));
+});
+
+test('@projection with a @trigger is contradictory', () => {
+  const v = (a) => `view V(id) = [a-b] => { x } ${a}\n`;
+  assert.ok(rules(v('@projection @trigger(type=ui, name="X")')).includes('warn:projection-trigger'));
+  assert.ok(!rules(v('@projection')).includes('warn:projection-trigger'));
+  assert.equal(parse(v('@projection')).views[0].annotations.projection, true);
+});
+
+test('from [...] can mark a read @optional, shown on the board; on [...] cannot', () => {
+  const m = parse('user -> go()\n  from [V(id) @optional @fresh<5s>]\n  --[default]--> [a-b]\nuser -> two()\n  on [x-y @optional]\n  --[default]--> [c-d]\n');
+  assert.deepEqual([m.commands[0].from[0].optional, m.commands[0].from[0].freshness], [true, '5s']);
+  assert.equal(m.commands[0].from[0].name, 'V');
+  assert.ok(check(m).some((i) => i.rule === 'optional-on' && /two/.test(i.message)));
+  assert.equal(buildBoard(m).edges.find((e) => e.kind === 'reads').label, 'fresh 5s, may be empty');
+});

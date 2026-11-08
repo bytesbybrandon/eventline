@@ -18,7 +18,7 @@ context Billing {
   boundary Invoice(invoiceId) @partition(shardKey="invoiceId")
 
   Customer -> openInvoice(accountId: id, amount: number) in Invoice(invoiceId)
-    @note("Customer uses the Invoices page, which calls POST /invoices")
+    @trigger(type=ui, name="InvoicesPage", part="Open button", route="POST /invoices")
     --[the amount is not positive]--> reject AMOUNT_INVALID
     --[default]--> [invoice-opened { invoiceId, accountId, amount }]
 

@@ -34,6 +34,9 @@ npx eventline-axi deps <file> <entity>
 # Validate against checklist
 npx eventline-axi validate <file>
 
+# What screens, endpoints and other triggers people and systems use
+npx eventline-axi triggers <file>
+
 # Derive diagrams (eventmodel | context | containers | dataflow | deployment | contextmap)
 npx eventline-axi diagram eventmodel <file> -o board.svg
 npx eventline-axi diagram containers <file> -f mermaid
