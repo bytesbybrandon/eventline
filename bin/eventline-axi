@@ -8,7 +8,9 @@ const path = require('path');
 program
   .name('eventline-axi')
   .description('Agent-ergonomic CLI for System Design DSL')
-  .version('1.0.0');
+  .version('1.0.0')
+  // Without this the top-level -f swallows -f after a subcommand, so `diagram -f mermaid` was ignored.
+  .enablePositionalOptions();
 
 program
   .argument('[file]', 'DSL file to load')
