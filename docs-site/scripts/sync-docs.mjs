@@ -21,6 +21,7 @@ const REPO = 'https://github.com/bytesbybrandon/eventline';
 export const PAGES = {
   'docs/README.md': 'index',
   'docs/LANGUAGE.md': 'language',
+  'docs/EVENT-MODELING.md': 'event-modeling',
   'docs/EXAMPLES.md': 'examples',
   'docs/THINKING-GUIDE.md': 'thinking-guide',
   'docs/GLOSSARY.md': 'glossary',
@@ -52,6 +53,7 @@ export function rewriteLink(target, from) {
 export const LABELS = {
   index: 'Overview',
   language: 'Language reference',
+  'event-modeling': 'Event Modeling and DCB',
   examples: 'Worked examples',
   'thinking-guide': 'Thinking guide',
   glossary: 'Glossary',
@@ -62,6 +64,23 @@ export const LABELS = {
   'interview-simulation': 'Interview simulation',
   architecture: 'Architecture',
   contributing: 'Contributing',
+};
+
+/* The search snippet for each page: 70 to 160 characters, unique, in plain words. A test enforces it. */
+export const DESCRIPTIONS = {
+  index: 'Guides to eventline, a text notation for Event Modeling and DCB: learn the language, model a system and use the CLI.',
+  language: 'The eventline language reference: commands, events, views, policies and Dynamic Consistency Boundaries, with the full grammar.',
+  'event-modeling': 'How event storming, Event Modeling and Dynamic Consistency Boundaries (DCB) fit together, and where eventline writes the design as text.',
+  examples: 'Worked eventline models for system design, a rate limiter and a payment webhook, with the commands, events and boundaries explained.',
+  'thinking-guide': 'A guide to thinking in events for system design: how to find the commands, events, boundaries and views before drawing boxes.',
+  glossary: 'Definitions for every eventline term: facts, events, views, commands, boundaries (DCB), policies, guards and freshness.',
+  actors: 'Declare the people, services and systems that act in an eventline model, together with how each one authenticates.',
+  'system-context': 'Describe a system\u2019s context in eventline: its external dependencies, SLOs, regions and constraints, and how diagrams show them.',
+  'twitter-translation': 'Design Twitter with an event model: how an eventline description of tweets, likes and timelines translates into an architecture.',
+  'eventline-axi': 'The eventline-axi command line tool: parse, validate and trace a model, and draw Event Modeling boards and system diagrams.',
+  'interview-simulation': 'A system design interview walkthrough for a rate limiter, using an event model with Dynamic Consistency Boundaries.',
+  architecture: 'How eventline is built: the parser, the model, the diagram builders and the public library API for parsing, checking and drawing.',
+  contributing: 'How to contribute to eventline: the workflow, the standards for examples and docs, and where everything lives in the repo.',
 };
 
 export const titleOf = (source, from) => {
@@ -83,9 +102,13 @@ export function convert(source, from, titles = {}) {
     return `[${text}](${next})`;
   });
   const slug = PAGES[from];
-  const lines = ['---', `title: ${JSON.stringify(title)}`, `editUrl: ${REPO}/edit/main/${from}`];
+  const description = DESCRIPTIONS[slug];
+  if (!description) throw new Error(`${from} has no entry in DESCRIPTIONS`);
+  const url = `https://bytesbybrandon.github.io${route(slug)}`;
+  const ld = { '@context': 'https://schema.org', '@type': 'TechArticle', headline: title, description, url, inLanguage: 'en', isPartOf: { '@type': 'WebSite', name: 'eventline', url: 'https://bytesbybrandon.github.io/eventline/docs/' }, author: { '@type': 'Person', name: 'Brandon D. Phillips' } };
+  const lines = ['---', `title: ${JSON.stringify(title)}`, `description: ${JSON.stringify(description)}`, `editUrl: ${REPO}/edit/main/${from}`];
   if (LABELS[slug]) lines.push('sidebar:', `  label: ${JSON.stringify(LABELS[slug])}`);
-  lines.push('---', '');
+  lines.push('head:', '  - tag: script', '    attrs:', '      type: application/ld+json', `    content: ${JSON.stringify(JSON.stringify(ld))}`, '---', '');
   return `${lines.join('\n')}\n${body}`;
 }
 
