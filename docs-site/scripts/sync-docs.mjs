@@ -32,6 +32,7 @@ export const PAGES = {
   'docs/TWITTER-TRANSLATION.md': 'twitter-translation',
   'docs/INTERVIEW_SIMULATION.md': 'interview-simulation',
   'docs/ARCHITECTURE.md': 'architecture',
+  'docs/RULES.md': 'rules',
   'EVENTLINE-AXI.md': 'eventline-axi',
   'CONTRIBUTING.md': 'contributing',
 };
@@ -68,6 +69,7 @@ export const LABELS = {
   'system-context': 'System context',
   'twitter-translation': 'Twitter translation',
   'eventline-axi': 'The CLI',
+  rules: 'Validation rules',
   'interview-simulation': 'Interview simulation',
   architecture: 'Architecture',
   contributing: 'Contributing',
@@ -84,6 +86,7 @@ export const DESCRIPTIONS = {
   actors: 'Declare the people, services and systems that act in an eventline model, together with how each one authenticates.',
   'system-context': 'Describe a system\u2019s context in eventline: its external dependencies, SLOs, regions and constraints, and how diagrams show them.',
   'twitter-translation': 'Design Twitter with an event model: how an eventline description of tweets, likes and timelines translates into an architecture.',
+  rules: 'Every eventline validation rule: what it checks, why it matters and how to fix it, in the core, Event Modeling and stricter profiles.',
   'eventline-axi': 'The eventline-axi command line tool: parse, validate and trace a model, and draw Event Modeling boards and system diagrams.',
   'interview-simulation': 'A system design interview walkthrough for a rate limiter, using an event model with Dynamic Consistency Boundaries.',
   architecture: 'How eventline is built: the parser, the model, the diagram builders and the public library API for parsing, checking and drawing.',

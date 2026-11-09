@@ -7,11 +7,11 @@ function (module, exports, __r) {
 
 /* Public API: parse a model, check it, draw it. Pure functions, no I/O, safe to bundle for a browser. */
 const { parse, ParseError } = __r(1);
-const { check } = __r(3);
-const { render, KINDS } = __r(9);
-const { linkMap } = __r(4);
+const { check, RULES } = __r(3);
+const { render, KINDS } = __r(11);
+const { linkMap } = __r(6);
 
-module.exports = { parse, ParseError, check, render, linkMap, KINDS };
+module.exports = { parse, ParseError, check, RULES, render, linkMap, KINDS };
 
 },
 function (module, exports, __r) {
@@ -648,7 +648,158 @@ module.exports = Model;
 function (module, exports, __r) {
 'use strict';
 
-const { linkIssues } = __r(4);
+const { RULES, BY_ID, CATEGORIES, PROFILES } = __r(4);
+const { coreIssues } = __r(5);
+const { scheduleIssues, eventmodelingIssues, slicermIssues, sliceOf } = __r(10);
+
+const DOCS = 'https://bytesbybrandon.github.io/eventline/docs/rules/#';
+
+/* The statements of a model, with where each begins and ends, so a finding can say what it is about. */
+function statements(model) {
+  const list = [];
+  const add = (kind, name, s, slice) => list.push({ kind, name, line: s.line, endLine: s.endLine || s.line, slice: slice || null });
+  for (const c of model.commands) add('command', c.name, c, sliceOf(c.annotations));
+  for (const v of model.views) add('view', v.name, v, sliceOf(v.annotations));
+  for (const p of model.policies) add('policy', p.trigger.event || p.trigger.schedule, p, sliceOf(p.annotations));
+  for (const b of model.boundaries) add('boundary', b.name, b);
+  for (const c of model.contexts) add('context', c.name, c);
+  for (const a of model.actors) add('actor', a.name, a);
+  return list.filter((s) => Number.isInteger(s.line));
+}
+
+function enrich(found, list, profile) {
+  const meta = BY_ID.get(found.rule);
+  if (!meta) throw new Error(`Rule "${found.rule}" is not in the catalogue (lib/rules/catalogue.js)`);
+  const line = Number.isInteger(found.line) ? found.line : null;
+  const inside = line === null ? [] : list.filter((s) => line >= s.line && line <= s.endLine).sort((a, b) => (a.endLine - a.line) - (b.endLine - b.line));
+  const subject = inside[0] || null;
+  return {
+    severity: profile === 'slicerm' && meta.slicerm ? meta.slicerm : found.severity,
+    rule: found.rule,
+    category: meta.category,
+    profile: meta.profile,
+    message: found.message,
+    line: found.line,
+    endLine: subject && line === subject.line ? subject.endLine : line,
+    subject: subject ? { kind: subject.kind, name: subject.name, line: subject.line, endLine: subject.endLine } : null,
+    slice: subject ? subject.slice : null,
+    docs: DOCS + found.rule,
+  };
+}
+
+/*
+ * What is wrong with a model. profile is core (default), eventmodeling or slicerm; each includes the one before.
+ * Every finding says what kind of problem it is, which statement it belongs to, and where that statement ends.
+ */
+function check(model, opts = {}) {
+  const profile = opts.profile || 'core';
+  if (!PROFILES.includes(profile)) throw new Error(`Unknown profile "${profile}". Choose one of: ${PROFILES.join(', ')}`);
+  const found = [...coreIssues(model), ...scheduleIssues(model)];
+  if (profile !== 'core') found.push(...eventmodelingIssues(model));
+  if (profile === 'slicerm') found.push(...slicermIssues(model));
+  const list = statements(model);
+  return found.map((f) => enrich(f, list, profile));
+}
+
+module.exports = { check, RULES, CATEGORIES, PROFILES };
+
+},
+function (module, exports, __r) {
+'use strict';
+
+/*
+ * Every rule `check` can report, in one place. The reference page (docs/RULES.md) is generated from this
+ * list, `eventline-axi rules` prints it, and a test fails if a rule reports an id that is not here.
+ *
+ *   profile   core: the language is wrong or inconsistent. Always on.
+ *             eventmodeling: Event Modeling guidelines. Opt in with --profile eventmodeling.
+ *             slicerm: stricter, for tools that treat a slice as one unit of delivery. Includes eventmodeling.
+ *   severity  error: the model cannot mean what it says. warn: a gap that is almost always a mistake.
+ *             info: worth a second look. `slicerm` may raise a rule's severity (see `slicerm`).
+ *   category  the kind of thing that is wrong, so a tool can group findings.
+ */
+
+const CATEGORIES = {
+  structure: 'A statement is missing something it needs',
+  order: 'Things depend on each other in a way no order can satisfy',
+  boundary: 'Consistency scopes and the edges between contexts',
+  fields: 'Information that appears from nowhere',
+  references: 'A name points at something that is not there',
+  naming: 'Names that break the project convention',
+  routes: 'How triggers reach commands and views',
+  schedule: 'When timers fire',
+  scenarios: 'Given, when, then examples',
+  triggers: 'What a person or system uses to reach a command or view',
+  links: 'Links between diagrams',
+  slices: 'What belongs together in one unit of delivery',
+  hints: 'Allowed, but often worth a second look',
+};
+
+const R = (id, profile, severity, category, title, why, fix, extra = {}) => ({ id, profile, severity, category, title, why, fix, ...extra });
+
+const RULES = [
+  // ---- core: the language itself ----
+  R('on-facts', 'core', 'error', 'references', 'A view listed in on [...]', 'on [...] lists the events a command needs. A view is read with from [...], not on.', 'Move the view to from [...], or list the event the view is built from.'),
+  R('from-facts', 'core', 'warn', 'references', 'Reads a view that is not declared', 'from [...] names a view that no view statement defines, so nothing says what it holds.', 'Declare the view, or fix the name.'),
+  R('unknown-boundary', 'core', 'error', 'boundary', 'Command is in a boundary that is not declared', 'in Name(key) scopes a command to a boundary, and no boundary statement defines it.', 'Add boundary Name(key), or fix the name.'),
+  R('view-from-view', 'core', 'error', 'references', 'A view projects from a view', 'Views are folds over events. A view cannot be built from another view.', 'List the events the second view needs, not the view.'),
+  R('view-sources', 'core', 'warn', 'structure', 'A view has no source events', 'A view with no events folds nothing.', 'List the events it projects from between the brackets.'),
+  R('no-events', 'core', 'warn', 'structure', 'A command never records an event', 'Every command records at least one event on its happy path, or nothing happened.', 'Add events to the --[default]--> branch.'),
+  R('missing-default', 'core', 'warn', 'structure', 'A command has no default branch', 'The default branch is the happy path. Without it a reader cannot tell what success looks like.', 'Add --[default]--> [ ... ] as the last branch.'),
+  R('default-rejects', 'core', 'warn', 'structure', 'The default branch refuses', 'The default branch should record events. A refusal belongs on a guarded branch.', 'Put the refusal on a --[guard]--> reject CODE branch.'),
+  R('rejection-as-event', 'core', 'info', 'structure', 'A rejection written as an event', 'An event named ...-rejected usually means nothing was recorded, and then it is a refusal, not an event.', 'Write --[guard]--> reject CODE when nothing is recorded.'),
+  R('optional-on', 'core', 'warn', 'references', 'An on fact marked optional', 'Only from [...] reads can come back empty. A fact in on [...] must have happened.', 'Move it to from [...] or drop @optional.'),
+  R('command-inputs', 'core', 'info', 'structure', 'A command lists no facts it needs', 'Fine for a command that starts something. Worth a look for one that should depend on what happened before.', 'Add on [...] or from [...], or leave it if the command creates something.'),
+  R('command-boundary', 'core', 'info', 'boundary', 'A command does not say which boundary it is in', 'When the model has boundaries, each command should say which one its decision is scoped to.', 'Add in BoundaryName(key).'),
+  R('boundaries', 'core', 'info', 'boundary', 'No boundary declared', 'Commands have no stated consistency scope.', 'Add boundary Name(key) and put commands in it.'),
+  R('unknown-actor', 'core', 'info', 'references', 'A command actor is not declared', 'The actor is neither a declared actor nor a system external.', 'Declare it with actor Name { ... } or list it under external in the system block.'),
+  R('freshness', 'core', 'info', 'references', 'A view is read without a freshness stance', 'A command that reads a view decides on something that may be stale.', 'Add @fresh<10s>, @eventual or @strong to the fact.'),
+  R('policy-guard', 'core', 'info', 'structure', 'A policy rule has no guard', 'An event-triggered rule with no guard runs on every occurrence.', 'Add --[condition]--> or leave it if that is intended.'),
+  R('unpublished-event', 'core', 'warn', 'boundary', 'An event crosses a context without being published', 'A context reads an event another context records but does not list in publishes.', 'Add the event to publishes of the context that records it, or stop reading it.'),
+  R('assumed-events', 'core', 'info', 'references', 'Events nothing records', 'No command or policy records these, so the model assumes the facts exist.', 'Fine for facts from outside. Otherwise add the command that records them.'),
+  R('event-naming', 'core', 'warn', 'naming', 'An event name breaks the convention', 'The system block sets event-naming (kebab or pascal) and this event does not follow it.', 'Rename the event, or set event-naming: none.'),
+  R('query-returns', 'core', 'warn', 'structure', '@query returns is not one, list or page', 'The cardinality of a query has three values.', 'Use returns=one, list or page.'),
+  R('projection-trigger', 'core', 'warn', 'triggers', 'A projection with a trigger', 'A @projection is never shown, so nothing reaches it through a screen or endpoint.', 'Remove @trigger or @projection.'),
+  R('source-system', 'core', 'warn', 'structure', '@source has no system', 'A translation says where it comes from.', 'Add system="Name" to @source.'),
+  R('command-trigger', 'core', 'info', 'triggers', 'A command does not say what is used to reach it', 'Other commands in the model say. This one does not, and no policy calls it.', 'Add @trigger(type=ui, name="...").'),
+  R('trigger-name', 'core', 'warn', 'triggers', 'A trigger has no name', 'A @trigger names the screen, endpoint, command or agent.', 'Add name="..."'),
+  R('trigger-type', 'core', 'warn', 'triggers', 'A trigger has an unknown type', 'Types are ui, endpoint, cli and agent.', 'Use one of them.'),
+  R('trigger-route', 'core', 'warn', 'routes', 'A trigger route is not METHOD /path', 'Only ui and endpoint triggers have a route, written as METHOD /path.', 'Write route="POST /audits/{id}/fail", or drop it.'),
+  R('scenario-name', 'core', 'warn', 'scenarios', 'A scenario has no name', 'Names make scenarios findable.', 'Name it: scenario "name" {'),
+  R('scenario-empty', 'core', 'warn', 'scenarios', 'A scenario has no lines', 'An empty scenario checks nothing.', 'Add its Given, When and Then lines.'),
+  R('scenario-duplicate', 'core', 'warn', 'scenarios', 'Two scenarios share a name under one command or view', 'Names must tell scenarios apart.', 'Rename one.'),
+  R('link-target', 'core', 'warn', 'links', 'An @link cannot work', 'It names a diagram or box that is not there, or none at all, or a diagram this model cannot draw yet.', 'Check to= and node= against the diagram.'),
+  R('link-url', 'core', 'warn', 'links', 'An @link url is not an address', 'A url is an http(s) address or a path.', 'Write https://... or a path.'),
+  R('schedule-invalid', 'core', 'warn', 'schedule', 'A timer cannot fire', 'An interval needs a whole number above zero. A cron expression has five fields, each in range.', 'Write every 5 minutes, or cron "0 9 * * 1" (minute hour day-of-month month day-of-week).',
+    { example: { bad: 'every 0 minutes\n  -> reminder -> sendReminder()', good: 'every 5 minutes\n  -> reminder -> sendReminder()' } }),
+
+  // ---- eventmodeling: the guidelines ----
+  R('unsourced-event-field', 'eventmodeling', 'warn', 'fields', 'An event carries a field nothing supplies', 'Information flows one way. An event can only hold what its command was given: its parameters, the boundary key, the facts it needs, or a value it computes.', 'Add the field to the command, to a fact it needs, or compute it with name: expression.',
+    { example: { bad: 'user -> addItem(cartId) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]', good: 'user -> addItem(cartId, sku) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]' } }),
+  R('unsourced-view-field', 'eventmodeling', 'warn', 'fields', 'A view shows a field no event carries', 'A view is a fold over events, so every plain field must be in the payload of an event it projects from. Computed fields are exempt.', 'Add the field to an event it reads, or compute it, as in total: count(order-placed*(id)).',
+    { example: { bad: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nview Cart(cartId) = [item-added*(cartId)] => { cartId, total }', good: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nview Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }' } }),
+  R('dependency-cycle', 'eventmodeling', 'warn', 'order', 'Commands depend on each other in a loop', 'A command waits for events that another records. If they wait on each other, or a command waits for an event only it records, no order of work can start.', 'Break the loop with an event that does not depend on the others, or mark one fact as coming from outside.'),
+  R('slice-multiple-commands', 'eventmodeling', 'warn', 'slices', 'One slice holds several commands', 'A write slice has one command. A command can record several events. Two commands are two slices.', 'Give each command its own @slice name.'),
+  R('slice-multiple-views', 'eventmodeling', 'info', 'slices', 'One slice defines several read models', 'A slice owns one query. Several read models in one slice invite several queries where one shaped for the reader would do. Reading views that other slices define is always fine.', 'Fold them into one view shaped for how it is read, or give each its own @slice.', { slicerm: 'warn' }),
+  R('slice-no-scenario', 'eventmodeling', 'info', 'scenarios', 'Commands and views have no scenario', 'A slice is specified with a given, when, then example. This counts the commands and views that have none. Models that keep scenarios elsewhere can ignore it.', 'Add scenario "name" { ... } under the command or view.'),
+  R('many-events', 'eventmodeling', 'info', 'hints', 'A happy path records several events', 'Right when they are one fact told in parts. If they are two steps, a policy can take the second.', 'Keep them if they are one fact, otherwise split the second into a policy.'),
+  R('view-many-sources', 'eventmodeling', 'info', 'hints', 'Four or more events feed one view', 'Combining streams is fine, but each event ties the view to the command that records it, so fewer is easier to change.', 'Check that every source is needed.'),
+
+  // ---- slicerm: stricter, for tools where a slice is a unit of delivery ----
+  R('rejection-uncovered', 'slicerm', 'warn', 'scenarios', 'A rejection code has no scenario', 'Each way a command can refuse is a behaviour to specify. Only checked when the model has scenarios at all.', 'Add a scenario whose text names the code.'),
+  R('route-duplicate', 'slicerm', 'warn', 'routes', 'Two commands or views share a method and route', 'One route in one context should reach one thing. Two triggers reaching the same command are fine.', 'Give one of them its own route.'),
+];
+
+const BY_ID = new Map(RULES.map((r) => [r.id, r]));
+const PROFILES = ['core', 'eventmodeling', 'slicerm'];
+
+module.exports = { RULES, BY_ID, CATEGORIES, PROFILES };
+
+},
+function (module, exports, __r) {
+'use strict';
+
+const { linkIssues } = __r(6);
 
 const NAMING = {
   kebab: { re: /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/, hint: '{aggregate}-{verb}' },
@@ -759,19 +910,7 @@ function check(model) {
   return issues;
 }
 
-module.exports = {
-  check,
-  run(model, opts) {
-    const Formatter = __r(8);
-    const fmt = new Formatter(opts.format);
-    const issues = check(model);
-    if (opts.format === 'json') { console.log(fmt.json(issues)); return; }
-    if (issues.length === 0) { console.log('validate: 0 issues found\n'); return; }
-    console.log(`validate: ${issues.length} issue(s)\n`);
-    console.log(fmt.formatOutput('issues', issues, ['severity', 'rule', 'message', 'line']));
-    if (issues.some((i) => i.severity === 'error')) process.exitCode = 1;
-  }
-};
+module.exports = { coreIssues: check };
 
 },
 function (module, exports, __r) {
@@ -795,9 +934,9 @@ function (module, exports, __r) {
  * exist in this model (no regions, no contexts, a box that is not drawn) is dropped.
  */
 
-const { KINDS, NAMES } = __r(5);
-const { buildBoard } = __r(6);
-const { BUILDERS } = __r(7);
+const { KINDS, NAMES } = __r(7);
+const { buildBoard } = __r(8);
+const { BUILDERS } = __r(9);
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const SKIPPED = new Set(['NO_REGIONS', 'NO_CONTEXTS']);
@@ -1500,77 +1639,300 @@ module.exports = { BUILDERS, context, containers, dataflow, deployment, contextM
 function (module, exports, __r) {
 'use strict';
 
-class Formatter {
-  constructor(format = 'toon') {
-    this.format = format;
-  }
+/*
+ * The rules that come with a profile, plus the one core rule that needs real parsing (timers).
+ * Each rule is a function from a model to [{ severity, rule, message, line }]. The catalogue says
+ * what each one means; a test checks the two agree.
+ */
 
-  toon(header, rows, fields) {
-    if (!rows || rows.length === 0) {
-      return `${header}: 0 results\n`;
-    }
-    const cols = fields || Object.keys(rows[0]);
-    let out = `${header}[${rows.length}]{${cols.join(',')}}:\n`;
-    for (const row of rows) {
-      out += '  ' + cols.map(c => this._cell(row[c])).join(',') + '\n';
-    }
-    return out;
-  }
+const { BY_ID } = __r(4);
 
-  json(data) {
-    return JSON.stringify(data, null, 2) + '\n';
-  }
+const issue = (rule, message, line) => ({ severity: BY_ID.get(rule).severity, rule, message, line: line || '' });
+const bare = (n) => String(n).replace(/\?$/, '');
+/* The names bound in an argument list: "userId, window: 60s" gives userId and window. */
+const names = (text) => String(text || '').split(',').map((p) => /^\s*([A-Za-z_]\w*)/.exec(p)).filter(Boolean).map((m) => m[1]);
+/* @slice("Name") */
+const sliceOf = (annotations) => {
+  const s = [].concat((annotations && annotations.slice) || [])[0];
+  if (s && typeof s === 'object') return (s._ && s._[0]) || s.name || null;
+  return typeof s === 'string' ? s : null;
+};
+/* A field written `name: type` is carried, not computed: the type sits where an expression would. */
+const TYPE = /^(text|string|number|int|integer|float|id|uuid|datetime|date|time|yesno|bool|boolean)$|^list\[.+\]$|^[A-Z][A-Za-z0-9_]*$/;
+const carried = (f) => !f.expr || TYPE.test(f.expr.trim());
+const quote = (list) => list.map((x) => `"${x}"`).join(', ');
 
-  text(header, rows, fields) {
-    if (!rows || rows.length === 0) return `${header}: (empty)\n`;
-    const cols = fields || Object.keys(rows[0]);
-    let out = `${header}:\n`;
-    for (const row of rows) {
-      out += cols.map(c => `${c}: ${row[c]}`).join(', ') + '\n';
-    }
-    return out;
+/* Every field name an event is recorded with, over all the places that record it. */
+function eventFields(model) {
+  const out = new Map();
+  const add = (event, fields) => {
+    if (!out.has(event)) out.set(event, new Set());
+    for (const f of fields) out.get(event).add(f.name);
+  };
+  for (const c of model.commands) for (const b of c.branches) for (const e of b.emits) add(e.event, e.fields);
+  for (const p of model.policies) {
+    if (p.trigger.event) add(p.trigger.event, p.trigger.fields || []);
+    for (const r of p.rules) for (const e of r.emits) add(e.event, e.fields);
   }
-
-  _cell(val) {
-    if (val === null || val === undefined) return '';
-    const s = String(val);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  }
-
-  formatOutput(header, rows, fields) {
-    switch (this.format) {
-      case 'json': return this.json(rows);
-      case 'text': return this.text(header, rows, fields);
-      default: return this.toon(header, rows, fields);
-    }
-  }
-
-  formatObject(header, data) {
-    if (this.format === 'json') return this.json(data);
-    if (this.format === 'text') return this.text(header, [data]);
-    const lines = [`${header}:`];
-    for (const [k, v] of Object.entries(data)) {
-      lines.push(`  ${k}: ${v}`);
-    }
-    return lines.join('\n') + '\n';
-  }
+  return out;
 }
 
-module.exports = Formatter;
+/* ------------------------------------------------------------------ core */
+
+const FIELD_RANGES = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+const FIELD_NAMES = ['minute', 'hour', 'day of month', 'month', 'day of week'];
+function cronField(field, [low, high]) {
+  return field.split(',').every((part) => {
+    const m = /^(\*|\d+)(?:-(\d+))?(?:\/(\d+))?$/.exec(part);
+    if (!m) return false;
+    const inRange = (n) => Number(n) >= low && Number(n) <= high;
+    if (m[1] !== '*' && !inRange(m[1])) return false;
+    if (m[2] && !inRange(m[2])) return false;
+    return !m[3] || Number(m[3]) > 0;
+  });
+}
+
+function scheduleIssues(model) {
+  const out = [];
+  for (const p of model.policies) {
+    const s = p.trigger.schedule;
+    if (!s) continue;
+    const interval = /^every (\d+) /.exec(s);
+    if (interval) {
+      if (Number(interval[1]) < 1) out.push(issue('schedule-invalid', `Timer "${s}" never fires: an interval needs a whole number above zero`, p.line));
+      continue;
+    }
+    const cron = /^cron "(.*)"$/.exec(s);
+    if (!cron) continue;
+    const fields = cron[1].trim().split(/\s+/);
+    if (fields.length !== 5) { out.push(issue('schedule-invalid', `Timer ${s} needs five parts: minute, hour, day of month, month and day of week`, p.line)); continue; }
+    const bad = fields.findIndex((f, i) => !cronField(f, FIELD_RANGES[i]));
+    if (bad >= 0) out.push(issue('schedule-invalid', `Timer ${s} has "${fields[bad]}" where a ${FIELD_NAMES[bad]} belongs, and that is not valid`, p.line));
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------- eventmodeling */
+
+function unsourcedEventFields(model) {
+  const out = [];
+  const fieldsOf = eventFields(model);
+  const shape = new Map(model.views.map((v) => [v.name, v.shape.map((f) => f.name)]));
+  const known = (event) => [...(fieldsOf.get(event) || [])];
+
+  /* A fact nothing records, or a view nobody declares, may supply anything, so what it supplies is unknown. */
+  const unknownSource = (facts) => facts.some((f) => (model.events.has(f.name) ? model.events.get(f.name).emittedBy.length === 0 : !shape.has(f.name)));
+
+  for (const cmd of model.commands) {
+    if (unknownSource([...cmd.on, ...cmd.from])) continue;
+    const supplied = new Set([...cmd.params.map(bare), ...names(cmd.boundary && cmd.boundary.args)]);
+    for (const f of cmd.on) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); known(f.name).forEach((n) => supplied.add(n)); }
+    for (const f of cmd.from) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); (shape.get(f.name) || []).forEach((n) => supplied.add(n)); }
+    for (const b of cmd.branches) {
+      for (const e of b.emits) {
+        const missing = e.fields.filter((f) => carried(f) && !supplied.has(f.name)).map((f) => f.name);
+        if (missing.length) out.push(issue('unsourced-event-field', `Event "${e.event}" carries ${quote(missing)}, which command "${cmd.name}" does not supply. Add ${missing.length === 1 ? 'it' : 'them'} to the command or a fact it needs, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, b.line));
+      }
+    }
+  }
+  for (const pol of model.policies) {
+    const who = pol.trigger.event ? `on "${pol.trigger.event}"` : `on "${pol.trigger.schedule}"`;
+    if (unknownSource(pol.from)) continue;
+    const supplied = new Set((pol.trigger.fields || []).map((f) => f.name));
+    for (const f of pol.from) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); (shape.get(f.name) || []).forEach((n) => supplied.add(n)); }
+    for (const r of pol.rules) {
+      if (r.worker) continue; // what a worker records is the worker's own business, not something the trigger must carry
+      for (const e of r.emits) {
+        const missing = e.fields.filter((f) => carried(f) && !supplied.has(f.name)).map((f) => f.name);
+        if (missing.length) out.push(issue('unsourced-event-field', `Event "${e.event}" carries ${quote(missing)}, which policy ${who} does not supply. Add ${missing.length === 1 ? 'it' : 'them'} to what the trigger carries, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, r.line));
+      }
+    }
+  }
+  return out;
+}
+
+function unsourcedViewFields(model) {
+  const out = [];
+  const fieldsOf = eventFields(model);
+  for (const view of model.views) {
+    if (!view.sources.length) continue;
+    const events = view.sources.map((s) => model.events.get(s.name));
+    // A source nothing records is an assumed fact: its payload is unknown, so there is nothing to check against.
+    if (events.some((e) => !e || e.emittedBy.length === 0)) continue;
+    const have = new Set([...view.params.map(bare), ...view.sources.flatMap((s) => names(s.args))]);
+    for (const s of view.sources) (fieldsOf.get(s.name) || []).forEach((n) => have.add(n));
+    const missing = view.shape.filter((f) => carried(f) && !have.has(f.name)).map((f) => f.name);
+    if (missing.length) out.push(issue('unsourced-view-field', `View "${view.name}" shows ${quote(missing)}, which no event it projects from carries. Add ${missing.length === 1 ? 'it' : 'them'} to an event, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, view.line));
+  }
+  return out;
+}
+
+/* Strongly connected components, so a loop is found wherever it runs. */
+function loops(edges) {
+  let index = 0;
+  const stack = [];
+  const meta = new Map();
+  const found = [];
+  const visit = (v) => {
+    meta.set(v, { index, low: index, on: true });
+    index++;
+    stack.push(v);
+    for (const w of edges.get(v) || []) {
+      if (!meta.has(w)) { visit(w); meta.get(v).low = Math.min(meta.get(v).low, meta.get(w).low); }
+      else if (meta.get(w).on) meta.get(v).low = Math.min(meta.get(v).low, meta.get(w).index);
+    }
+    if (meta.get(v).low === meta.get(v).index) {
+      const group = [];
+      let w;
+      do { w = stack.pop(); meta.get(w).on = false; group.push(w); } while (w !== v);
+      if (group.length > 1) found.push(group);
+    }
+  };
+  for (const v of edges.keys()) if (!meta.has(v)) visit(v);
+  return found;
+}
+
+function dependencyCycles(model) {
+  const out = [];
+  const nodes = new Map();
+  const edges = new Map();
+  const node = (key, label, line) => { if (!nodes.has(key)) { nodes.set(key, { label, line }); edges.set(key, new Set()); } };
+  const edge = (from, to) => { if (edges.has(from) && edges.has(to) && from !== to) edges.get(from).add(to); };
+  for (const c of model.commands) node(`c:${c.name}`, `command "${c.name}"`, c.line);
+  model.policies.forEach((p, i) => node(`p:${i}`, `policy on "${p.trigger.event || p.trigger.schedule}"`, p.line));
+  const emitters = (event) => ((model.events.get(event) || {}).emittedBy || []).flatMap((e) => {
+    if (e.kind === 'command') return [`c:${e.name}`];
+    return model.policies.flatMap((p, i) => ((p.trigger.event || p.trigger.schedule) === e.name ? [`p:${i}`] : []));
+  });
+  for (const c of model.commands) for (const f of c.on) for (const from of emitters(f.name)) edge(from, `c:${c.name}`);
+  model.policies.forEach((p, i) => {
+    if (p.trigger.event) for (const from of emitters(p.trigger.event)) edge(from, `p:${i}`);
+    for (const r of p.rules) if (r.command) edge(`p:${i}`, `c:${r.command.name}`);
+  });
+  for (const group of loops(edges)) {
+    const ordered = group.sort((a, b) => nodes.get(a).line - nodes.get(b).line);
+    out.push(issue('dependency-cycle', `${ordered.map((k) => nodes.get(k).label).join(', ')} wait on each other in a loop, so no order of work can start. Break it with an event that does not depend on the others`, nodes.get(ordered[0]).line));
+  }
+  // A command that waits for an event only it records can never run first.
+  const seen = new Set();
+  for (const c of model.commands) {
+    for (const f of c.on) {
+      const by = ((model.events.get(f.name) || {}).emittedBy || []);
+      const key = `${c.name}:${f.name}`;
+      if (by.length && by.every((e) => e.kind === 'command' && e.name === c.name) && !seen.has(key)) {
+        seen.add(key);
+        out.push(issue('dependency-cycle', `Command "${c.name}" needs "${f.name}", which only it records, so it can never run first`, c.line));
+      }
+    }
+  }
+  return out;
+}
+
+function sliceShapes(model) {
+  const out = [];
+  const group = (items, nameOf, ruleId, what) => {
+    const by = new Map();
+    for (const item of items) {
+      const slice = sliceOf(item.annotations);
+      if (!slice) continue;
+      if (!by.has(slice)) by.set(slice, new Map());
+      if (!by.get(slice).has(nameOf(item))) by.get(slice).set(nameOf(item), item.line);
+    }
+    for (const [slice, members] of by) {
+      if (members.size < 2) continue;
+      const list = [...members.entries()].sort((a, b) => a[1] - b[1]);
+      out.push(issue(ruleId, `Slice "${slice}" holds ${list.length} ${what}: ${quote(list.map(([n]) => n))}. ${ruleId === 'slice-multiple-views' ? 'A slice owns one query, so fold them into one view shaped for how it is read. Reading views other slices define is fine' : 'A write slice has one command, so give each its own slice'}`, list[1][1]));
+    }
+  };
+  group(model.commands, (c) => c.name, 'slice-multiple-commands', 'commands');
+  group(model.views, (v) => v.name, 'slice-multiple-views', 'read models');
+  return out;
+}
+
+function scenarioCoverage(model) {
+  const all = [...model.commands, ...model.views];
+  if (!all.length) return [];
+  const without = [];
+  const seen = new Set();
+  for (const x of all) {
+    const key = `${x.actor ? 'c' : 'v'}:${x.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const has = all.some((y) => y.name === x.name && !!y.actor === !!x.actor && y.scenarios.length);
+    if (!has) without.push(x);
+  }
+  if (!without.length) return [];
+  return [issue('slice-no-scenario', `${without.length} of ${seen.size} commands and views have no scenario, starting with "${without[0].name}"`, without[0].line)];
+}
+
+function hints(model) {
+  const out = [];
+  for (const c of model.commands) {
+    for (const b of c.branches) {
+      const events = [...new Set(b.emits.map((e) => e.event))];
+      if (b.default && events.length > 1) out.push(issue('many-events', `Command "${c.name}" records ${events.length} events on its happy path: ${quote(events)}. Right if they are one fact told in parts; if they are two steps, a policy can take the second`, b.line));
+    }
+  }
+  for (const v of model.views) {
+    if (v.sources.length >= 4) out.push(issue('view-many-sources', `${v.sources.length} events feed view "${v.name}". Combining streams is fine, but each event ties the view to the command that records it`, v.line));
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------- slicerm */
+
+function rejectionCoverage(model) {
+  const scenarios = [...model.commands, ...model.views].some((x) => x.scenarios.length);
+  if (!scenarios) return []; // scenarios are kept elsewhere, so there is nothing to compare against
+  const out = [];
+  for (const c of model.commands) {
+    const text = model.commands.filter((o) => o.name === c.name).flatMap((o) => o.scenarios).map((s) => `${s.name}\n${s.text}`).join('\n');
+    for (const b of c.branches) {
+      if (b.reject && !new RegExp(`\\b${b.reject}\\b`).test(text)) out.push(issue('rejection-uncovered', `Command "${c.name}" can refuse with ${b.reject}, and no scenario names it`, b.line));
+    }
+  }
+  return out;
+}
+
+function routeDuplicates(model) {
+  const seen = new Map();
+  const add = (kind, item, context) => {
+    for (const t of item.triggers) {
+      if (!t.route) continue;
+      const key = `${context || ''} ${t.route}`;
+      if (!seen.has(key)) seen.set(key, []);
+      seen.get(key).push({ target: `${kind} "${item.name}"`, route: t.route, line: item.line });
+    }
+  };
+  for (const c of model.commands) add('command', c, c.context);
+  for (const v of model.views) add('view', v, v.context);
+  const out = [];
+  for (const list of seen.values()) {
+    const targets = [...new Set(list.map((x) => x.target))];
+    if (targets.length < 2) continue;
+    const first = list[0].target;
+    for (const x of list) if (x.target !== first) out.push(issue('route-duplicate', `${x.route} is also used by ${targets.filter((t) => t !== x.target).join(', ')}`, x.line));
+  }
+  return out;
+}
+
+module.exports = {
+  scheduleIssues,
+  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...hints(model)],
+  slicermIssues: (model) => [...rejectionCoverage(model), ...routeDuplicates(model)],
+  sliceOf,
+};
 
 },
 function (module, exports, __r) {
 'use strict';
 
-const { buildBoard, boardToGraph } = __r(6);
-const { renderBoard, renderGraph } = __r(10);
-const { toMermaid, toDot } = __r(12);
-const { BUILDERS } = __r(7);
-const { KINDS, FORMATS } = __r(5);
-const { linkMap, sourceRanges } = __r(4);
+const { buildBoard, boardToGraph } = __r(8);
+const { renderBoard, renderGraph } = __r(12);
+const { toMermaid, toDot } = __r(14);
+const { BUILDERS } = __r(9);
+const { KINDS, FORMATS } = __r(7);
+const { linkMap, sourceRanges } = __r(6);
 
 /* The boxes of this diagram that lead somewhere: { boxId: [ { href, title } ] }. */
 function resolveLinks(model, kind, format, opts) {
@@ -1600,8 +1962,8 @@ module.exports = { KINDS, FORMATS, render };
 function (module, exports, __r) {
 'use strict';
 
-const { layering } = __r(11);
-const { LANES } = __r(6);
+const { layering } = __r(13);
+const { LANES } = __r(8);
 
 /*
  * Dependency-free SVG output. Two renderers:

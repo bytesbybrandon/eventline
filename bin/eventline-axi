@@ -94,12 +94,20 @@ program
   .command('validate <file>')
   .description('Validate DSL against checklist')
   .option('-f, --format <fmt>', 'Output format', 'toon')
+  .option('-p, --profile <name>', 'Which rules: core (default) | eventmodeling | slicerm. Each includes the one before.')
   .action((file, opts) => {
     const model = loadModel(file);
     if (!model) return;
     const cmd = require(path.join(__dirname, '..', 'lib', 'commands', 'validate'));
     cmd.run(model, opts);
   });
+
+program
+  .command('rules')
+  .description('List every validation rule: what it checks, why, and how to fix it')
+  .option('-f, --format <fmt>', 'Output format', 'toon')
+  .option('-p, --profile <name>', 'Only the rules this profile adds: core | eventmodeling | slicerm')
+  .action((opts) => require(path.join(__dirname, '..', 'lib', 'commands', 'rules')).run(opts));
 
 program
   .command('diagram <kind> <file>')

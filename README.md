@@ -50,11 +50,16 @@ npx -y eventline-axi twitter-pure.dsl
 | :--- | :--- |
 | See what is in it | `eventline-axi commands|events|views|policies <file>` |
 | Find mistakes | `eventline-axi validate <file>` |
+| Check it against the Event Modeling guidelines | `eventline-axi validate <file> --profile eventmodeling` |
 | See what depends on what | `eventline-axi deps <file> <name>` |
 | Draw it | `eventline-axi diagram eventmodel <file> -o board.svg` |
 | Draw everything | `eventline-axi diagrams <file> -o diagrams` |
+| Link the diagrams to each other | `eventline-axi diagrams <file> --links` |
 
 Diagram types, formats and what each one is derived from are in [EVENTLINE-AXI.md](./EVENTLINE-AXI.md).
+Every validation rule, with why it exists and how to fix it, is in [docs/RULES.md](./docs/RULES.md).
+
+You can also write a model in the browser: the [playground](https://bytesbybrandon.github.io/eventline/#play) runs the same parser, checks and diagrams, and shares a model as a link.
 
 ## Learn the notation
 

@@ -8,6 +8,7 @@ Start with the goal you have.
 | Understand how event storming, Event Modeling and DCB relate | [EVENT-MODELING.md](./EVENT-MODELING.md) |
 | Use it in a system design interview | [LANGUAGE.md](./LANGUAGE.md) sections 2 and 5, then [INTERVIEW_SIMULATION.md](./INTERVIEW_SIMULATION.md) |
 | Review a model you wrote | [THINKING-GUIDE.md](./THINKING-GUIDE.md) and the checklist in [LANGUAGE.md](./LANGUAGE.md) |
+| Understand a warning from `validate` | [RULES.md](./RULES.md) |
 | Look up a term | [GLOSSARY.md](./GLOSSARY.md) |
 | Declare actors or system context | [ACTORS.md](./ACTORS.md), [SYSTEM-CONTEXT.md](./SYSTEM-CONTEXT.md) |
 | Turn a model into architecture | [TWITTER-TRANSLATION.md](./TWITTER-TRANSLATION.md) |

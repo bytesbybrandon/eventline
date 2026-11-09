@@ -194,6 +194,23 @@ Use an event instead when the refusal must be remembered.
 `@trigger(type, name, part, route)` on a command or view: the screen, endpoint, command line tool or agent an actor uses to reach it, the part of it (a button, a toggled view), and the route it calls.
 A scheduled job is a [timer](#timer), not a trigger.
 
+### Slice
+
+One step of the process: a state change (a trigger, one command, the events it records), a state view (a read model and what shows it), an automation, or a translation.
+`@slice("name")` names the slice a command, view or policy belongs to.
+A slice has one command and defines one read model, but it may read any number of views that other slices define.
+
+### Link
+
+`@link(to="containers", node="view:Orders")` or `@link(url="...")` on a command, view, policy or boundary says where its box leads in the diagrams.
+Without it, `diagrams --links` derives links between the diagrams of one model.
+
+### Profile
+
+A named set of validation rules: `core` (always on), `eventmodeling` (the Event Modeling guidelines) and `slicerm` (stricter, for tools where a slice is one unit of delivery).
+Each includes the one before it.
+See [the rules reference](./RULES.md).
+
 ## Derived Concepts
 
 ### Guard

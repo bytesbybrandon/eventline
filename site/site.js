@@ -746,6 +746,7 @@
   const syncScroll = () => {
     pgEl.mirrorBox.scrollTop = pgEl.text.scrollTop; pgEl.mirrorBox.scrollLeft = pgEl.text.scrollLeft;
     pgEl.hl.style.transform = 'translate3d(0,' + (-pgEl.text.scrollTop) + 'px,0)';
+    $('#pg-marks').style.transform = pgEl.hl.style.transform;
   };
   pgEl.text.addEventListener('scroll', syncScroll);
 
@@ -758,6 +759,7 @@
   let lastSvg = '';
   let pgKind = 'eventmodel';  // which diagram of the model is on the board
   let pgLinks = false;        // whether boxes link to the same thing in another diagram
+  let pgProfile = 'core';     // which checks run: core, eventmodeling or slicerm
   let pgDirty = false;        // the text was edited or came from a link, so the address must carry it
   const KIND_FILE = { eventmodel: 'event-model', context: 'context', containers: 'containers', dataflow: 'data-flow', deployment: 'deployment', contextmap: 'context-map' };
   /* A link inside the page: #d=<diagram>&n=<box>. Addresses outside the page stay as they are. */
@@ -772,6 +774,7 @@
       b.tabIndex = on ? 0 : -1;
     });
     linksBtn.setAttribute('aria-pressed', String(pgLinks));
+    $$('.pg__check').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.profile === pgProfile)));
     $('#pg-svg').textContent = 'Download ' + KIND_FILE[pgKind] + '.svg';
   }
   /* The address says where you are: the text when it is not a preset, the diagram, and whether links are on. */
@@ -779,6 +782,7 @@
     let h = (forceText || pgDirty || pgKind !== 'eventmodel' || pgLinks) ? '#play=' + b64.enc(pgEl.text.value) : '#play';
     if (pgKind !== 'eventmodel') h += '&d=' + pgKind;
     if (pgLinks) h += '&links=1';
+    if (pgProfile !== 'core') h += '&p=' + pgProfile;
     return h;
   }
   function setKind(kind) { pgKind = kind; paintKinds(); }
@@ -834,18 +838,90 @@
       if (grp) { grp.classList.add('is-flash'); setTimeout(() => grp.classList.remove('is-flash'), 1400); }
     }
     pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'view'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
-    const issues = eventline.check(model).slice(0, 5);
-    for (const it of issues) {
+    paintChecks(eventline.check(model, { profile: pgProfile }));
+  }
+  /* What the checks found: a mark beside each line, a badge on each box, and the list, worst first. */
+  const SEV = { error: 0, warn: 1, info: 2 };
+  const GLYPH = { error: '\u25CF', warn: '\u25B2', info: '\u00B7' };
+  let allIssues = [];
+  let showAll = false;
+  const moreBtn = $('#pg-more');
+  moreBtn.addEventListener('click', () => { showAll = !showAll; paintIssueList(); });
+  function paintChecks(issues) {
+    allIssues = [...issues].sort((x, y) => SEV[x.severity] - SEV[y.severity] || (Number(x.line) || 1e9) - (Number(y.line) || 1e9));
+    showAll = false;
+    const n = (sev) => allIssues.filter((i) => i.severity === sev).length;
+    const parts = [[n('error'), 'error'], [n('warn'), 'warning'], [n('info'), 'hint']].filter(([c]) => c).map(([c, w]) => c + ' ' + w + (c === 1 ? '' : 's'));
+    $('#pg-summary').textContent = parts.length ? parts.join(', ') : 'No findings.';
+    paintIssueList();
+    paintMarks();
+    paintBadges();
+  }
+  function paintIssueList() {
+    const limit = 8;
+    const shown = showAll ? allIssues : allIssues.slice(0, limit);
+    pgEl.issues.replaceChildren();
+    for (const it of shown) {
       const li = document.createElement('li'); li.dataset.s = it.severity;
-      const span = document.createElement('span'); span.textContent = it.message;
-      li.append(span);
+      const span = document.createElement('span');
+      span.append(it.message);
+      const cat = document.createElement('span'); cat.className = 'pg__cat'; cat.textContent = it.category; span.append(cat);
       if (Number.isInteger(it.line) && it.line > 0) {
         const go = document.createElement('button'); go.type = 'button'; go.className = 'pg__issue'; go.textContent = 'line ' + it.line;
         go.setAttribute('aria-label', 'Show line ' + it.line + ' in the editor');
-        go.addEventListener('click', () => { if (pgBoard) pgBoard.tracer.setBase(null); pgSel = null; showLines([[it.line, it.line]], true); });
-        span.append(go);
+        go.addEventListener('click', () => focusIssue(it));
+        span.append(' ', go);
       }
+      const why = document.createElement('a'); why.className = 'pg__why'; why.href = '/eventline/docs/rules/#' + it.rule; why.target = '_blank'; why.rel = 'noopener'; why.textContent = 'why';
+      why.setAttribute('aria-label', 'Why ' + it.rule + ' is checked, in a new tab');
+      span.append(why);
+      li.append(span);
       pgEl.issues.append(li);
+    }
+    moreBtn.hidden = allIssues.length <= limit;
+    moreBtn.textContent = showAll ? 'Show fewer' : 'Show all ' + allIssues.length;
+  }
+  /* A finding on the first line of a statement is about all of it. Its box, if the diagram has one, lights up too. */
+  function focusIssue(it) {
+    const ranges = [[it.line, it.endLine || it.line]];
+    const subject = it.subject;
+    let id = null;
+    if (pgBoard && subject) {
+      for (const [nid, el] of pgBoard.tracer.nodes) {
+        if (el.dataset.lines && rangesOf(el).some(([from, to]) => subject.line >= from && subject.line <= to) && el.dataset.kind !== 'actor') { id = nid; break; }
+      }
+    }
+    if (pgBoard) pgBoard.tracer.setBase(id);
+    pgSel = id;
+    showLines(ranges, true);
+  }
+  function paintMarks() {
+    const host = $('#pg-marks');
+    host.replaceChildren();
+    const { lh, pt } = lineMetrics();
+    const worst = new Map();
+    for (const it of allIssues) if (Number.isInteger(it.line) && it.line > 0 && !(worst.has(it.line) && SEV[worst.get(it.line)] <= SEV[it.severity])) worst.set(it.line, it.severity);
+    for (const [line, sev] of worst) {
+      const mark = document.createElement('b');
+      mark.dataset.s = sev; mark.textContent = GLYPH[sev];
+      mark.style.top = (pt + (line - 1) * lh) + 'px'; mark.style.height = lh + 'px';
+      host.append(mark);
+    }
+  }
+  function paintBadges() {
+    if (!pgBoard) return;
+    const ns = 'http://www.w3.org/2000/svg';
+    for (const [, el] of pgBoard.tracer.nodes) {
+      if (!el.dataset.lines) continue;
+      const mine = allIssues.filter((it) => it.severity !== 'info' && Number.isInteger(it.line) && rangesOf(el).some(([from, to]) => it.line >= from && it.line <= to));
+      if (!mine.length) continue;
+      const box = el.firstElementChild && el.firstElementChild.getBBox ? el.firstElementChild.getBBox() : null;
+      if (!box) continue;
+      const g = document.createElementNS(ns, 'g'); g.setAttribute('class', 'issue-badge');
+      const title = document.createElementNS(ns, 'title'); title.textContent = mine.map((m) => m.message).join('\n');
+      const c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', box.x + 2); c.setAttribute('cy', box.y + 2); c.setAttribute('r', 8); c.setAttribute('fill', '#0a0e1a'); c.setAttribute('stroke', '#ffd400'); c.setAttribute('stroke-width', 1.6);
+      const t = document.createElementNS(ns, 'text'); t.setAttribute('x', box.x + 2); t.setAttribute('y', box.y + 5.5); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', 10); t.setAttribute('font-weight', 700); t.setAttribute('fill', '#ffd400'); t.textContent = mine.length > 9 ? '9+' : String(mine.length);
+      g.append(title, c, t); el.append(g);
     }
   }
   function setText(text, fromUser) {
@@ -1071,14 +1147,15 @@
     const m = HASH.exec(location.hash);
     if (!m) return null;
     const p = new URLSearchParams((m[2] || '').replace(/^&/, ''));
-    return { text: m[1] || null, kind: p.get('d'), node: p.get('n'), links: p.get('links') === '1' };
+    return { text: m[1] || null, kind: p.get('d'), node: p.get('n'), links: p.get('links') === '1', profile: ['eventmodeling', 'slicerm'].includes(p.get('p')) ? p.get('p') : 'core' };
   }
   function applyHash() {
     const h = parseHash();
-    if (!h || (h.text === null && !h.kind)) return false; // a bare #play is just the section
+    if (!h || (h.text === null && !h.kind && h.profile === 'core')) return false; // a bare #play is just the section
     try {
       if (h.kind && kindTabs.some((t) => t.dataset.kind === h.kind)) pgKind = h.kind; else if (!h.kind) pgKind = 'eventmodel';
       pgLinks = h.links;
+      pgProfile = h.profile;
       pgSel = h.node;
       paintKinds();
       if (h.text !== null) {
@@ -1119,6 +1196,8 @@
     });
   });
   linksBtn.addEventListener('click', () => { pgLinks = !pgLinks; paintKinds(); drawBoard(); history.replaceState(null, '', currentHash(false)); });
+
+  $$('.pg__check').forEach((b) => b.addEventListener('click', () => { pgProfile = b.dataset.profile; paintKinds(); drawBoard(); history.replaceState(null, '', currentHash(false)); }));
 
   const hashed = applyHash();
   if (!pgEl.text.value) { pgEl.text.value = START; paintMirror(); }
