@@ -1147,7 +1147,7 @@
     const m = HASH.exec(location.hash);
     if (!m) return null;
     const p = new URLSearchParams((m[2] || '').replace(/^&/, ''));
-    return { text: m[1] || null, kind: p.get('d'), node: p.get('n'), links: p.get('links') === '1', profile: ['eventmodeling', 'slicerm'].includes(p.get('p')) ? p.get('p') : 'core' };
+    return { text: m[1] || null, kind: p.get('d'), node: p.get('n'), links: p.get('links') === '1', profile: ['workshop', 'eventmodeling', 'slicerm'].includes(p.get('p')) ? p.get('p') : 'core' };
   }
   function applyHash() {
     const h = parseHash();

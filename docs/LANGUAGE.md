@@ -467,6 +467,17 @@ view Orders(orderId) = [order-placed*(orderId)] => { status: text }
 - A box with several links shows one arrow badge for each, and the box itself opens the first.
 - `validate` warns about a link to a diagram or box that does not exist, or to a diagram the model cannot draw yet.
 
+### Accepting a finding, and open questions
+
+`@accept(rule="many-events", reason="One fact told in two parts")` on a command, view, policy or boundary says the team knows a rule reports something there, and why.
+The finding stays in the list with its reason, and its severity does not change.
+`validate` warns about an `@accept` with no reason or an unknown rule, and notes one that accepts nothing.
+
+`@hotspot("Does the guest lose the deposit?", kind=assumption, category=rule)` records something the model does not answer yet.
+`kind` is `question` (the default), `assumption` or `request`; a request says what must change with `concerns="scenario"`.
+`category` is `action`, `data`, `next`, `rule`, `example`, `view`, `who` or `time`, and `status` is `open` (the default) or `resolved`.
+With `--profile eventmodeling` or `workshop`, an open hotspot is reported as a hint.
+
 ### Strings, comments and repeated blocks
 
 - Inside a string, `\"` is a quote, `\\` is a backslash and `\n` is a line break.

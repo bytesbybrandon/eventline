@@ -29,7 +29,7 @@ test('the default profile is core, and each profile includes the one before it',
 test('every rule that can report is in the catalogue, with its own text, and reports the severity the catalogue gives it', () => {
   const seen = new Set();
   const texts = [...['twitter-pure', 'billing', 'rate-limiter', 'payment-webhook'].map(example), SHOP.replace('sku }', 'sku, x }')];
-  for (const text of texts) for (const profile of PROFILES) for (const i of found(text, profile)) seen.add(`${i.rule}:${i.severity}`);
+  for (const text of texts) for (const profile of PROFILES.filter((p) => p !== 'workshop')) for (const i of found(text, profile)) seen.add(`${i.rule}:${i.severity}`);
   const byId = new Map(RULES.map((r) => [r.id, r]));
   for (const key of seen) {
     const [id, severity] = key.split(':');
@@ -142,4 +142,42 @@ test('a command may read events it records itself: that is how a decision checks
     'user -> refund(id)\non [refunded(id)]\n  --[done]--> reject DONE\n  --[default]--> [refunded { id }]\n',
     'user -> addItem(id)\non [item-added*(id)]\n  --[default]--> [item-added { id }]\n',
   ]) assert.ok(!ids(text, 'slicerm').includes('dependency-cycle'));
+});
+
+const CMD2 = 'user -> go(id) %A%\n  --[default]--> [a-done { id }, b-done { id }]\n';
+const withAnn = (a) => CMD2.replace('%A%', a);
+
+test('@accept keeps a finding in the list, marked with its reason, and does not change its severity', () => {
+  const plain = found(withAnn(''), 'eventmodeling').find((i) => i.rule === 'many-events');
+  const acc = found(withAnn('@accept(rule="many-events", reason="One fact told in two parts")'), 'eventmodeling').find((i) => i.rule === 'many-events');
+  assert.equal(acc.severity, plain.severity);
+  assert.equal(acc.accepted.reason, 'One fact told in two parts');
+  assert.equal(plain.accepted, undefined);
+});
+
+test('@accept needs a real rule and a reason, and one that accepts nothing is reported', () => {
+  const r = (a) => ids(withAnn(a), 'eventmodeling').filter((x) => x.startsWith('accept'));
+  assert.deepEqual(r('@accept(rule="many-events", reason="x")'), []);
+  assert.deepEqual(r('@accept(rule="many-events")'), ['accept-invalid']);
+  assert.deepEqual(r('@accept(rule="nonsense", reason="x")'), ['accept-invalid']);
+  assert.deepEqual(r('@accept(reason="x")'), ['accept-invalid']);
+  assert.deepEqual(r('@accept(rule="view-many-sources", reason="x")'), ['accept-unused']);
+});
+
+test('@hotspot is an open question: reported while open, quiet when resolved, and checked for its kind, category and status', () => {
+  const r = (a, p = 'eventmodeling') => ids(withAnn(a), p).filter((x) => x.startsWith('hotspot'));
+  assert.deepEqual(r('@hotspot("Does the guest lose the deposit?")'), ['hotspot-open']);
+  assert.deepEqual(r('@hotspot("Q", kind=assumption, category=rule, status=resolved)'), []);
+  assert.deepEqual(r('@hotspot("Q", kind=nope)'), ['hotspot-invalid']);
+  assert.deepEqual(r('@hotspot("Q", category=nope)'), ['hotspot-invalid']);
+  assert.deepEqual(r('@hotspot("Q", kind=request)'), ['hotspot-invalid']);
+  assert.deepEqual(r('@hotspot("Q", kind=request, concerns="scenario")'), ['hotspot-open']);
+  assert.deepEqual(r('@hotspot("Q")', 'core'), [], 'core checks only that it is well formed');
+});
+
+test('workshop runs the guidelines and reports every one of them as info', () => {
+  const list = found(SHOP.replace('sku }', 'sku, x }'), 'workshop');
+  assert.ok(list.some((i) => i.rule === 'unsourced-event-field'));
+  assert.ok(list.filter((i) => i.profile !== 'core').every((i) => i.severity === 'info'));
+  assert.equal(found(SHOP.replace('sku }', 'sku, x }'), 'eventmodeling').find((i) => i.rule === 'unsourced-event-field').severity, 'warn');
 });

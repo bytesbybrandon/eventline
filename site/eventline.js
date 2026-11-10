@@ -650,7 +650,7 @@ function (module, exports, __r) {
 
 const { RULES, BY_ID, CATEGORIES, PROFILES } = __r(4);
 const { coreIssues } = __r(5);
-const { scheduleIssues, eventmodelingIssues, slicermIssues, sliceOf } = __r(10);
+const { scheduleIssues, hotspotIssues, acceptIssues, eventmodelingIssues, slicermIssues, sliceOf } = __r(10);
 
 const DOCS = 'https://bytesbybrandon.github.io/eventline/docs/rules/#';
 
@@ -687,18 +687,42 @@ function enrich(found, list, profile) {
   };
 }
 
+/* A finding on a statement that carries @accept for its rule stays in the list, marked with the reason. Severity does not change. */
+function accepted(model, issues, list) {
+  const marks = new Map();
+  for (const x of [...model.commands, ...model.views, ...model.policies, ...model.boundaries]) {
+    const rules = [].concat((x.annotations && x.annotations.accept) || []).filter((a) => a && typeof a === 'object' && a.rule && BY_ID.has(a.rule) && String(a.reason || '').trim());
+    if (rules.length) marks.set(x.line, rules);
+  }
+  const used = new Set();
+  for (const i of issues) {
+    const hit = i.subject && (marks.get(i.subject.line) || []).find((a) => a.rule === i.rule);
+    if (hit) { i.accepted = { reason: hit.reason }; used.add(`${i.subject.line}:${i.rule}`); }
+  }
+  for (const [line, rules] of marks) for (const a of rules) {
+    if (used.has(`${line}:${a.rule}`)) continue;
+    const s = list.find((x) => x.line === line);
+    const meta = BY_ID.get('accept-unused');
+    issues.push({ severity: meta.severity, rule: 'accept-unused', category: meta.category, profile: meta.profile, message: `The @accept of ${a.rule} on "${s ? s.name : 'this statement'}" accepts nothing: that rule reports nothing there`, line, endLine: s ? s.endLine : line, subject: s ? { kind: s.kind, name: s.name, line: s.line, endLine: s.endLine } : null, slice: s ? s.slice : null, docs: DOCS + 'accept-unused' });
+  }
+  return issues;
+}
+
 /*
- * What is wrong with a model. profile is core (default), eventmodeling or slicerm; each includes the one before.
+ * What is wrong with a model. profile is core (default), workshop, eventmodeling or slicerm; workshop is eventmodeling with everything reported as info, and slicerm includes eventmodeling.
  * Every finding says what kind of problem it is, which statement it belongs to, and where that statement ends.
  */
 function check(model, opts = {}) {
   const profile = opts.profile || 'core';
   if (!PROFILES.includes(profile)) throw new Error(`Unknown profile "${profile}". Choose one of: ${PROFILES.join(', ')}`);
-  const found = [...coreIssues(model), ...scheduleIssues(model)];
-  if (profile !== 'core') found.push(...eventmodelingIssues(model));
+  const guidelines = profile !== 'core';
+  const found = [...coreIssues(model), ...scheduleIssues(model), ...hotspotIssues(model, guidelines), ...acceptIssues(model, BY_ID)];
+  if (guidelines) found.push(...eventmodelingIssues(model));
   if (profile === 'slicerm') found.push(...slicermIssues(model));
   const list = statements(model);
-  return found.map((f) => enrich(f, list, profile));
+  const issues = found.map((f) => enrich(f, list, profile));
+  if (profile === 'workshop') for (const i of issues) if (i.profile !== 'core') i.severity = 'info';
+  return accepted(model, issues, list);
 }
 
 module.exports = { check, RULES, CATEGORIES, PROFILES };
@@ -712,6 +736,7 @@ function (module, exports, __r) {
  * list, `eventline-axi rules` prints it, and a test fails if a rule reports an id that is not here.
  *
  *   profile   core: the language is wrong or inconsistent. Always on.
+ *             workshop: the eventmodeling rules, every one reported as info. For exploring a model before it is meant to be right.
  *             eventmodeling: Event Modeling guidelines. Opt in with --profile eventmodeling.
  *             slicerm: stricter, for tools that treat a slice as one unit of delivery. Includes eventmodeling.
  *   severity  error: the model cannot mean what it says. warn: a gap that is almost always a mistake.
@@ -773,6 +798,11 @@ const RULES = [
   R('schedule-invalid', 'core', 'warn', 'schedule', 'A timer cannot fire', 'An interval needs a whole number above zero. A cron expression has five fields, each in range.', 'Write every 5 minutes, or cron "0 9 * * 1" (minute hour day-of-month month day-of-week).',
     { example: { bad: 'every 0 minutes\n  -> reminder -> sendReminder()', good: 'every 5 minutes\n  -> reminder -> sendReminder()' } }),
 
+  R('accept-invalid', 'core', 'warn', 'structure', 'An @accept that cannot work', 'An @accept says the team knowingly keeps something a rule reports, and why. It needs rule="..." naming a rule in the catalogue, and a reason.', 'Write @accept(rule="many-events", reason="One fact told in two parts").'),
+  R('accept-unused', 'core', 'info', 'hints', 'An @accept that accepts nothing', 'The rule it names reports nothing on this statement, so the acceptance is out of date or on the wrong statement.', 'Remove it, or move it to the statement the rule reports on.'),
+  R('hotspot-invalid', 'core', 'warn', 'structure', 'A @hotspot that cannot work', 'A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (action, data, next, rule, example, view, who, time) and status (open, resolved). A request says what must change with concerns="...".', 'Write @hotspot("Does the guest lose the deposit?", kind=assumption, category=rule).'),
+  R('hotspot-open', 'eventmodeling', 'info', 'hints', 'A hotspot is still open', 'Someone wrote down something the model does not answer yet.', 'Answer it in the model, then set status=resolved, or keep it as a known gap.'),
+
   // ---- eventmodeling: the guidelines ----
   R('unsourced-event-field', 'eventmodeling', 'warn', 'fields', 'An event carries a field nothing supplies', 'Information flows one way. An event can only hold what its command was given: its parameters, the boundary key, the facts it needs, or a value it computes.', 'Add the field to the command, to a fact it needs, or compute it with name: expression.',
     { example: { bad: 'user -> addItem(cartId) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]', good: 'user -> addItem(cartId, sku) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]' } }),
@@ -791,7 +821,7 @@ const RULES = [
 ];
 
 const BY_ID = new Map(RULES.map((r) => [r.id, r]));
-const PROFILES = ['core', 'eventmodeling', 'slicerm'];
+const PROFILES = ['core', 'workshop', 'eventmodeling', 'slicerm'];
 
 module.exports = { RULES, BY_ID, CATEGORIES, PROFILES };
 
@@ -1867,6 +1897,40 @@ function hints(model) {
   return out;
 }
 
+const KINDS = ['question', 'assumption', 'request'];
+const CATEGORIES = ['action', 'data', 'next', 'rule', 'example', 'view', 'who', 'time'];
+const asList = (x) => [].concat(x || []).filter((v) => v !== undefined);
+const text = (h) => (h && typeof h === 'object' ? (h._ && h._[0]) || '' : typeof h === 'string' ? h : '');
+/* Everything that can carry @hotspot or @accept: [{ item, line }]. */
+function carriers(model) {
+  return [...model.commands, ...model.views, ...model.policies, ...model.boundaries].filter((x) => x.annotations);
+}
+function hotspotIssues(model, open) {
+  const out = [];
+  for (const c of carriers(model)) {
+    for (const h of asList(c.annotations.hotspot)) {
+      const q = text(h).trim();
+      const o = h && typeof h === 'object' ? h : {};
+      const bad = !q ? 'has no question' : o.kind && !KINDS.includes(o.kind) ? `has kind "${o.kind}", which is not one of ${KINDS.join(', ')}` : o.category && !CATEGORIES.includes(o.category) ? `has category "${o.category}", which is not one of ${CATEGORIES.join(', ')}` : o.status && !['open', 'resolved'].includes(o.status) ? `has status "${o.status}", which is not open or resolved` : o.kind === 'request' && !o.concerns ? 'is a request, which says what must change with concerns="..."' : o.kind !== 'request' && o.concerns ? 'has concerns, which only a request has' : null;
+      if (bad) out.push(issue('hotspot-invalid', `A @hotspot on "${c.name || c.trigger.event || c.trigger.schedule}" ${bad}`, c.line));
+      else if (open && (o.status || 'open') === 'open') out.push(issue('hotspot-open', `Open ${o.kind || 'question'}: ${q}`, c.line));
+    }
+  }
+  return out;
+}
+function acceptIssues(model, known) {
+  const out = [];
+  for (const c of carriers(model)) {
+    for (const a of asList(c.annotations.accept)) {
+      const o = a && typeof a === 'object' ? a : {};
+      const who = c.name || c.trigger.event || c.trigger.schedule;
+      if (!o.rule || !known.has(o.rule)) out.push(issue('accept-invalid', `An @accept on "${who}" needs rule="..." naming a rule in the catalogue${o.rule ? `, and "${o.rule}" is not one` : ''}`, c.line));
+      else if (!String(o.reason || '').trim()) out.push(issue('accept-invalid', `The @accept of ${o.rule} on "${who}" needs a reason="..."`, c.line));
+    }
+  }
+  return out;
+}
+
 /* ---------------------------------------------------------------- slicerm */
 
 function rejectionCoverage(model) {
@@ -1905,7 +1969,7 @@ function routeDuplicates(model) {
 }
 
 module.exports = {
-  scheduleIssues,
+  scheduleIssues, hotspotIssues, acceptIssues,
   eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...hints(model)],
   slicermIssues: (model) => [...rejectionCoverage(model), ...routeDuplicates(model)],
   sliceOf,
