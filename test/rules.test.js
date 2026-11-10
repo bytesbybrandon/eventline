@@ -68,12 +68,10 @@ test('unsourced fields: an event holds only what its command was given, and comp
   assert.ok(!ids(SHOP.replace('items: count(item-added*(cartId))', 'sku'), 'eventmodeling').includes('unsourced-view-field'), 'a view may show what its events carry');
 });
 
-test('dependency-cycle finds commands that wait on each other, and one that waits for an event only it records', () => {
+test('dependency-cycle finds commands that wait on each other in a loop', () => {
   const loop = 'user -> a(id)\non [b-done(id)]\n  --[default]--> [a-done { id }]\nuser -> b(id)\non [a-done(id)]\n  --[default]--> [b-done { id }]\n';
   const [i] = found(loop, 'eventmodeling').filter((x) => x.rule === 'dependency-cycle');
   assert.match(i.message, /command "a", command "b" wait on each other/);
-  const lonely = 'user -> a(id)\non [a-done(id)]\n  --[default]--> [a-done { id }]\n';
-  assert.match(found(lonely, 'eventmodeling').find((x) => x.rule === 'dependency-cycle').message, /only it records/);
   const chain = 'user -> a(id)\n  --[default]--> [a-done { id }]\nuser -> b(id)\non [a-done(id)]\n  --[default]--> [b-done { id }]\n';
   assert.ok(!ids(chain, 'eventmodeling').includes('dependency-cycle'));
   for (const name of ['twitter-pure', 'billing', 'rate-limiter', 'payment-webhook']) assert.ok(!ids(example(name), 'slicerm').includes('dependency-cycle'), name);
@@ -137,4 +135,11 @@ test('every example in the catalogue behaves as it says: the bad one is reported
     assert.ok(ids(r.example.bad, 'slicerm').includes(r.id), `${r.id}: the bad example is not reported`);
     assert.ok(!ids(r.example.good, 'slicerm').includes(r.id), `${r.id}: the good example is reported`);
   }
+});
+
+test('a command may read events it records itself: that is how a decision checks what already happened', () => {
+  for (const text of [
+    'user -> refund(id)\non [refunded(id)]\n  --[done]--> reject DONE\n  --[default]--> [refunded { id }]\n',
+    'user -> addItem(id)\non [item-added*(id)]\n  --[default]--> [item-added { id }]\n',
+  ]) assert.ok(!ids(text, 'slicerm').includes('dependency-cycle'));
 });

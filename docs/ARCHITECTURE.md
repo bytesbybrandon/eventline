@@ -18,6 +18,7 @@ A short map of the code, for people changing it.
 | System diagrams | `lib/diagram/system.js` | Builds context, containers, data flow, deployment and the context map as one generic graph. |
 | Layout | `lib/diagram/layout.js` | Layering shared by the diagrams. Edges that close a loop are set aside, so loops never break placement. |
 | Renderers | `lib/diagram/svg.js`, `export.js` | SVG with no dependencies. Mermaid and DOT from the same graph. |
+| Folder models | `lib/folder.js` | Reads a folder of `.dsl` files as one model and maps a line back to its file. Node only. |
 | Rules | `lib/rules/` | The validation rules. `core.js` is the language, `profile.js` the Event Modeling and stricter rules, `catalogue.js` says what each rule means. |
 | Library entry | `lib/index.js`, `lib/diagram/index.js` | The public API: `parse`, `check`, `render`. Nothing in this path touches the file system. |
 

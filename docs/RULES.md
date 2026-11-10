@@ -457,8 +457,9 @@ view Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(
 Severity: warn.
 Category: order.
 
-A command waits for events that another records.
-If they wait on each other, or a command waits for an event only it records, no order of work can start.
+Commands wait for events that others record.
+If they wait on each other in a loop, no order of work can start.
+A command that reads events it records itself is fine: that is how a decision checks what already happened.
 
 How to fix it: Break the loop with an event that does not depend on the others, or mark one fact as coming from outside.
 
