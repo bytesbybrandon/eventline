@@ -99,7 +99,7 @@ program
     const model = loadModel(file);
     if (!model) return;
     const cmd = require(path.join(__dirname, '..', 'lib', 'commands', 'validate'));
-    cmd.run(model, opts);
+    cmd.run(model, { ...opts, locate: lastLoaded && lastLoaded.files.length > 1 ? lastLoaded.locate : null });
   });
 
 program
@@ -147,6 +147,7 @@ program
     }
   });
 
+let lastLoaded = null; // where the last model came from, so findings can name a file
 function loadModel(file) {
   if (!file || !fs.existsSync(file)) {
     if (file) {
@@ -155,10 +156,10 @@ function loadModel(file) {
     }
     return null;
   }
-  const Parser = require(path.join(__dirname, '..', 'lib', 'parser'));
-  const content = fs.readFileSync(file, 'utf8');
   try {
-    return Parser.parse(content);
+    const loaded = require(path.join(__dirname, '..', 'lib', 'folder')).load(file);
+    lastLoaded = loaded;
+    return loaded.model;
   } catch (err) {
     console.error(`error: parse failed: ${err.message}`);
     process.exit(1);

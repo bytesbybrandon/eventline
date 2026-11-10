@@ -50,6 +50,16 @@ npx eventline-axi diagram containers <file> -f mermaid
 npx eventline-axi diagrams <file> -o diagrams
 ```
 
+## A model in several files
+
+Every command that takes a file also takes a folder.
+A folder model is every `.dsl` file directly in it, read as one model: references resolve across files, so you can split a model whenever it grows and move statements between files without rewriting anything.
+There is no `include`, subfolders and dot files are ignored, and findings and parse errors name the file and the line inside it.
+
+```bash
+npx eventline-axi validate model/ --profile eventmodeling
+```
+
 ## Derived diagrams
 
 The notation is enough to draw the system.

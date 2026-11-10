@@ -778,7 +778,7 @@ const RULES = [
     { example: { bad: 'user -> addItem(cartId) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]', good: 'user -> addItem(cartId, sku) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]' } }),
   R('unsourced-view-field', 'eventmodeling', 'warn', 'fields', 'A view shows a field no event carries', 'A view is a fold over events, so every plain field must be in the payload of an event it projects from. Computed fields are exempt.', 'Add the field to an event it reads, or compute it, as in total: count(order-placed*(id)).',
     { example: { bad: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nview Cart(cartId) = [item-added*(cartId)] => { cartId, total }', good: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nview Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }' } }),
-  R('dependency-cycle', 'eventmodeling', 'warn', 'order', 'Commands depend on each other in a loop', 'A command waits for events that another records. If they wait on each other, or a command waits for an event only it records, no order of work can start.', 'Break the loop with an event that does not depend on the others, or mark one fact as coming from outside.'),
+  R('dependency-cycle', 'eventmodeling', 'warn', 'order', 'Commands depend on each other in a loop', 'Commands wait for events that others record. If they wait on each other in a loop, no order of work can start. A command that reads events it records itself is fine: that is how a decision checks what already happened.', 'Break the loop with an event that does not depend on the others, or mark one fact as coming from outside.'),
   R('slice-multiple-commands', 'eventmodeling', 'warn', 'slices', 'One slice holds several commands', 'A write slice has one command. A command can record several events. Two commands are two slices.', 'Give each command its own @slice name.'),
   R('slice-multiple-views', 'eventmodeling', 'info', 'slices', 'One slice defines several read models', 'A slice owns one query. Several read models in one slice invite several queries where one shaped for the reader would do. Reading views that other slices define is always fine.', 'Fold them into one view shaped for how it is read, or give each its own @slice.', { slicerm: 'warn' }),
   R('slice-no-scenario', 'eventmodeling', 'info', 'scenarios', 'Commands and views have no scenario', 'A slice is specified with a given, when, then example. This counts the commands and views that have none. Models that keep scenarios elsewhere can ignore it.', 'Add scenario "name" { ... } under the command or view.'),
@@ -1812,18 +1812,6 @@ function dependencyCycles(model) {
   for (const group of loops(edges)) {
     const ordered = group.sort((a, b) => nodes.get(a).line - nodes.get(b).line);
     out.push(issue('dependency-cycle', `${ordered.map((k) => nodes.get(k).label).join(', ')} wait on each other in a loop, so no order of work can start. Break it with an event that does not depend on the others`, nodes.get(ordered[0]).line));
-  }
-  // A command that waits for an event only it records can never run first.
-  const seen = new Set();
-  for (const c of model.commands) {
-    for (const f of c.on) {
-      const by = ((model.events.get(f.name) || {}).emittedBy || []);
-      const key = `${c.name}:${f.name}`;
-      if (by.length && by.every((e) => e.kind === 'command' && e.name === c.name) && !seen.has(key)) {
-        seen.add(key);
-        out.push(issue('dependency-cycle', `Command "${c.name}" needs "${f.name}", which only it records, so it can never run first`, c.line));
-      }
-    }
   }
   return out;
 }
