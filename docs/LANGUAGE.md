@@ -446,6 +446,31 @@ The body is kept exactly as written, apart from removing the common indentation,
 It ends at a line that holds only `}`.
 A scenario outside a command or view, or one after a context block closes, is an error.
 
+#### Scenarios as steps
+
+A scenario can also be written as steps, which the tools can check.
+Lowercase keywords, one step to a line:
+
+```eventline
+user -> pay(id) in Account(id)
+  --[too poor]--> reject NO_FUNDS
+  --[default]--> [paid { id }]
+  scenario "refused when there is no money" {
+    given [account-opened { id: 1 }]
+    when pay(id: 1)
+    then reject NO_FUNDS
+  }
+```
+
+- `given [...]` lists events that already happened, and may repeat.
+- `when command(...)` is exactly one command, the one the scenario sits under.
+- `then [...]` lists the events it records, or `then reject CODE` names a rejection of that command.
+- A scenario with a line shaped like that is read as steps. Anything else, such as `Given a user`, stays prose, kept exactly as written.
+  Mixing the two in one scenario is an error.
+- `validate` warns when a step scenario lacks `when` or `then`, runs a different command, names an event nobody records or reads, or expects an event or rejection the command does not have.
+- A rejection covered by a `then reject CODE` step needs no word match in prose for `--profile slicerm`.
+- Views and policies take prose scenarios for now.
+
 `eventline-axi scenarios <file>` lists each scenario, what it checks and how many lines it has.
 `validate` warns about an empty scenario or a repeated name under the same command or view.
 

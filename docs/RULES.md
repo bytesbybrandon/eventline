@@ -369,6 +369,63 @@ A url is an http(s) address or a path.
 
 How to fix it: Write https://... or a path.
 
+### scenario-steps
+
+**A scenario with steps is not complete.**
+Severity: warn.
+Category: scenarios.
+
+A scenario written as steps has any number of given steps, exactly one when naming the command it sits under, and one then.
+Views and policies take prose scenarios for now.
+
+How to fix it: Add the missing step, or point when at the command above.
+
+### scenario-unknown-event
+
+**A scenario names an event the model does not have.**
+Severity: warn.
+Category: scenarios.
+
+A given or then step lists an event that no command or policy records or reads.
+
+How to fix it: Fix the name, or add the command that records the event.
+
+### scenario-then-mismatch
+
+**A scenario expects something the command cannot do.**
+Severity: warn.
+Category: scenarios.
+
+then lists an event the command never records, or rejects with a code the command does not have.
+
+How to fix it: Fix the then step, or add the branch to the command.
+
+Instead of:
+
+```text
+user -> other(id)
+  --[default]--> [other { id }]
+user -> go(id)
+  --[default]--> [went { id }]
+  scenario "x" {
+    when go(id: 1)
+    then [other { id: 1 }]
+  }
+```
+
+write:
+
+```text
+user -> other(id)
+  --[default]--> [other { id }]
+user -> go(id)
+  --[default]--> [went { id }]
+  scenario "x" {
+    when go(id: 1)
+    then [went { id: 1 }]
+  }
+```
+
 ### schedule-invalid
 
 **A timer cannot fire.**
