@@ -471,6 +471,39 @@ function parseContext(sc, model) {
 
 /* scenario "name" { ...lines as written... }  Checks the command or view just above it.
    The body is kept as written, so Gherkin can hold any characters, and ends at a line holding only "}". */
+/* A scenario written as steps instead of prose. Lowercase keywords, one step to a line:
+     given [a-done { id: 1 }, b-done]     (zero or more)
+     when go(id: 1)                       (exactly one)
+     then [c-done { id: 1 }]  |  then reject CODE
+   A scenario is typed when a line has that shape; Gherkin ("Given a user ...") stays prose. Returns null for prose. */
+const STEP_START = /^\s*(given\s*\[|when\s+[A-Za-z_][\w-]*\s*\(|then\s*\[|then\s+reject\s)/;
+function parseSteps(raw, firstLine, name) {
+  if (!raw.some((l) => STEP_START.test(l))) return null;
+  const steps = { given: [], when: null, then: null };
+  raw.forEach((text, i) => {
+    const at = firstLine + i;
+    const t = text.trim();
+    if (!t) return;
+    const word = /^(given|when|then)\b/.exec(t);
+    if (!word) throw new ParseError(`Scenario "${name}" mixes steps with other text. A step is given [...], when command(...), or then [...] / then reject CODE`, at);
+    const rest = t.slice(word[1].length);
+    const sub = new Scanner(rest.trim(), at - 1);
+    if (word[1] === 'when') {
+      if (steps.when) throw new ParseError(`Scenario "${name}" has two when steps; a scenario checks one command`, at);
+      const cname = sub.ident('a command name');
+      const args = sub.peek('(') ? squash(sub.balanced()) : '';
+      steps.when = { name: cname, args, fields: parseFields(args), line: at };
+    } else if (word[1] === 'given') {
+      for (const e of parseEmissions(sub)) steps.given.push({ event: e.event, fields: e.fields, payload: e.payload || '', line: at });
+    } else {
+      if (steps.then) throw new ParseError(`Scenario "${name}" has two then steps`, at);
+      const rej = /^reject\s+([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(rest.trim());
+      steps.then = rej ? { reject: rej[1], events: [], line: at } : { reject: null, events: parseEmissions(sub).map((e) => ({ event: e.event, fields: e.fields, payload: e.payload || '' })), line: at };
+    }
+  });
+  return steps;
+}
+
 function parseScenario(sc, target, line) {
   const head = /^\s*"((?:[^"\\]|\\.)*)"[ \t]*\{[ \t]*\n/.exec(sc.s.slice(sc.i));
   if (!head) throw new ParseError('A scenario is: scenario "name" {, then its lines, then } on a line of its own', line);
@@ -478,6 +511,7 @@ function parseScenario(sc, target, line) {
   const name = unquote(`"${head[1]}"`);
   sc.i += head[0].length;
   const lines = [];
+  const raw = [];
   for (;;) {
     if (sc.i >= sc.s.length) throw new ParseError(`Unclosed "{" for scenario "${name}"`, line);
     let end = sc.s.indexOf('\n', sc.i);
@@ -485,12 +519,14 @@ function parseScenario(sc, target, line) {
     const text = sc.s.slice(sc.i, end);
     sc.i = Math.min(end + 1, sc.s.length);
     if (text.trim() === '}') break;
+    raw.push(text);
     lines.push(text);
   }
   while (lines.length && !lines[0].trim()) lines.shift();
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
   const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => /^[ \t]*/.exec(l)[0].length), Infinity);
-  target.scenarios.push({ name, text: lines.map((l) => l.slice(Number.isFinite(indent) ? indent : 0).replace(/\s+$/, '')).join('\n'), line });
+  const steps = parseSteps(raw, line + 1, name);
+  target.scenarios.push({ name, text: lines.map((l) => l.slice(Number.isFinite(indent) ? indent : 0).replace(/\s+$/, '')).join('\n'), line, steps });
   sc.last = target;
 }
 
@@ -650,7 +686,7 @@ function (module, exports, __r) {
 
 const { RULES, BY_ID, CATEGORIES, PROFILES } = __r(4);
 const { coreIssues } = __r(5);
-const { scheduleIssues, hotspotIssues, acceptIssues, eventmodelingIssues, slicermIssues, sliceOf } = __r(10);
+const { scheduleIssues, scenarioStepIssues, hotspotIssues, acceptIssues, eventmodelingIssues, slicermIssues, sliceOf } = __r(10);
 
 const DOCS = 'https://bytesbybrandon.github.io/eventline/docs/rules/#';
 
@@ -716,7 +752,7 @@ function check(model, opts = {}) {
   const profile = opts.profile || 'core';
   if (!PROFILES.includes(profile)) throw new Error(`Unknown profile "${profile}". Choose one of: ${PROFILES.join(', ')}`);
   const guidelines = profile !== 'core';
-  const found = [...coreIssues(model), ...scheduleIssues(model), ...hotspotIssues(model, guidelines), ...acceptIssues(model, BY_ID)];
+  const found = [...coreIssues(model), ...scheduleIssues(model), ...scenarioStepIssues(model), ...hotspotIssues(model, guidelines), ...acceptIssues(model, BY_ID)];
   if (guidelines) found.push(...eventmodelingIssues(model));
   if (profile === 'slicerm') found.push(...slicermIssues(model));
   const list = statements(model);
@@ -795,6 +831,10 @@ const RULES = [
   R('scenario-duplicate', 'core', 'warn', 'scenarios', 'Two scenarios share a name under one command or view', 'Names must tell scenarios apart.', 'Rename one.'),
   R('link-target', 'core', 'warn', 'links', 'An @link cannot work', 'It names a diagram or box that is not there, or none at all, or a diagram this model cannot draw yet.', 'Check to= and node= against the diagram.'),
   R('link-url', 'core', 'warn', 'links', 'An @link url is not an address', 'A url is an http(s) address or a path.', 'Write https://... or a path.'),
+  R('scenario-steps', 'core', 'warn', 'scenarios', 'A scenario with steps is not complete', 'A scenario written as steps has any number of given steps, exactly one when naming the command it sits under, and one then. Views and policies take prose scenarios for now.', 'Add the missing step, or point when at the command above.'),
+  R('scenario-unknown-event', 'core', 'warn', 'scenarios', 'A scenario names an event the model does not have', 'A given or then step lists an event that no command or policy records or reads.', 'Fix the name, or add the command that records the event.'),
+  R('scenario-then-mismatch', 'core', 'warn', 'scenarios', 'A scenario expects something the command cannot do', 'then lists an event the command never records, or rejects with a code the command does not have.', 'Fix the then step, or add the branch to the command.',
+    { example: { bad: 'user -> other(id)\n  --[default]--> [other { id }]\nuser -> go(id)\n  --[default]--> [went { id }]\n  scenario "x" {\n    when go(id: 1)\n    then [other { id: 1 }]\n  }', good: 'user -> other(id)\n  --[default]--> [other { id }]\nuser -> go(id)\n  --[default]--> [went { id }]\n  scenario "x" {\n    when go(id: 1)\n    then [went { id: 1 }]\n  }' } }),
   R('schedule-invalid', 'core', 'warn', 'schedule', 'A timer cannot fire', 'An interval needs a whole number above zero. A cron expression has five fields, each in range.', 'Write every 5 minutes, or cron "0 9 * * 1" (minute hour day-of-month month day-of-week).',
     { example: { bad: 'every 0 minutes\n  -> reminder -> sendReminder()', good: 'every 5 minutes\n  -> reminder -> sendReminder()' } }),
 
@@ -1748,6 +1788,36 @@ function scheduleIssues(model) {
   return out;
 }
 
+/* Scenarios written as steps are checked against the command they sit under. */
+function scenarioStepIssues(model) {
+  const out = [];
+  const check = (owner, kind) => {
+    for (const sc of owner.scenarios) {
+      const st = sc.steps;
+      if (!st) continue;
+      if (kind === 'view') { out.push(issue('scenario-steps', `Scenario "${sc.name}" on view "${owner.name}" is written as steps, which a view does not take yet. Write it as prose`, sc.line)); continue; }
+      if (!st.when) out.push(issue('scenario-steps', `Scenario "${sc.name}" has no when step`, sc.line));
+      else if (st.when.name !== owner.name) out.push(issue('scenario-steps', `Scenario "${sc.name}" sits under "${owner.name}" but its when step runs "${st.when.name}"`, st.when.line));
+      if (!st.then) out.push(issue('scenario-steps', `Scenario "${sc.name}" has no then step`, sc.line));
+      const known = (e) => model.events.has(e);
+      for (const g of st.given) if (!known(g.event)) out.push(issue('scenario-unknown-event', `Scenario "${sc.name}" gives "${g.event}", which no command or policy records or reads`, g.line));
+      if (st.then && st.when && st.when.name === owner.name) {
+        const same = model.commands.filter((c) => c.name === owner.name && c.actor === owner.actor);
+        const emits = new Set(same.flatMap((c) => c.branches.flatMap((b) => b.emits.map((e) => e.event))));
+        const rejects = new Set(same.flatMap((c) => c.branches.map((b) => b.reject).filter(Boolean)));
+        if (st.then.reject) { if (!rejects.has(st.then.reject)) out.push(issue('scenario-then-mismatch', `Scenario "${sc.name}" expects rejection ${st.then.reject}, which "${owner.name}" does not have`, st.then.line)); }
+        else for (const e of st.then.events) {
+          if (!known(e.event)) out.push(issue('scenario-unknown-event', `Scenario "${sc.name}" expects "${e.event}", which no command or policy records or reads`, st.then.line));
+          else if (!emits.has(e.event)) out.push(issue('scenario-then-mismatch', `Scenario "${sc.name}" expects "${e.event}", which "${owner.name}" never records`, st.then.line));
+        }
+      }
+    }
+  };
+  for (const c of model.commands) check(c, 'command');
+  for (const v of model.views) check(v, 'view');
+  return out;
+}
+
 /* ---------------------------------------------------------- eventmodeling */
 
 function unsourcedEventFields(model) {
@@ -1955,9 +2025,11 @@ function rejectionCoverage(model) {
   if (!scenarios) return []; // scenarios are kept elsewhere, so there is nothing to compare against
   const out = [];
   for (const c of model.commands) {
-    const text = model.commands.filter((o) => o.name === c.name).flatMap((o) => o.scenarios).map((s) => `${s.name}\n${s.text}`).join('\n');
+    const own = model.commands.filter((o) => o.name === c.name).flatMap((o) => o.scenarios);
+    const text = own.map((s) => `${s.name}\n${s.text}`).join('\n');
+    const typed = new Set(own.map((s) => s.steps && s.steps.then && s.steps.then.reject).filter(Boolean));
     for (const b of c.branches) {
-      if (b.reject && !new RegExp(`\\b${b.reject}\\b`).test(text)) out.push(issue('rejection-uncovered', `Command "${c.name}" can refuse with ${b.reject}, and no scenario names it`, b.line));
+      if (b.reject && !typed.has(b.reject) && !new RegExp(`\\b${b.reject}\\b`).test(text)) out.push(issue('rejection-uncovered', `Command "${c.name}" can refuse with ${b.reject}, and no scenario names it`, b.line));
     }
   }
   return out;
@@ -1986,7 +2058,7 @@ function routeDuplicates(model) {
 }
 
 module.exports = {
-  scheduleIssues, hotspotIssues, acceptIssues,
+  scheduleIssues, scenarioStepIssues, hotspotIssues, acceptIssues,
   eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...dedupeCoverage(model), ...hints(model)],
   slicermIssues: (model) => [...rejectionCoverage(model), ...routeDuplicates(model)],
   sliceOf,

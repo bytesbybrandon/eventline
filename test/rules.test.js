@@ -195,3 +195,37 @@ test('@dedupe and @correlate name keys of outside facts: they count as supplied,
   assert.ok(!ids(view, 'eventmodeling').includes('unsourced-view-field'), 'on a view, a key of the delivery counts for it');
   assert.ok(!ids('user -> a(id)\n  --[default]--> [a-done { id }]\n', 'eventmodeling').includes('translation-no-dedupe'), 'only outside commands');
 });
+
+const STEPPED = (body) => `user -> pay(id)\n  --[too poor]--> reject NO_FUNDS\n  --[default]--> [paid { id }]\n  scenario "s" {\n${body}\n  }\n`;
+
+test('a scenario written as steps is read as steps, and Gherkin stays prose', () => {
+  const m = parse(STEPPED('    given [funded { id }, signed-in]\n    when pay(id: 1)\n    then [paid { id: 1 }]'));
+  const st = m.commands[0].scenarios[0].steps;
+  assert.deepEqual(st.given.map((g) => g.event), ['funded', 'signed-in']);
+  assert.equal(st.when.name, 'pay');
+  assert.deepEqual(st.then.events.map((e) => e.event), ['paid']);
+  assert.equal(st.when.line, 6, 'steps know their own line');
+  const rej = parse(STEPPED('    when pay(id: 1)\n    then reject NO_FUNDS')).commands[0].scenarios[0].steps;
+  assert.equal(rej.then.reject, 'NO_FUNDS');
+  assert.equal(parse(STEPPED('    Given a user\n    When they pay\n    Then it is paid')).commands[0].scenarios[0].steps, null);
+  assert.equal(parse(STEPPED('    Given a user\n    When they pay\n    Then it is paid')).commands[0].scenarios[0].text.split('\n').length, 3, 'the text is kept as written either way');
+  assert.throws(() => parse(STEPPED('    when pay(id: 1)\n    when pay(id: 2)\n    then [paid]')), /two when steps/);
+  assert.throws(() => parse(STEPPED('    when pay(id: 1)\n    and something else\n    then [paid]')), /mixes steps with other text/);
+});
+
+test('step scenarios are checked against the command: complete, known events, and only what the command can do', () => {
+  const r = (body) => found(STEPPED(body), 'core').filter((i) => i.rule.startsWith('scenario')).map((i) => i.rule);
+  assert.deepEqual(r('    when pay(id: 1)\n    then [paid { id: 1 }]'), []);
+  assert.deepEqual(r('    when pay(id: 1)\n    then reject NO_FUNDS'), []);
+  assert.deepEqual(r('    then [paid]'), ['scenario-steps']);
+  assert.deepEqual(r('    when pay(id: 1)'), ['scenario-steps']);
+  assert.deepEqual(r('    when refund(id: 1)\n    then [paid]'), ['scenario-steps']);
+  assert.deepEqual(r('    given [ghost]\n    when pay(id: 1)\n    then [paid]'), ['scenario-unknown-event']);
+  assert.deepEqual(r('    when pay(id: 1)\n    then reject NOPE'), ['scenario-then-mismatch']);
+  assert.deepEqual(r('    when pay(id: 1)\n    then [ghost]'), ['scenario-unknown-event']);
+});
+
+test('a rejection is covered by a step scenario that expects it, no word match needed', () => {
+  assert.ok(!ids(STEPPED('    when pay(id: 1)\n    then reject NO_FUNDS'), 'slicerm').includes('rejection-uncovered'));
+  assert.ok(ids(STEPPED('    when pay(id: 1)\n    then [paid { id: 1 }]'), 'slicerm').includes('rejection-uncovered'));
+});
