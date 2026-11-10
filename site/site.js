@@ -742,13 +742,19 @@
     if (cm) out += '<span class="t-cm">' + esc(cm) + '</span>';
     return out;
   }
-  const paintMirror = () => { pgEl.mirror.innerHTML = pgEl.text.value.split('\n').map(hlLine).join('\n') + '\n'; };
+  const paintMirror = () => { pgEl.mirror.innerHTML = pgEl.text.value.split('\n').map(hlLine).join('\n') + '\n'; syncScroll(); };
   const syncScroll = () => {
-    pgEl.mirrorBox.scrollTop = pgEl.text.scrollTop; pgEl.mirrorBox.scrollLeft = pgEl.text.scrollLeft;
+    // Translate, never scroll, the mirror. A scrolled box clamps at its own limit, and the textarea's limit is
+    // lower when a long line gives it a horizontal scrollbar, so the two drifted apart at the bottom of a long model.
+    pgEl.mirror.style.transform = 'translate3d(' + (-pgEl.text.scrollLeft) + 'px,' + (-pgEl.text.scrollTop) + 'px,0)';
     pgEl.hl.style.transform = 'translate3d(0,' + (-pgEl.text.scrollTop) + 'px,0)';
     $('#pg-marks').style.transform = pgEl.hl.style.transform;
   };
   pgEl.text.addEventListener('scroll', syncScroll);
+  // The box can change size (a window resize, a scrollbar appearing) without a scroll event, which moves the textarea's limits.
+  new ResizeObserver(syncScroll).observe(pgEl.text);
+  pgEl.text.addEventListener('keyup', syncScroll);
+  pgEl.text.addEventListener('mouseup', syncScroll);
 
   const b64 = {
     enc(s) { let bin = ''; new TextEncoder().encode(s).forEach((x) => { bin += String.fromCharCode(x); }); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
