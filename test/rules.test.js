@@ -181,3 +181,17 @@ test('workshop runs the guidelines and reports every one of them as info', () =>
   assert.ok(list.filter((i) => i.profile !== 'core').every((i) => i.severity === 'info'));
   assert.equal(found(SHOP.replace('sku }', 'sku, x }'), 'eventmodeling').find((i) => i.rule === 'unsourced-event-field').severity, 'warn');
 });
+
+test('@dedupe and @correlate name keys of outside facts: they count as supplied, and an outside command without one is hinted', () => {
+  const ext = (a) => `system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId) ${a}\n  --[default]--> [parcel-scanned { parcelId, scanId }]\n`;
+  assert.ok(ids(ext(''), 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(!ids(ext('@dedupe(scanId)'), 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(!ids(ext('@correlate(scanId)'), 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(ids(ext(''), 'eventmodeling').includes('translation-no-dedupe'));
+  assert.ok(!ids(ext('@dedupe(scanId)'), 'eventmodeling').includes('translation-no-dedupe'));
+  const inbox = 'view Inbox(id) = [parcel-scanned*(id)] => { id, scanId }\n' + ext('@dedupe(scanId)');
+  assert.ok(!ids(inbox, 'eventmodeling').includes('unsourced-view-field'));
+  const view = 'view Inbox(id) = [parcel-scanned*(id)] => { id, deliveryId } @dedupe(deliveryId)\n' + ext('@dedupe(scanId)');
+  assert.ok(!ids(view, 'eventmodeling').includes('unsourced-view-field'), 'on a view, a key of the delivery counts for it');
+  assert.ok(!ids('user -> a(id)\n  --[default]--> [a-done { id }]\n', 'eventmodeling').includes('translation-no-dedupe'), 'only outside commands');
+});

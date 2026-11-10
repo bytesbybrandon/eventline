@@ -542,6 +542,34 @@ Models that keep scenarios elsewhere can ignore it.
 
 How to fix it: Add scenario "name" { ... } under the command or view.
 
+### translation-no-dedupe
+
+**An outside fact has no deduplication key.**
+Severity: info.
+Category: fields.
+
+A command issued by an outside system is a fact someone else recorded.
+It can be delivered twice, so the model says which field tells a repeat from a new one. @dedupe names it, and @correlate names the field that ties the fact to something here.
+Both count as supplying that field to the events and views that carry it.
+
+How to fix it: Add @dedupe(eventId) to the command, view or policy that consumes the fact.
+
+Instead of:
+
+```text
+system S { external: carrier (translator) }
+carrier -> scanReceived(parcelId)
+  --[default]--> [parcel-scanned { parcelId }]
+```
+
+write:
+
+```text
+system S { external: carrier (translator) }
+carrier -> scanReceived(parcelId) @dedupe(scanId)
+  --[default]--> [parcel-scanned { parcelId, scanId }]
+```
+
 ### many-events
 
 **A happy path records several events.**
