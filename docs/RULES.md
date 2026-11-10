@@ -8,6 +8,7 @@ Each finding says what is wrong, where, and why it matters.
 | Profile | Includes | Use it when |
 | :--- | :--- | :--- |
 | `core` (default) | the language rules | You want to know the file is sound |
+| `workshop` | core, plus the guidelines, all as info | You are still exploring and want hints, not warnings |
 | `eventmodeling` | core, plus the guidelines | You are designing a system and want the method checked |
 | `slicerm` | eventmodeling, stricter | A slice is a unit of delivery that someone plans and builds |
 
@@ -393,11 +394,53 @@ every 5 minutes
   -> reminder -> sendReminder()
 ```
 
+### accept-invalid
+
+**An @accept that cannot work.**
+Severity: warn.
+Category: structure.
+
+An @accept says the team knowingly keeps something a rule reports, and why.
+It needs rule="..." naming a rule in the catalogue, and a reason.
+
+How to fix it: Write @accept(rule="many-events", reason="One fact told in two parts").
+
+### accept-unused
+
+**An @accept that accepts nothing.**
+Severity: info.
+Category: hints.
+
+The rule it names reports nothing on this statement, so the acceptance is out of date or on the wrong statement.
+
+How to fix it: Remove it, or move it to the statement the rule reports on.
+
+### hotspot-invalid
+
+**A @hotspot that cannot work.**
+Severity: warn.
+Category: structure.
+
+A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (action, data, next, rule, example, view, who, time) and status (open, resolved).
+A request says what must change with concerns="...".
+
+How to fix it: Write @hotspot("Does the guest lose the deposit?", kind=assumption, category=rule).
+
 ## Event Modeling rules
 
 These apply the Event Modeling guidelines.
 Turn them on with `--profile eventmodeling`.
 They check that information has a source, that work has an order, and that a slice holds what a slice should.
+
+### hotspot-open
+
+**A hotspot is still open.**
+Severity: info.
+Category: hints.
+
+Someone wrote down something the model does not answer yet.
+
+How to fix it: Answer it in the model, then set status=resolved, or keep it as a known gap.
 
 ### unsourced-event-field
 

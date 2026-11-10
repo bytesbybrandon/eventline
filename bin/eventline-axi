@@ -94,7 +94,7 @@ program
   .command('validate <file>')
   .description('Validate DSL against checklist')
   .option('-f, --format <fmt>', 'Output format', 'toon')
-  .option('-p, --profile <name>', 'Which rules: core (default) | eventmodeling | slicerm. Each includes the one before.')
+  .option('-p, --profile <name>', 'Which rules: core (default) | workshop | eventmodeling | slicerm. Each includes the one before.')
   .action((file, opts) => {
     const model = loadModel(file);
     if (!model) return;

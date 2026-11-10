@@ -22,6 +22,7 @@ function render() {
   out.push('| Profile | Includes | Use it when |');
   out.push('| :--- | :--- | :--- |');
   out.push('| `core` (default) | the language rules | You want to know the file is sound |');
+  out.push('| `workshop` | core, plus the guidelines, all as info | You are still exploring and want hints, not warnings |');
   out.push('| `eventmodeling` | core, plus the guidelines | You are designing a system and want the method checked |');
   out.push('| `slicerm` | eventmodeling, stricter | A slice is a unit of delivery that someone plans and builds |');
   out.push('');
