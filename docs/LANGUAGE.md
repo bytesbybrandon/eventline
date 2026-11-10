@@ -467,6 +467,14 @@ view Orders(orderId) = [order-placed*(orderId)] => { status: text }
 - A box with several links shows one arrow badge for each, and the box itself opens the first.
 - `validate` warns about a link to a diagram or box that does not exist, or to a diagram the model cannot draw yet.
 
+### Outside facts: deduplication and correlation keys
+
+A command an outside system issues is a fact someone else recorded, and it can arrive twice.
+`@dedupe(scanId)` on the command, view or policy that consumes it names the field that tells a repeat from a new one.
+`@correlate(parcelRef)` names the field that ties the fact to something in your system.
+Both can list several names, and both count as supplying those fields to the events and views that carry them.
+`validate --profile eventmodeling` hints at an outside command that has neither.
+
 ### Accepting a finding, and open questions
 
 `@accept(rule="many-events", reason="One fact told in two parts")` on a command, view, policy or boundary says the team knows a rule reports something there, and why.

@@ -812,6 +812,8 @@ const RULES = [
   R('slice-multiple-commands', 'eventmodeling', 'warn', 'slices', 'One slice holds several commands', 'A write slice has one command. A command can record several events. Two commands are two slices.', 'Give each command its own @slice name.'),
   R('slice-multiple-views', 'eventmodeling', 'info', 'slices', 'One slice defines several read models', 'A slice owns one query. Several read models in one slice invite several queries where one shaped for the reader would do. Reading views that other slices define is always fine.', 'Fold them into one view shaped for how it is read, or give each its own @slice.', { slicerm: 'warn' }),
   R('slice-no-scenario', 'eventmodeling', 'info', 'scenarios', 'Commands and views have no scenario', 'A slice is specified with a given, when, then example. This counts the commands and views that have none. Models that keep scenarios elsewhere can ignore it.', 'Add scenario "name" { ... } under the command or view.'),
+  R('translation-no-dedupe', 'eventmodeling', 'info', 'fields', 'An outside fact has no deduplication key', 'A command issued by an outside system is a fact someone else recorded. It can be delivered twice, so the model says which field tells a repeat from a new one. @dedupe names it, and @correlate names the field that ties the fact to something here. Both count as supplying that field to the events and views that carry it.', 'Add @dedupe(eventId) to the command, view or policy that consumes the fact.',
+    { example: { bad: 'system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId)\n  --[default]--> [parcel-scanned { parcelId }]', good: 'system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId) @dedupe(scanId)\n  --[default]--> [parcel-scanned { parcelId, scanId }]' } }),
   R('many-events', 'eventmodeling', 'info', 'hints', 'A happy path records several events', 'Right when they are one fact told in parts. If they are two steps, a policy can take the second.', 'Keep them if they are one fact, otherwise split the second into a policy.'),
   R('view-many-sources', 'eventmodeling', 'info', 'hints', 'Four or more events feed one view', 'Combining streams is fine, but each event ties the view to the command that records it, so fewer is easier to change.', 'Check that every source is needed.'),
 
@@ -1687,6 +1689,10 @@ const sliceOf = (annotations) => {
   if (s && typeof s === 'object') return (s._ && s._[0]) || s.name || null;
   return typeof s === 'string' ? s : null;
 };
+/* @dedupe(eventId) and @correlate(orderRef) name fields of the outside facts a statement consumes that its own payload does not carry:
+   the key that tells a repeat delivery from a new one, and the key that ties the fact to something here. They count as supplied. */
+const keys = (annotations) => ['dedupe', 'correlate'].flatMap((n) => [].concat((annotations && annotations[n]) || []).flatMap((a) => (a && typeof a === 'object' && a._ ? a._ : typeof a === 'string' ? [a] : [])));
+
 /* A field written `name: type` is carried, not computed: the type sits where an expression would. */
 const TYPE = /^(text|string|number|int|integer|float|id|uuid|datetime|date|time|yesno|bool|boolean)$|^list\[.+\]$|^[A-Z][A-Za-z0-9_]*$/;
 const carried = (f) => !f.expr || TYPE.test(f.expr.trim());
@@ -1755,7 +1761,7 @@ function unsourcedEventFields(model) {
 
   for (const cmd of model.commands) {
     if (unknownSource([...cmd.on, ...cmd.from])) continue;
-    const supplied = new Set([...cmd.params.map(bare), ...names(cmd.boundary && cmd.boundary.args)]);
+    const supplied = new Set([...cmd.params.map(bare), ...names(cmd.boundary && cmd.boundary.args), ...keys(cmd.annotations)]);
     for (const f of cmd.on) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); known(f.name).forEach((n) => supplied.add(n)); }
     for (const f of cmd.from) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); (shape.get(f.name) || []).forEach((n) => supplied.add(n)); }
     for (const b of cmd.branches) {
@@ -1768,7 +1774,7 @@ function unsourcedEventFields(model) {
   for (const pol of model.policies) {
     const who = pol.trigger.event ? `on "${pol.trigger.event}"` : `on "${pol.trigger.schedule}"`;
     if (unknownSource(pol.from)) continue;
-    const supplied = new Set((pol.trigger.fields || []).map((f) => f.name));
+    const supplied = new Set([...(pol.trigger.fields || []).map((f) => f.name), ...keys(pol.annotations)]);
     for (const f of pol.from) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); (shape.get(f.name) || []).forEach((n) => supplied.add(n)); }
     for (const r of pol.rules) {
       if (r.worker) continue; // what a worker records is the worker's own business, not something the trigger must carry
@@ -1789,7 +1795,7 @@ function unsourcedViewFields(model) {
     const events = view.sources.map((s) => model.events.get(s.name));
     // A source nothing records is an assumed fact: its payload is unknown, so there is nothing to check against.
     if (events.some((e) => !e || e.emittedBy.length === 0)) continue;
-    const have = new Set([...view.params.map(bare), ...view.sources.flatMap((s) => names(s.args))]);
+    const have = new Set([...view.params.map(bare), ...view.sources.flatMap((s) => names(s.args)), ...keys(view.annotations)]);
     for (const s of view.sources) (fieldsOf.get(s.name) || []).forEach((n) => have.add(n));
     const missing = view.shape.filter((f) => carried(f) && !have.has(f.name)).map((f) => f.name);
     if (missing.length) out.push(issue('unsourced-view-field', `View "${view.name}" shows ${quote(missing)}, which no event it projects from carries. Add ${missing.length === 1 ? 'it' : 'them'} to an event, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, view.line));
@@ -1883,6 +1889,17 @@ function scenarioCoverage(model) {
   return [issue('slice-no-scenario', `${without.length} of ${seen.size} commands and views have no scenario, starting with "${without[0].name}"`, without[0].line)];
 }
 
+/* A command an outside system issues is a fact that can arrive twice. Say which field tells the copies apart. */
+function dedupeCoverage(model) {
+  const out = [];
+  for (const c of model.commands) {
+    if (model.actorKind(c.actor) !== 'external' || keys(c.annotations).length) continue;
+    if (c.annotations.dedupe || c.annotations.correlate) continue;
+    out.push(issue('translation-no-dedupe', `Command "${c.name}" comes from outside system "${c.actor}", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)`, c.line));
+  }
+  return out;
+}
+
 function hints(model) {
   const out = [];
   for (const c of model.commands) {
@@ -1970,7 +1987,7 @@ function routeDuplicates(model) {
 
 module.exports = {
   scheduleIssues, hotspotIssues, acceptIssues,
-  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...hints(model)],
+  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...dedupeCoverage(model), ...hints(model)],
   slicermIssues: (model) => [...rejectionCoverage(model), ...routeDuplicates(model)],
   sliceOf,
 };

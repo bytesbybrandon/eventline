@@ -205,6 +205,10 @@ A slice has one command and defines one read model, but it may read any number o
 `@link(to="containers", node="view:Orders")` or `@link(url="...")` on a command, view, policy or boundary says where its box leads in the diagrams.
 Without it, `diagrams --links` derives links between the diagrams of one model.
 
+### Deduplication key
+
+`@dedupe(field)`: the field of an outside fact that tells a repeat delivery from a new one. `@correlate(field)` is the field that ties it to something in the system. See [Outside facts](./LANGUAGE.md#outside-facts-deduplication-and-correlation-keys).
+
 ### Hotspot
 
 `@hotspot("question")`: something the model does not answer yet, kept in the model instead of a side note. See [Accepting a finding, and open questions](./LANGUAGE.md#accepting-a-finding-and-open-questions).
