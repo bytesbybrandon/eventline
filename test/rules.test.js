@@ -142,6 +142,7 @@ test('a command may read events it records itself: that is how a decision checks
     'user -> refund(id)\non [refunded(id)]\n  --[done]--> reject DONE\n  --[default]--> [refunded { id }]\n',
     'user -> addItem(id)\non [item-added*(id)]\n  --[default]--> [item-added { id }]\n',
   ]) assert.ok(!ids(text, 'slicerm').includes('dependency-cycle'));
+});
 
 const CMD2 = 'user -> go(id) %A%\n  --[default]--> [a-done { id }, b-done { id }]\n';
 const withAnn = (a) => CMD2.replace('%A%', a);
