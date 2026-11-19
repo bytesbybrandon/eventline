@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { parse } = require('../lib/parser');
-const { buildBoard, boardToGraph } = require('../lib/diagram/board');
+const { buildBoard, boardToGraph, LANES, LANE_LABELS, needsImpliedReadModel } = require('../lib/diagram/board');
 const { BUILDERS } = require('../lib/diagram/system');
 const { render, KINDS } = require('../lib/diagram');
 const { check } = require('../lib/commands/validate');
@@ -45,11 +45,12 @@ test('board: order follows causality, so a command comes after the command whose
   assert.ok(byId(rl, 'cmd:makeRequest').col > byId(rl, 'cmd:authenticate').col);
 });
 
-test('board: a view sits right of the events that feed it; a worker right of its trigger', () => {
+test('board: a read model sits right of the events that feed it; a worker right of the implied read model', () => {
   const b = buildBoard(load('twitter-pure.dsl'));
   const details = byId(b, 'view:TweetDetails');
   assert.ok(details.col > byId(b, 'evt:tweet-created').col);
-  assert.ok(byId(b, 'pol:trending-analyzer').col > byId(b, 'evt:tweet-created').col);
+  assert.ok(byId(b, 'implied:tweet-created').col > byId(b, 'evt:tweet-created').col);
+  assert.ok(byId(b, 'pol:trending-analyzer').col > byId(b, 'implied:tweet-created').col);
   const ev = (from, to, kind) => b.edges.some((e) => e.from === from && e.to === to && e.kind === kind);
   assert.ok(ev('evt:tweet-created', 'view:TweetDetails', 'projects'));
   assert.ok(ev('pol:notification-worker', 'cmd:sendLikeNotification', 'invokes'));
@@ -57,9 +58,65 @@ test('board: a view sits right of the events that feed it; a worker right of its
 
 test('board: facts nobody emits become a note, and a command nobody declared is marked as not modeled', () => {
   const b = buildBoard(load('twitter-pure.dsl'));
-  assert.match(byId(b, 'cmd:likeTweet').notes[0], /tweet-exists/);
+  assert.match(byId(b, 'cmd:likeTweet').notes[0], /^checks .*tweet-exists \(assumed\)/);
   assert.equal(b.nodes.some((n) => n.id.startsWith('evt:tweet-exists')), false);
   assert.equal(byId(b, 'cmd:sendLikeNotification').declared, false);
+});
+
+test('board: three rows, with read models beside commands and processors beside actors', () => {
+  const b = buildBoard(load('twitter-pure.dsl'));
+  assert.deepEqual(LANES, ['actor', 'command', 'event']);
+  assert.equal(LANE_LABELS.command, 'COMMAND · READ MODEL');
+  assert.equal(byId(b, 'view:TweetDetails').lane, 'command');
+  assert.equal(byId(b, 'pol:notification-worker').lane, 'actor');
+});
+
+test('board: an event reaches an automation only through a read model', () => {
+  const b = buildBoard(load('twitter-pure.dsl'));
+  const imp = byId(b, 'implied:tweet-liked');
+  assert.equal(imp.implied, true); assert.equal(imp.sub, 'implied read model');
+  assert.ok(b.edges.some((e) => e.from === 'evt:tweet-liked' && e.to === imp.id && e.kind === 'projects'));
+  assert.ok(b.edges.some((e) => e.from === imp.id && e.to === 'pol:notification-worker' && e.kind === 'reads'));
+  const into = (id) => id.startsWith('pol:') || id.startsWith('auto:') || id.startsWith('cmd:');
+  for (const e of b.edges) assert.ok(!(e.from.startsWith('evt:') && into(e.to)), `${e.from} -> ${e.to}`);
+});
+
+test('board: two policies on one event share an implied read model; reading a read model fed by the trigger needs none', () => {
+  const two = buildBoard(parse('x-happened { id } -> a-worker -> goA(id)\nx-happened { id } -> b-worker -> goB(id)'));
+  assert.equal(two.nodes.filter((n) => n.id.startsWith('implied:')).length, 1);
+  const read = buildBoard(parse('user -> start(id)\n  --[default]--> [x-happened { id }]\nreadmodel Todo(id) = [x-happened*(id)] => { id }\nx-happened from [Todo] -> w -> go(id)'));
+  assert.equal(read.nodes.some((n) => n.id.startsWith('implied:')), false);
+  assert.ok(read.edges.some((e) => e.from === 'view:Todo' && e.to === 'pol:w'));
+});
+
+test('board: an event nobody records still reaches its automation through an implied read model', () => {
+  const b = buildBoard(parse('ghost-seen { id } -> w -> go(id)'));
+  assert.equal(byId(b, 'evt:ghost-seen').assumed, true);
+  assert.ok(byId(b, 'implied:ghost-seen'));
+});
+
+test('board: an automation that starts from read models sits after them, with no event', () => {
+  const b = buildBoard(parse('from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)'));
+  const w = byId(b, 'pol:fulfilment-worker'); const v = byId(b, 'view:OrdersToShip');
+  assert.equal(v.sub, 'not declared'); assert.ok(w.col > v.col);
+  assert.equal(b.nodes.some((n) => n.id.startsWith('implied:') || n.id.startsWith('evt:')), false);
+});
+
+test('board: a rule with no worker gets its own unnamed processor', () => {
+  const b = buildBoard(parse('x-happened { id }\n  --[a]--> [y-happened { id }]\n  --[b]--> [z-happened { id }]'));
+  const autos = b.nodes.filter((n) => n.id.startsWith('auto:'));
+  assert.equal(autos.length, 2); assert.equal(autos[0].label, 'automation'); assert.equal(autos[0].lane, 'actor');
+});
+
+test('board: a command shows its decision model instead of arrows from events', () => {
+  const b = buildBoard(load('twitter-pure.dsl'));
+  assert.equal(b.edges.some((e) => e.kind === 'given'), false);
+  assert.match(byId(b, 'cmd:likeTweet').notes.join(' '), /checks .*tweet-exists \(assumed\)/);
+});
+
+test('needsImpliedReadModel: only an event trigger with no from read model fed by that event', () => {
+  const m = parse('readmodel Todo(id) = [x-happened*(id)] => { id }\nx-happened from [Todo] -> w -> go(id)\nx-happened -> v -> go(id)\nfrom [Todo] -> u -> go(id)\nevery 1 hours -> s -> go()');
+  assert.deepEqual(m.policies.map((p) => needsImpliedReadModel(m, p)), [false, true, false, false]);
 });
 
 test('board: slices follow the four Event Modeling patterns', () => {
