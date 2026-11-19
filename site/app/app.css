@@ -33,8 +33,15 @@
 .ap .ap-banner button:focus-visible { outline-color: var(--sc-accent-ink); }
 
 .ap-main { min-height: 0; min-width: 0; padding: var(--sc-2); }
-.ap .pg__grid { position: relative; height: 100%; min-height: 0; gap: var(--sc-2); grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); }
+.ap .pg__grid { position: relative; height: 100%; min-height: 0; gap: 0; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, var(--ap-ed, 41%)) var(--sc-2) minmax(0, 1fr); }
 .ap .pg__grid[data-layout="editor"], .ap .pg__grid[data-layout="board"] { grid-template-columns: minmax(0, 1fr); }
+/* The handle between the panes: the gap itself, so it costs no space. */
+.ap-split { position: relative; cursor: col-resize; touch-action: none; }
+.ap-split::after { content: ""; position: absolute; top: 50%; left: 50%; width: 3px; height: 2.5rem; transform: translate(-50%, -50%); border-radius: 2px; background: var(--sc-hairline-strong); transition: background-color var(--sc-d-fast) var(--sc-ease-out), height var(--sc-d-fast) var(--sc-ease-out); }
+.ap-split:hover::after, .ap-split.is-drag::after, .ap-split:focus-visible::after { background: var(--sc-accent); height: 4rem; }
+.ap-split:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: -2px; }
+.ap .pg__grid[data-layout="editor"] .ap-split, .ap .pg__grid[data-layout="board"] .ap-split { display: none; }
+@media (prefers-reduced-motion: reduce) { .ap-split::after { transition: none; } }
 /* A hidden pane keeps its size: the board measures its boxes while drawing, even when it is not showing. */
 .ap .pg__grid[data-layout="editor"] .pg__bd, .ap .pg__grid[data-layout="board"] .pg__ed { position: absolute; inset: 0; visibility: hidden; }
 .ap .pg__grid[data-board="light"] .pg__bd { background: #ffffff; }
@@ -106,6 +113,7 @@
   .ap-pr__boards { grid-template-columns: minmax(0, 1fr); }
   .ap-layout [data-layout="split"] { display: none; }
   .ap .pg__grid { grid-template-columns: minmax(0, 1fr); }
+  .ap-split { display: none; }
   .ap-foot { grid-template-columns: minmax(0, 1fr); }
   .ap .pg__out { justify-content: flex-start; }
   .ap-slot { margin-left: 0; }

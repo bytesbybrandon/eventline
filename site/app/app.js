@@ -177,6 +177,45 @@
   function setLayout(next) { layout = next; setPref('sessionStorage', LAYOUT_KEY, next); paintLayout(); }
   document.querySelectorAll('.ap-layout [data-layout]').forEach((b) => b.addEventListener('click', () => setLayout(b.dataset.layout)));
   narrow.addEventListener('change', paintLayout);
+
+  /* The editor's share of the split, in percent, remembered per browser. Drag, arrow keys, or double-click to reset. */
+  const SPLIT_KEY = 'eventline.app.split';
+  const SPLIT_MIN = 20; const SPLIT_MAX = 70; const SPLIT_DEFAULT = 41;
+  const handle = $('#ap-split');
+  const clampSplit = (n) => Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, Math.round(n)));
+  let split = clampSplit(Number(pref('localStorage', SPLIT_KEY)) || SPLIT_DEFAULT);
+  function paintSplit(save) {
+    grid.style.setProperty('--ap-ed', split + '%');
+    handle.setAttribute('aria-valuenow', String(split));
+    handle.setAttribute('aria-valuetext', `Editor ${split}% of the width`);
+    if (save) { setPref('localStorage', SPLIT_KEY, String(split)); if (playground) playground.setView({}); }
+  }
+  function setSplit(n, save) { split = clampSplit(n); paintSplit(save); }
+  handle.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    ev.preventDefault();
+    handle.setPointerCapture(ev.pointerId);
+    handle.classList.add('is-drag');
+    const box = grid.getBoundingClientRect();
+    const move = (e) => setSplit(((e.clientX - box.left) / box.width) * 100, false);
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.classList.remove('is-drag');
+      paintSplit(true);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end, { once: true });
+    handle.addEventListener('pointercancel', end, { once: true });
+  });
+  handle.addEventListener('dblclick', () => setSplit(SPLIT_DEFAULT, true));
+  handle.addEventListener('keydown', (ev) => {
+    const step = ev.shiftKey ? 10 : 2;
+    const to = { ArrowLeft: split - step, ArrowRight: split + step, Home: SPLIT_MIN, End: SPLIT_MAX }[ev.key];
+    if (to === undefined) return;
+    ev.preventDefault();
+    setSplit(to, true);
+  });
+  paintSplit(false);
   window.addEventListener('keydown', (ev) => {
     const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(ev.code); // Option+digit types a character on macOS, so match the key
     if (!ev.altKey || ev.ctrlKey || ev.metaKey || i < 0) return;
