@@ -124,9 +124,9 @@ Two ways to write an automation that reads through a read model, both accepted:
 
 ### Read models
 
-- New statement form: `read model Name(params) = [events] => { fields }`. Two words, matching how people say it.
+- New statement form: `readmodel Name(params) = [events] => { fields }`. One word, like every other keyword (owner's choice). `read-model` is avoided because lowercase hyphenated words are events.
 - `view` keeps working as a short form, with the same meaning.
-- Examples, docs, the homepage listings and the app's "Start small" model use `read model`.
+- Examples, docs, the homepage listings and the app's "Start small" model use `readmodel`.
 - The CLI gains a `readmodels` command; `views` keeps working.
 - Words people read change from "view" to "read model": board labels and legend, the system diagrams' labels, check messages, CLI help and human-readable output, the app's text, the homepage copy, and the docs (`docs/LANGUAGE.md`, `docs/GLOSSARY.md`, `docs/EVENT-MODELING.md`, `README.md`, `EVENTLINE-AXI.md`).
 - Machine-readable output keys stay `views`.
@@ -137,7 +137,7 @@ Two ways to write an automation that reads through a read model, both accepted:
 
 "View" means a screen to many Event Modeling practitioners, so the docs say plainly which is which:
 
-- **A read model** is data folded from events: what a screen shows, what a query returns, or a projection no screen shows (`@projection`). It is written with `read model` and drawn in the middle row.
+- **A read model** is data folded from events: what a screen shows, what a query returns, or a projection no screen shows (`@projection`). It is written with `readmodel` and drawn in the middle row.
 - **A screen** is where a person sees a read model or starts a command. eventline writes it as `@trigger(type=ui, name="CartScreen", part="Checkout button")` on a command or a read model, and the board shows it on the arrow from the actor (for a command) or as `read in CartScreen` (for a read model).
 - The same distinction covers the other trigger types: an endpoint, a command line tool or an agent is where something is read or started, never a read model itself.
 
@@ -147,7 +147,7 @@ Where this goes:
 - glossary entries for **Read model** and **Screen** (with "View" pointing to Read model), in `docs/GLOSSARY.md`;
 - a vocabulary table in `docs/EVENT-MODELING.md` mapping classic Event Modeling, SliceRM and eventline words: read model / view model / query / view; screen / wireframe / trigger; automation / processor / policy and worker; translation / translator;
 - one homepage FAQ answer: "Is a read model a screen?"
-- The playground highlighter, the docs grammar (`docs-site/src/code/eventline.tmLanguage.json`), the docs' code-shape check (`docs-site/src/code/eventline-source.mjs`) and the app's autocomplete snippet learn `read model`.
+- The playground highlighter, the docs grammar (`docs-site/src/code/eventline.tmLanguage.json`), the docs' code-shape check (`docs-site/src/code/eventline-source.mjs`) and the app's autocomplete snippet learn `readmodel`.
 
 ### Homepage
 
@@ -157,16 +157,15 @@ The homepage's board image is regenerated, and its description, which mentions t
 
 - Parser: a policy starting `from [...]`, with and without a guard; its trigger shape; `from` without `[` is an error.
 - Board: three rows; processors in the actor row; a read-model-started processor placed after its read models with no event or implied node; one implied read model per triggering event, fed by the event and read by the processor; no edge from an event into a command or a processor; the `checks` note, including `(assumed)`.
-- Parser: `read model` and `view` produce the same model.
+- Parser: `readmodel` and `view` produce the same model.
 - Rule: the catalogue examples, plus the severity under each profile.
 - Site: the existing tests, after `node scripts/build-site.js`.
 - In a browser: the app and the homepage boards for all four examples, the board tracing, and the links between diagrams.
 
 ## Decisions made by the designer
 
-The owner chose the approach, layout B (read models share the command row), "read model" as the name, documenting read models versus screens, both automation forms (event then read model, and read model alone), and that predefined events are a separate step. These were settled during design and can be changed on review:
+The owner chose the approach, layout B (read models share the command row), "read model" as the name, `readmodel` as the keyword, documenting read models versus screens, both automation forms (event then read model, and read model alone), and that predefined events are a separate step. These were settled during design and can be changed on review:
 
-- The keyword `read model` (two words) rather than `readmodel`.
 - Row labels `ACTOR`, `COMMAND · READ MODEL`, `EVENT`.
 - One implied read model per triggering event, labelled with the event's name.
 - An unnamed `automation` processor for policy rules with no worker.
