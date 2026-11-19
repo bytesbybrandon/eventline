@@ -515,7 +515,7 @@
       let best = null; let size = Infinity;
       for (const [id, el] of pgBoard.tracer.nodes) {
         if (!el.dataset.lines || el.dataset.kind === 'actor' || el.dataset.kind === 'external') continue;
-        for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && to - from < size) { best = id; size = to - from; }
+        for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && to - from < size || (to - from === size && el.dataset.kind === 'policy')) { best = id; size = to - from; }
       }
       return best;
     }

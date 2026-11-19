@@ -237,3 +237,24 @@ test('boardToGraph keeps every node and edge for the exporters', () => {
   assert.equal(g.nodes.length, b.nodes.length);
   assert.equal(g.edges.length, b.edges.length);
 });
+
+test('board svg: row labels, implied read models drawn dashed, and source lines on new nodes', () => {
+  const svg = render(load('twitter-pure.dsl'), 'eventmodel', 'svg', 'dark');
+  for (const l of ['ACTOR', 'COMMAND · READ MODEL', 'EVENT']) assert.ok(svg.includes(`>${l}<`), l);
+  assert.ok(!/>POLICY<|>VIEW</.test(svg));
+  const imp = svg.slice(svg.indexOf('data-id="implied:tweet-liked"'), svg.indexOf('data-id="implied:tweet-liked"') + 400);
+  assert.match(imp, /data-lines="\d+-\d+"/); assert.match(imp, /stroke-dasharray/);
+  assert.match(svg, /implied read model/); assert.match(svg, /read model/);
+  assert.ok(!/fact or view the command reads/.test(svg));
+});
+test('board links: a processor still links to its worker in the containers diagram', () => {
+  const svg = render(load('twitter-pure.dsl'), 'eventmodel', 'svg', 'dark', { links: true });
+  assert.match(svg.slice(svg.indexOf('data-id="pol:notification-worker"'), svg.indexOf('data-id="pol:notification-worker"') + 1500), /containers/);
+});
+test('board svg: a long checks note wraps and keeps (assumed) with its fact', () => {
+  const svg = render(load('twitter-pure.dsl'), 'eventmodel', 'svg', 'dark');
+  const notes = [...svg.matchAll(/font-size="9.5"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.ok(notes.every((s) => s.length <= 44), 'note lines stay narrow');
+  const board = buildBoard(load('twitter-pure.dsl'));
+  assert.ok(board.nodes.some((n) => n.checks && n.checks.length > 1));
+});

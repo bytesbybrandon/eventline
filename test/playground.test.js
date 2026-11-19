@@ -42,3 +42,6 @@ test('board links keep only the addresses the link-url check allows', () => {
   for (const bad of ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', '\u0001\tjavascript:x', 'data:text/html,x', 'vbscript:x', '']) assert.equal(safeHref(bad), false, bad);
   for (const ok of ['https://x', 'http://x', ' HTTPS://x', '/eventline/', './a.svg', '../a.svg', '#d=context', '#d=context&n=Cart']) assert.equal(safeHref(ok), true, ok);
 });
+test('click-to-source prefers the processor when it shares lines with an implied read model', () => {
+  assert.match(read('site/playground.js'), /size && el\.dataset\.kind === 'policy'/);
+});
