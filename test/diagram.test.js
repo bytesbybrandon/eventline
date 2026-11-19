@@ -119,6 +119,32 @@ test('needsImpliedReadModel: only an event trigger with no from read model fed b
   assert.deepEqual(m.policies.map((p) => needsImpliedReadModel(m, p)), [false, true, false, false]);
 });
 
+test('board: a read model sits between the command that feeds it and the next command (Start small)', () => {
+  const b = buildBoard(parse([
+    'Customer -> addItem(cartId, sku) in Cart(cartId)', 'on [cart-opened(cartId)]', '  --[outOfStock(sku)]--> [item-rejected { cartId, sku }]', '  --[default]--> [item-added { cartId, sku }]',
+    'Customer -> checkout(cartId) in Cart(cartId)', 'on [item-added*(cartId)]', '  --[default]--> [order-placed { cartId }]',
+    'readmodel CartSummary(cartId) = [item-added*(cartId)] => { items: count(item-added*(cartId)) }',
+    'order-placed { cartId }', '  -> fulfilment-worker -> shipOrder(cartId)',
+  ].join('\n')));
+  const col = (id) => byId(b, id).col;
+  assert.ok(col('cmd:addItem') < col('view:CartSummary') && col('view:CartSummary') < col('cmd:checkout'));
+  assert.ok(col('evt:order-placed') < col('implied:order-placed') && col('implied:order-placed') < col('pol:fulfilment-worker') && col('pol:fulfilment-worker') < col('cmd:shipOrder'));
+});
+
+test('board: in twitter-pure each read model sits right of its latest feeding event and left of later commands', () => {
+  const m = load('twitter-pure.dsl');
+  const b = buildBoard(m);
+  const cmds = b.nodes.filter((n) => n.kind === 'command' && n.declared !== false);
+  for (const v of m.views) {
+    const node = byId(b, `view:${v.name}`);
+    const feeds = v.sources.map((s) => byId(b, `evt:${s.name}`)).filter(Boolean).map((n) => n.col);
+    if (!feeds.length) continue;
+    const latest = Math.max(...feeds);
+    assert.ok(node.col > latest, `${v.name} right of its events`);
+    for (const c of cmds) if (c.col > latest) assert.ok(node.col < c.col, `${v.name} left of ${c.id}`);
+  }
+});
+
 test('board: slices follow the four Event Modeling patterns', () => {
   const types = (f) => new Set(buildBoard(load(f)).slices.map((s) => s.type));
   assert.deepEqual([...types('twitter-pure.dsl')].sort(), ['automation', 'state change', 'state view']);
