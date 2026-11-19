@@ -54,7 +54,8 @@ export function rewriteLink(target, from) {
 
 /* Fenced blocks with no language, or "text", that hold eventline source get the eventline language. Others stay as written. */
 export function tagEventline(body) {
-  return body.replace(/^(```)(text)?\n([\s\S]*?)^```$/gm, (m, fence, lang, code) => (looksLikeEventline(code) ? `${fence}eventline\n${code}${fence}` : m));
+  // match every block, whatever its language, so a block's closing fence is never taken for the next one's opening
+  return body.replace(/^(```)([\w-]*)\n([\s\S]*?)^```$/gm, (m, fence, lang, code) => ((!lang || lang === 'text') && looksLikeEventline(code) ? `${fence}eventline\n${code}${fence}` : m));
 }
 
 /* The short name each page has in the sidebar. */

@@ -141,3 +141,9 @@ test('the docs cover short guards, named policies and declared events', () => {
   assert.match(lang, /## Named policies/); assert.match(lang, /## Predefined events/);
   const g = read('docs/GLOSSARY.md'); assert.match(g, /### Named policy/); assert.match(g, /### Declared event/);
 });
+
+test('a block already tagged eventline keeps its closing fence, and the blocks after it pair up as written', async () => {
+  const { tagEventline } = await load();
+  const body = '```eventline\nuser -> go(id)\n  --[default]--> [go-done { id }]\n```\n\n### Next\n\n```eventline\nevent item-added { id }\n```\n';
+  assert.equal(tagEventline(body), body);
+});
