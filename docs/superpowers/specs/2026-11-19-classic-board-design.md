@@ -145,7 +145,7 @@ Where this goes:
 
 - a short section, "Read models and screens", in `docs/LANGUAGE.md`, with one example showing a screen that reads a read model and starts a command;
 - glossary entries for **Read model** and **Screen** (with "View" pointing to Read model), in `docs/GLOSSARY.md`;
-- a vocabulary table in `docs/EVENT-MODELING.md` mapping classic Event Modeling, SliceRM and eventline words: read model / view model / query / view; screen / wireframe / trigger; automation / processor / policy and worker; translation / translator;
+- a vocabulary table in `docs/EVENT-MODELING.md` mapping classic Event Modeling, SliceRM and eventline words: read model / read model (labelled "Query" in DCB mode and "View model" in classic mode) / `readmodel` (`view` is the short form); screen / trigger (the generic element for a screen, endpoint, CLI or agent) / `@trigger(type=ui)`; automation / automation / the board draws a processor and the text writes a policy with a worker; translation / translator / translation;
 - one homepage FAQ answer: "Is a read model a screen?"
 - The playground highlighter, the docs grammar (`docs-site/src/code/eventline.tmLanguage.json`), the docs' code-shape check (`docs-site/src/code/eventline-source.mjs`) and the app's autocomplete snippet learn `readmodel`.
 
