@@ -200,7 +200,9 @@
   const menu = $('#ap-menu');
   const closeMenu = () => { if (menu.matches(':popover-open')) menu.hidePopover(); };
   const reopenMenu = () => { if (menu.matches(':popover-open')) renderMenu(); else menu.showPopover(); }; // a modal dialog closes the menu
-  const toEditor = () => { closeMenu(); playground.textarea.focus(); };
+  // Opening a model from a practice screen returns to the workspace, saving any review notes on the way.
+  const showWorkspace = () => { if (document.body.dataset.mode === 'practice') window.EventlinePracticeUI.leave(); };
+  const toEditor = () => { closeMenu(); showWorkspace(); playground.textarea.focus(); };
   const dateText = (ms) => new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
   function ask(dialog) {
@@ -372,6 +374,7 @@
     if (locked) { showNotice('Links cannot be opened during a practice attempt.'); syncAddress(); return; }
     if (!canLeave()) { syncAddress(); return; }
     const notice = openAddress(address);
+    showWorkspace();
     if (address.view) playground.setView(address.view);
     syncAddress();
     if (notice) showNotice(notice);

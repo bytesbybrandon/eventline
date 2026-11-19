@@ -384,5 +384,5 @@
     if (active) startWork(); else paintSlot();
   }
 
-  window.EventlinePracticeUI = { init, resumeActive };
+  window.EventlinePracticeUI = { init, resumeActive, leave: toWorkspace };
 })();
