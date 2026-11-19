@@ -288,7 +288,7 @@
         </details>
         <details name="faq">
           <summary>What is a Dynamic Consistency Boundary?</summary>
-          <p>It scopes a decision by a key, such as <code>userId</code>, instead of by an aggregate. A command reads only the events inside its boundary, so two users never contend for the same lock.</p>
+          <p>It keeps a decision consistent without tying it to one aggregate's stream. Each event is tagged with what it is about, such as a <code>userId</code>. A command reads the events whose types and tags it needs, decides, and appends only if no matching event was added since it read. In eventline, <code>in UserTimeline(userId)</code> names those tags. <a href="https://dcb.events/">Read more at dcb.events.</a></p>
         </details>
         <details name="faq">
           <summary>Can I use it in a system design interview?</summary>
