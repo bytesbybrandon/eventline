@@ -417,7 +417,8 @@ In the model above, `cart-abandoned` is not drawn, and `validate --profile works
 
 A used event that nothing records is either declared or assumed.
 A command that checks a declared one says `checks cart-abandoned (declared)` instead of `(assumed)`.
-Where the board draws such an event, as the event that starts a policy, a declared one is filled with a dashed outline and marked `declared` instead of `assumed`.
+Where the board draws such an event, as the event that starts a policy, a declared one is filled with a dashed outline and marked `declared` instead of `assumed`, or `declared · Shop` when it is declared inside `context Shop`.
+A read model fed by one says `from cart-abandoned (declared)`.
 `eventline-axi events` lists declared events and says which are not used and which are not recorded.
 
 A field list is the event's contract.

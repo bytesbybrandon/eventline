@@ -308,6 +308,11 @@ test('board: a used declared event is styled declared; an unused one is absent',
   assert.equal(b.nodes.some((n) => n.id === 'evt:ghost-seen'), false);
   assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(declared\)/);
 });
+test('board: a declared event shows its declaring context, and a read model notes a declared source', () => {
+  const b = buildBoard(parse('context Shop {\n  event cart-opened { cartId }\n}\ncart-opened { cartId } -> w -> go(cartId)\nreadmodel Carts(cartId) = [cart-opened*(cartId)] => { cartId }'));
+  assert.equal(b.nodes.find((n) => n.id === 'evt:cart-opened').sub, 'declared · Shop');
+  assert.deepEqual(b.nodes.find((n) => n.id === 'view:Carts').notes, ['from cart-opened (declared)']);
+});
 test('board: an undeclared event nothing records is still assumed', () => {
   const b = buildBoard(parse('user -> add(cartId)\non [cart-opened(cartId)]\n  --[default]--> [item-added { cartId }]'));
   assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(assumed\)/);
