@@ -540,7 +540,7 @@ Instead of:
 ```text
 user -> addItem(cartId, sku)
   --[default]--> [item-added { cartId, sku }]
-view Cart(cartId) = [item-added*(cartId)] => { cartId, total }
+readmodel Cart(cartId) = [item-added*(cartId)] => { cartId, total }
 ```
 
 write:
@@ -548,7 +548,7 @@ write:
 ```text
 user -> addItem(cartId, sku)
   --[default]--> [item-added { cartId, sku }]
-view Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }
+readmodel Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }
 ```
 
 ### dependency-cycle
