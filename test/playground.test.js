@@ -8,6 +8,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 const html = read('site/index.html');
+const requiredIds = [...read('site/playground.js').match(/REQUIRED_IDS = \[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 
 test('the homepage loads the shared playground before its own script', () => {
   assert.ok(html.indexOf('src="playground.js"') > -1);
@@ -19,7 +20,11 @@ test('the playground code lives in one place', () => {
   assert.ok(read('site/playground.js').includes('function drawBoard'));
 });
 test('the homepage has every element the playground needs', () => {
-  const ids = [...read('site/playground.js').match(/REQUIRED_IDS = \[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  assert.ok(ids.length > 15);
-  for (const id of ids) assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
+  assert.ok(requiredIds.length > 15);
+  for (const id of requiredIds) assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
+});
+test('the app has every element the playground needs and loads its modules', () => {
+  const app = read('site/app/index.html');
+  for (const id of requiredIds) assert.ok(app.includes(`id="${id}"`), `missing #${id}`);
+  for (const src of ['../eventline.js', '../playground.js', 'store.js', 'session.js', 'zip.js', 'app.js']) assert.ok(app.includes(`src="${src}"`), src);
 });
