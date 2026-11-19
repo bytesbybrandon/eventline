@@ -58,28 +58,9 @@ The playground on the landing page runs `site/eventline.js`, which is `lib/index
 The board SVG tags every node and edge with `data-id`, `data-from` and `data-to`, which the page uses to light a box's lineage.
 Command, view and policy nodes also carry `data-lines`, the source lines the parser recorded (`line` to `endLine`), so a click on a box finds its text in the playground editor and the caret finds its box.
 `test/site.test.js` fails when the page's counts, DSL listing, board, bundle or example copies drift from `examples/`.
-A model can be shared as `/eventline/#play=<base64url of the text>`; the docs link to the app with the same hash, `/eventline/app/#play=...`.
+A model can be shared as `/eventline/#play=<base64url of the text>`; the docs use the same link.
 The link can also name a diagram and a box, `&d=containers&n=view%3AOrders`, and turn on links between diagrams, `&links=1`.
 The playground's diagram tabs and Links button read and write those parts, and the back button walks the links you followed.
-
-## The modeling app
-
-`site/app/` is a static page for writing and keeping models.
-It reuses the playground's code, so it parses, checks and draws exactly as the homepage does.
-`index.html` is the page and `app.css` its styles.
-`app.js` wires the page together.
-`store.js` keeps models in the browser's `localStorage`, and nowhere else.
-`session.js` holds the state of the open model, reads the page address and checks imported files.
-`editor.js` attaches the completion popup and the editing help to the editor.
-`complete.js` suggests completions as you type.
-`editing.js` handles indentation, Tab, bracket pairs and bracket matching.
-`zip.js` writes the zip a set of models is exported as.
-`practice.js` holds the rules of a practice attempt: its timer, pausing, finishing and past attempts.
-`practice-ui.js` draws the practice screens and stores each attempt as a model.
-`prompts.json` holds the practice prompts and their requirements, and names each one's reference model in `site/examples/`.
-The pure modules (`store.js`, `session.js`, `complete.js`, `editing.js`, `zip.js`, `practice.js`) are tested under Node.
-Model text never leaves the browser.
-The homepage playground's "Open in the app" link and the docs' playground links open `app/#play=<base64url of the text>` as a draft.
 
 ## The docs site
 

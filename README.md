@@ -59,7 +59,7 @@ npx -y eventline-axi twitter-pure.dsl
 Diagram types, formats and what each one is derived from are in [EVENTLINE-AXI.md](./EVENTLINE-AXI.md).
 Every validation rule, with why it exists and how to fix it, is in [docs/RULES.md](./docs/RULES.md).
 
-You can also write a model in the browser: the [modeling app](https://bytesbybrandon.github.io/eventline/app/) runs the same parser, checks and diagrams, saves your models in the browser, has a practice mode, and shares a model as a link.
+You can also write a model in the browser: the [playground](https://bytesbybrandon.github.io/eventline/#play) runs the same parser, checks and diagrams, and shares a model as a link.
 
 ## Learn the notation
 

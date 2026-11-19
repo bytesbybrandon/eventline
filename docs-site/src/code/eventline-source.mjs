@@ -30,4 +30,4 @@ export function isDrawable(text) {
   return !!m && m.commands.length + m.views.length + m.policies.length > 0 && text.split('\n').filter((l) => l.trim()).length >= 3;
 }
 
-export const playgroundHref = (text) => `/eventline/app/#play=${Buffer.from(text, 'utf8').toString('base64url')}`;
+export const playgroundHref = (text) => `/eventline/#play=${Buffer.from(text, 'utf8').toString('base64url')}`;

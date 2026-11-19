@@ -87,7 +87,7 @@ test('the playground link carries the model as base64url that decodes back to th
   const { playgroundHref, isDrawable } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
   const text = 'user -> postTweet(content) in UserTimeline(userId)\non [user-authenticated(userId)]\n  --[default]--> [tweet-created { userId, note: "h\u00e9llo" }]\n';
   const href = playgroundHref(text);
-  assert.match(href, /^\/eventline\/app\/#play=[A-Za-z0-9_-]+$/);
+  assert.match(href, /^\/eventline\/#play=[A-Za-z0-9_-]+$/);
   assert.equal(Buffer.from(href.split('#play=')[1], 'base64url').toString('utf8'), text);
   assert.ok(isDrawable(text));
   assert.ok(!isDrawable('user -> postTweet(content)'), 'a one-line fragment is not worth drawing');
