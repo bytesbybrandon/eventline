@@ -240,3 +240,7 @@ test('automation-reads-event: an event-started automation should read a read mod
   assert.equal(found(bad, 'slicerm').find((i) => i.rule === 'automation-reads-event').severity, 'warn');
   for (const text of [good, alone]) assert.ok(!ids(text, 'slicerm').includes('automation-reads-event'));
 });
+
+test('no rule text people read says view where it means a read model', () => {
+  for (const r of RULES) for (const k of ['title', 'why', 'fix']) assert.doesNotMatch(r[k].replace(/state view/gi, '').replace(/`view [^`]*`/g, ''), /\bviews?\b(?! model)/i, `${r.id}.${k}`);
+});

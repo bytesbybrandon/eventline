@@ -38,10 +38,10 @@ npx -y eventline-axi rules --profile slicerm
 | `fields` | Information that appears from nowhere |
 | `references` | A name points at something that is not there |
 | `naming` | Names that break the project convention |
-| `routes` | How triggers reach commands and views |
+| `routes` | How triggers reach commands and read models |
 | `schedule` | When timers fire |
 | `scenarios` | Given, when, then examples |
-| `triggers` | What a person or system uses to reach a command or view |
+| `triggers` | What a person or system uses to reach a command or read model |
 | `links` | Links between diagrams |
 | `slices` | What belongs together in one unit of delivery |
 | `hints` | Allowed, but often worth a second look |
@@ -53,24 +53,24 @@ They report a language that is wrong or inconsistent: a statement that cannot me
 
 ### on-facts
 
-**A view listed in on [...].**
+**A read model listed in on [...].**
 Severity: error.
 Category: references.
 
 on [...] lists the events a command needs.
-A view is read with from [...], not on.
+A read model is read with from [...], not on.
 
-How to fix it: Move the view to from [...], or list the event the view is built from.
+How to fix it: Move the read model to from [...], or list the event the read model is built from.
 
 ### from-facts
 
-**Reads a view that is not declared.**
+**Reads a read model that is not declared.**
 Severity: warn.
 Category: references.
 
-from [...] names a view that no view statement defines, so nothing says what it holds.
+from [...] names a read model that no declaration defines, so nothing says what it holds.
 
-How to fix it: Declare the view, or fix the name.
+How to fix it: Declare the read model, or fix the name.
 
 ### unknown-boundary
 
@@ -84,22 +84,22 @@ How to fix it: Add boundary Name(key), or fix the name.
 
 ### view-from-view
 
-**A view projects from a view.**
+**A read model projects from a read model.**
 Severity: error.
 Category: references.
 
-Views are folds over events.
-A view cannot be built from another view.
+Read models are folds over events.
+A read model cannot be built from another read model.
 
-How to fix it: List the events the second view needs, not the view.
+How to fix it: List the events the second read model needs, not the read model.
 
 ### view-sources
 
-**A view has no source events.**
+**A read model has no source events.**
 Severity: warn.
 Category: structure.
 
-A view with no events folds nothing.
+A read model with no events folds nothing.
 
 How to fix it: List the events it projects from between the brackets.
 
@@ -199,11 +199,11 @@ How to fix it: Declare it with actor Name { ... } or list it under external in t
 
 ### freshness
 
-**A view is read without a freshness stance.**
+**A read model is read without a freshness stance.**
 Severity: info.
 Category: references.
 
-A command that reads a view decides on something that may be stale.
+A command that reads a read model decides on something that may be stale.
 
 How to fix it: Add @fresh<10s>, @eventual or @strong to the fact.
 
@@ -341,7 +341,7 @@ How to fix it: Add its Given, When and Then lines.
 
 ### scenario-duplicate
 
-**Two scenarios share a name under one command or view.**
+**Two scenarios share a name under one command or read model.**
 Severity: warn.
 Category: scenarios.
 
@@ -376,7 +376,7 @@ Severity: warn.
 Category: scenarios.
 
 A scenario written as steps has any number of given steps, exactly one when naming the command it sits under, and one then.
-Views and policies take prose scenarios for now.
+Read models and policies take prose scenarios for now.
 
 How to fix it: Add the missing step, or point when at the command above.
 
@@ -478,7 +478,7 @@ How to fix it: Remove it, or move it to the statement the rule reports on.
 Severity: warn.
 Category: structure.
 
-A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (action, data, next, rule, example, view, who, time) and status (open, resolved).
+A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (what it is about, such as action, data, next, rule, example, who or time) and status (open, resolved).
 A request says what must change with concerns="...".
 
 How to fix it: Write @hotspot("Does the guest lose the deposit?", kind=assumption, category=rule).
@@ -526,11 +526,11 @@ user -> addItem(cartId, sku) in Cart(cartId)
 
 ### unsourced-view-field
 
-**A view shows a field no event carries.**
+**A read model shows a field no event carries.**
 Severity: warn.
 Category: fields.
 
-A view is a fold over events, so every plain field must be in the payload of an event it projects from.
+A read model is a fold over events, so every plain field must be in the payload of an event it projects from.
 Computed fields are exempt.
 
 How to fix it: Add the field to an event it reads, or compute it, as in total: count(order-placed*(id)).
@@ -583,9 +583,9 @@ Category: slices.
 
 A slice owns one query.
 Several read models in one slice invite several queries where one shaped for the reader would do.
-Reading views that other slices define is always fine.
+Reading read models that other slices define is always fine.
 
-How to fix it: Fold them into one view shaped for how it is read, or give each its own @slice.
+How to fix it: Fold them into one read model shaped for how it is read, or give each its own @slice.
 
 ### automation-reads-event
 
@@ -617,15 +617,15 @@ x-happened from [Todo] -> w -> go(id)
 
 ### slice-no-scenario
 
-**Commands and views have no scenario.**
+**Commands and read models have no scenario.**
 Severity: info.
 Category: scenarios.
 
 A slice is specified with a given, when, then example.
-This counts the commands and views that have none.
+This counts the commands and read models that have none.
 Models that keep scenarios elsewhere can ignore it.
 
-How to fix it: Add scenario "name" { ... } under the command or view.
+How to fix it: Add scenario "name" { ... } under the command or read model.
 
 ### translation-no-dedupe
 
@@ -635,9 +635,9 @@ Category: fields.
 
 A command issued by an outside system is a fact someone else recorded.
 It can be delivered twice, so the model says which field tells a repeat from a new one. @dedupe names it, and @correlate names the field that ties the fact to something here.
-Both count as supplying that field to the events and views that carry it.
+Both count as supplying that field to the events and read models that carry it.
 
-How to fix it: Add @dedupe(eventId) to the command, view or policy that consumes the fact.
+How to fix it: Add @dedupe(eventId) to the command, read model or policy that consumes the fact.
 
 Instead of:
 
@@ -668,11 +668,11 @@ How to fix it: Keep them if they are one fact, otherwise split the second into a
 
 ### view-many-sources
 
-**Four or more events feed one view.**
+**Four or more events feed one read model.**
 Severity: info.
 Category: hints.
 
-Combining streams is fine, but each event ties the view to the command that records it, so fewer is easier to change.
+Combining streams is fine, but each event ties the read model to the command that records it, so fewer is easier to change.
 
 How to fix it: Check that every source is needed.
 
@@ -695,7 +695,7 @@ How to fix it: Add a scenario whose text names the code.
 
 ### route-duplicate
 
-**Two commands or views share a method and route.**
+**Two commands or read models share a method and route.**
 Severity: warn.
 Category: routes.
 

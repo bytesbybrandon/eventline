@@ -55,8 +55,9 @@ program
   .action((file, opts) => runSubcommand('events', file, opts));
 
 program
-  .command('views <file>')
-  .description('List views/projections in the model')
+  .command('readmodels <file>')
+  .alias('views')
+  .description('List read models in the model (views is an alias)')
   .option('-f, --format <fmt>', 'Output format', 'toon')
   .action((file, opts) => runSubcommand('views', file, opts));
 
@@ -80,13 +81,13 @@ program
 
 program
   .command('scenarios <file>')
-  .description('List the scenarios written under commands and views')
+  .description('List the scenarios written under commands and read models')
   .option('-f, --format <fmt>', 'Output format', 'toon')
   .action((file, opts) => runSubcommand('scenarios', file, opts));
 
 program
   .command('deps <file> <entity>')
-  .description('Show dependencies for an entity (event|view|command)')
+  .description('Show dependencies for an entity (event|read model|command)')
   .option('-f, --format <fmt>', 'Output format', 'toon')
   .action((file, entity, opts) => runSubcommand('deps', file, opts, entity));
 

@@ -14,6 +14,7 @@
     snip('system', 'system  {\n  slo: 99.9% uptime\n}', 7),
     snip('actor', 'actor  { auth: session }', 6),
     snip('boundary', 'boundary (id) @partition(shardKey="id")', 9),
+    snip('readmodel', 'readmodel (id) = [event-name*(id)] => {\n  total: count(event-name*(id))\n}', 10),
     snip('view', 'view (id) = [event-name*(id)] => {\n  total: count(event-name*(id))\n}', 5),
     snip('context', 'context  {\n}', 8),
     snip('scenario', 'scenario "" {\n}', 10),
@@ -31,7 +32,7 @@
       out.push({ label: label, kind: kind });
     }
     if (model.events) model.events.forEach(function (_, name) { add(name, 'event'); });
-    [['commands', 'command'], ['views', 'view'], ['boundaries', 'boundary'], ['actors', 'actor']].forEach(function (p) {
+    [['commands', 'command'], ['views', 'read model'], ['boundaries', 'boundary'], ['actors', 'actor']].forEach(function (p) {
       (model[p[0]] || []).forEach(function (x) { add(x.name, p[1]); });
     });
     return out;

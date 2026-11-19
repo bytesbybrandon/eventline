@@ -47,3 +47,7 @@ test('click-to-source prefers the processor when it shares lines with an implied
   assert.match(js, /len === size && el\.dataset\.kind === 'policy'/);
   assert.equal(js.split('closer(el,').length - 1, 2); // one helper, used by the caret and by a finding
 });
+
+test('the highlighter knows readmodel', () => {
+  assert.match(read('site/playground.js'), /\|readmodel\|/);
+});

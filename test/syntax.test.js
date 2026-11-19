@@ -166,7 +166,7 @@ test('triggers command lists each screen, endpoint or other trigger with who use
   const out = rows(parse(`auditor -> failAudit() ${T}\n  --[default]--> [audit-failed]\nview V(id) = [audit-failed] => { x } @trigger(type=ui, name="AuditingScreen")\n`));
   assert.deepEqual(out.map((r) => [r.trigger, r.part, r.actor, r.reaches]), [
     ['AuditingScreen', 'Fail button', 'auditor', 'failAudit()'],
-    ['AuditingScreen', '', '', 'view V'],
+    ['AuditingScreen', '', '', 'read model V'],
   ]);
 });
 
@@ -231,8 +231,8 @@ test('scenarios: inside a context they stay with their own command, and cannot f
   assert.equal(m.commands[0].scenarios.length, 1);
   assert.equal(m.commands[1].scenarios.length, 0);
   const bad = (s, re) => assert.throws(() => parse(s), (e) => e instanceof ParseError && re.test(e.message));
-  bad('scenario "x" {\n a\n}\n', /right after the command or view/);
-  bad('context A {\n  u -> a()\n    --[default]--> [a-b]\n}\nscenario "x" {\n a\n}\n', /right after the command or view/);
+  bad('scenario "x" {\n a\n}\n', /right after the command or read model/);
+  bad('context A {\n  u -> a()\n    --[default]--> [a-b]\n}\nscenario "x" {\n a\n}\n', /right after the command or read model/);
   bad('u -> a()\n  --[default]--> [a-b]\nscenario "x" {\n a\n', /Unclosed/);
   bad('u -> a()\n  --[default]--> [a-b]\nscenario "x" { a }\n', /scenario "name" \{/);
 });
@@ -250,5 +250,5 @@ test('scenarios: validate flags an empty body and a repeated name', () => {
 
 test('scenarios command lists what each command or view checks', () => {
   const { rows } = require('../lib/commands/scenarios');
-  assert.deepEqual(rows(parse(SC)).map((r) => [r.checks, r.scenario, r.lines]), [['fail()', 'Fail an audit', 4], ['fail()', 'Second', 1], ['view V', 'Shown', 1]]);
+  assert.deepEqual(rows(parse(SC)).map((r) => [r.checks, r.scenario, r.lines]), [['fail()', 'Fail an audit', 4], ['fail()', 'Second', 1], ['read model V', 'Shown', 1]]);
 });

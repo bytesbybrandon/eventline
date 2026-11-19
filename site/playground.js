@@ -171,8 +171,8 @@
       '    order-placed { cartId, placedAt: clock.wall() }',
       '  ]',
       '',
-      '// A view is a fold over events. It answers questions without asking the commands.',
-      'view CartSummary(cartId) = [item-added*(cartId)] => {',
+      '// A read model is a fold over events. It answers questions without asking the commands.',
+      'readmodel CartSummary(cartId) = [item-added*(cartId)] => {',
       '  items: count(item-added*(cartId))',
       '}',
       '',
@@ -187,7 +187,7 @@
     };
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const TOKEN = /(@[A-Za-z_]\w*)|("(?:[^"\\]|\\.)*")|(->\s*)([A-Za-z_]\w*)(?=\()|(\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\*?)|(\bon(?=\s*\[)|\bfrom(?=\s*\[)|\bin(?=\s+[A-Z])|\b(?:default|reject)\b)/g;
-    const HEAD = /^(\s*)(system|actor|context|boundary|view|scenario)\b/;
+    const HEAD = /^(\s*)(system|actor|context|boundary|view|readmodel|scenario)\b/;
     function hlLine(line) {
       let code = line; let cm = '';
       for (let i = 0, q = false; i < line.length; i++) {
@@ -284,7 +284,7 @@
       if (!drawable) {
         clearBoard();
         pgEl.grid.dataset.state = 'empty';
-        pgEl.status.textContent = 'Nothing to draw yet. Add a command, an event, a view or a policy.';
+        pgEl.status.textContent = 'Nothing to draw yet. Add a command, an event, a read model or a policy.';
         const p = document.createElement('p'); p.className = 'pg__empty'; p.textContent = 'Write a command and the board appears.';
         pgEl.board.replaceChildren(p);
         lastSvg = '';
@@ -318,7 +318,7 @@
         const grp = $$('.gp', svg).find((g) => g.dataset.id === wanted);
         if (grp) { grp.classList.add('is-flash'); setTimeout(() => grp.classList.remove('is-flash'), 1400); }
       }
-      pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'view'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
+      pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'read model'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
       paintChecks(eventline.check(model, { profile: pgProfile }));
       viewChanged();
     }

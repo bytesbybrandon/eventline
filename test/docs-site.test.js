@@ -92,3 +92,10 @@ test('the playground link carries the model as base64url that decodes back to th
   assert.ok(isDrawable(text));
   assert.ok(!isDrawable('user -> postTweet(content)'), 'a one-line fragment is not worth drawing');
 });
+
+test('docs grammar and code-shape check know readmodel and from [', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('readmodel A(id) = [x-y*(id)] => { id }'));
+  assert.ok(looksLikeEventline('from [A] -> worker -> go()'));
+  assert.match(fs.readFileSync(path.join(root, 'docs-site', 'src', 'code', 'eventline.tmLanguage.json'), 'utf8'), /readmodel/);
+});

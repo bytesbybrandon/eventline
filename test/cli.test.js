@@ -46,3 +46,13 @@ test('a policy that starts from a read model is listed, traced and checked witho
     assert.doesNotThrow(() => check(parse(src), { profile: 'slicerm' }));
   } finally { require('node:fs').rmSync(tmp, { force: true }); }
 });
+
+test('readmodels lists read models, and views still works', () => {
+  const a = run('readmodels', file);
+  const b = run('views', file);
+  assert.equal(a.status, 0);
+  assert.equal(b.status, 0);
+  assert.ok(a.stdout.length > 0);
+  assert.equal(a.stdout, b.stdout);
+  assert.match(run('--help').stdout, /readmodels/);
+});
