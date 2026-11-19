@@ -120,4 +120,5 @@
 .ap-pop li { display: flex; justify-content: space-between; gap: var(--sc-4); padding: 0 var(--sc-2); border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .ap-pop li[aria-selected="true"] { background: var(--sc-accent); color: var(--sc-accent-ink); }
 .ap-pop__kind { opacity: 0.7; }
+.ap-match { position: absolute; z-index: 1; pointer-events: none; box-sizing: border-box; outline: 1px solid var(--sc-accent); border-radius: 2px; }
 .ap-probe { position: absolute; visibility: hidden; pointer-events: none; top: 0; left: 0; white-space: pre; overflow: hidden; height: 0; box-sizing: border-box; }

@@ -265,14 +265,18 @@
         model = eventline.parse(text);
         lastModel = model;
       } catch (err) {
+        // Leave nothing of the last model on screen: it may be another client's.
+        clearBoard();
         pgEl.grid.dataset.state = 'error';
         pgEl.status.classList.add('is-error');
         pgEl.status.textContent = err.message;
+        if (Number.isInteger(err.line) && err.line > 0) paintMarks([{ line: err.line, severity: 'error' }]);
         return;
       }
       pgEl.status.classList.remove('is-error');
       const drawable = model.commands.length + model.events.size + model.views.length + model.policies.length;
       if (!drawable) {
+        clearBoard();
         pgEl.grid.dataset.state = 'empty';
         pgEl.status.textContent = 'Nothing to draw yet. Add a command, an event, a view or a policy.';
         const p = document.createElement('p'); p.className = 'pg__empty'; p.textContent = 'Write a command and the board appears.';
@@ -286,6 +290,7 @@
       if (pgKind in can && !can[pgKind]) setKind('eventmodel');
       let svgText;
       try { svgText = eventline.render(model, pgKind, 'svg', theme, renderOpts()); } catch (err) {
+        clearBoard();
         pgEl.grid.dataset.state = 'error'; pgEl.status.classList.add('is-error'); pgEl.status.textContent = err.message; return;
       }
       lastSvg = svgText;
@@ -366,12 +371,21 @@
       showLines(ranges, true);
       viewChanged();
     }
-    function paintMarks() {
+    function clearBoard() {
+      pgEl.board.replaceChildren();
+      pgBoard = null;
+      lastSvg = '';
+      pgEl.trace.textContent = IDLE;
+      showLines([]);
+      paintChecks([]);
+      $('#pg-summary').textContent = '';
+    }
+    function paintMarks(issues = allIssues) {
       const host = $('#pg-marks');
       host.replaceChildren();
       const { lh, pt } = lineMetrics();
       const worst = new Map();
-      for (const it of allIssues) if (Number.isInteger(it.line) && it.line > 0 && !(worst.has(it.line) && SEV[worst.get(it.line)] <= SEV[it.severity])) worst.set(it.line, it.severity);
+      for (const it of issues) if (Number.isInteger(it.line) && it.line > 0 && !(worst.has(it.line) && SEV[worst.get(it.line)] <= SEV[it.severity])) worst.set(it.line, it.severity);
       for (const [line, sev] of worst) {
         const mark = document.createElement('b');
         mark.dataset.s = sev; mark.textContent = GLYPH[sev];
