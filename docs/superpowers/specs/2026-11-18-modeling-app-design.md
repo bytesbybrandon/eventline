@@ -134,6 +134,16 @@ Suggestions appear in the existing text box:
 - Accepting a suggestion must keep the browser's undo history working.
 - The list is announced to screen readers as a combobox popup.
 
+### Editing help (added by the owner on 2026-11-18)
+
+- **Indentation:** Enter keeps the current line's indentation and adds one level (two spaces) after a line ending in `{` or `[`. Typing `}` or `]` on an otherwise blank line removes one level.
+- **Tab:** inserts two spaces. With several lines selected, Tab indents them and Shift+Tab removes one level. When the suggestion popup is open, Tab accepts instead. Esc then Tab moves focus out of the editor, and the editor's description says so.
+- **Pairs:** typing `{`, `[`, `(` or `"` inserts its closing partner. Typing a closer that is already next to the caret steps over it. Backspace between an empty pair removes both. None of this happens inside a comment or a string.
+- **Matching:** when the caret is beside a bracket, it and its partner are highlighted.
+- **Syntax errors:** the line a parse error names gets an error mark beside it, as check findings do. This applies on the homepage too.
+- Every edit keeps the browser's undo history working.
+- A formatter is out of scope here. It belongs in the library and CLI, and is tracked as a GitHub issue.
+
 ### Practice mode
 
 **Pick.** Practice opens a list of prompts, each with its suggested time and the owner's past attempts.

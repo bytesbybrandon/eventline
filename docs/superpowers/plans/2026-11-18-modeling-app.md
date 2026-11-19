@@ -671,7 +671,98 @@ git commit -m "Add practice mode screens"
 
 ---
 
-### Task 11: Final verification
+### Task 11: Editing help
+
+**Files:**
+- Create: `site/app/editing.js` (global `EventlineEditing`)
+- Modify: `site/app/editor.js`, `site/app/index.html`, `site/app/app.css`, `site/playground.js` (parse error mark only)
+- Test: `test/app-editing.test.js`
+
+**Interfaces:**
+- Consumes: `EventlineEditor.attach` from Task 7, which already owns the textarea's keydown handling and the suggestion popup.
+- Produces:
+  - `Edit`: `{ from: number, to: number, insert: string, selStart: number, selEnd: number } | null`, meaning replace `from..to` with `insert`, then select `selStart..selEnd`. `null` means let the browser handle the key.
+  - `onEnter(text, selStart, selEnd) -> Edit`
+  - `onTab(text, selStart, selEnd, shift: boolean) -> Edit`
+  - `onType(text, selStart, selEnd, ch: string) -> Edit`, for `{ [ ( " } ] )`
+  - `onBackspace(text, selStart, selEnd) -> Edit`
+  - `matchBracket(text, caret) -> [number, number] | null`, the offsets of the bracket beside the caret and its partner
+  - `INDENT = '  '`
+
+- [ ] **Step 1: Write the failing tests**
+
+```js
+test('enter keeps indentation', () => { assert.equal(onEnter('  a', 3, 3).insert, '\n  '); });
+test('enter adds a level after an opening brace or bracket', () => {
+  assert.equal(onEnter('view V = [', 10, 10).insert, '\n  ');
+  assert.equal(onEnter('system S {', 10, 10).insert, '\n  ');
+});
+test('enter between a pair puts the closer on its own line', () => {
+  const e = onEnter('x {}', 3, 3);
+  assert.equal(e.insert, '\n  \n'); assert.equal(e.selStart, 6);
+});
+test('a closer on a blank line removes one level', () => {
+  const e = onType('a {\n    ', 8, 8, '}');
+  assert.equal(e.from, 4); assert.equal(e.insert, '  }');
+});
+test('tab inserts two spaces, and indents or dedents a selection of lines', () => {
+  assert.equal(onTab('a', 1, 1, false).insert, '  ');
+  assert.equal(apply('a\nb', onTab('a\nb', 0, 3, false)), '  a\n  b');
+  assert.equal(apply('  a\n  b', onTab('  a\n  b', 0, 7, true)), 'a\nb');
+});
+test('pairs close, step over and delete together', () => {
+  assert.equal(onType('', 0, 0, '(').insert, '()');
+  assert.equal(onType('()', 1, 1, ')').selStart, 2);
+  assert.deepEqual([onBackspace('()', 1, 1).from, onBackspace('()', 1, 1).to], [0, 2]);
+});
+test('no pairing inside a comment or a string', () => {
+  assert.equal(onType('// a', 4, 4, '('), null);
+  assert.equal(onType('"a', 2, 2, '('), null);
+});
+test('typing over a selection wraps it in the pair', () => { assert.equal(apply('ab', onType('ab', 0, 2, '[')), '[ab]'); });
+test('matchBracket finds partners across lines and ignores strings and comments', () => {
+  assert.deepEqual(matchBracket('a { "}" // }\n}', 3), [2, 13]);
+  assert.equal(matchBracket('a', 1), null);
+});
+```
+
+`apply(text, edit)` is a test helper that returns the text after the edit.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `node --test test/app-editing.test.js`
+Expected: FAIL, cannot find `site/app/editing.js`.
+
+- [ ] **Step 3: Implement `site/app/editing.js`**
+
+Comment and string detection uses the same rules as `site/app/complete.js`.
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `node --test test/app-editing.test.js`
+Expected: PASS
+
+- [ ] **Step 5: Wire it into the editor**
+
+In `site/app/editor.js`, when the suggestion popup is closed, route Enter, Tab, Shift+Tab, Backspace and the pair characters through these functions. Apply each `Edit` by selecting `from..to` and calling `document.execCommand('insertText', false, insert)`, then `setSelectionRange(selStart, selEnd)`, so undo keeps working. Esc followed by Tab within 1.5 seconds lets Tab move focus out of the editor. Add a sentence saying so to the textarea's description. Draw the bracket match as two outlined boxes positioned with the caret-measuring element from Task 7. In `site/playground.js`, give a `ParseError`'s `line` an error mark in `#pg-marks`, and clear it when the text parses.
+
+- [ ] **Step 6: Check it in a real browser**
+
+Confirm on the app page: Enter after `view V = [` indents; Enter between `{}` opens a block; Tab and Shift+Tab work on one line and on several; pairs close and step over; Ctrl+Z undoes each edit in one step; Esc then Tab leaves the editor; the bracket match shows on both sides of a pair; a syntax error marks its line on both the app page and the homepage, and the mark clears once fixed; autocomplete still accepts with Tab and Enter when its popup is open.
+
+- [ ] **Step 7: Run all tests and commit**
+
+Run: `npm test`
+Expected: all pass.
+
+```bash
+git add site test/app-editing.test.js
+git commit -m "Add indentation, pairs, bracket matching and error marks to the editor"
+```
+
+---
+
+### Task 12: Final verification
 
 **Files:**
 - Modify: only what the checks below reveal.
