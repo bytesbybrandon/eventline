@@ -286,6 +286,15 @@ test('a declared field list is the known payload of a fact a command checks with
   assert.ok(ids('event order-paid { orderId }\n' + cmd, 'eventmodeling').includes('unsourced-event-field'));
   assert.ok(ids('event order-paid\n' + cmd, 'eventmodeling').every((r) => r !== 'unsourced-event-field'));
 });
+test('a field a recording computes, beyond the declaration, is still carried downstream', () => {
+  const rec = 'event item-added { cartId, sku }\nuser -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku, addedAt: clock.now() }]\n';
+  const view = rec + 'readmodel Cart(cartId) = [item-added*(cartId)] => { cartId, addedAt }';
+  const cmd = rec + 'user -> stamp(cartId)\n  on [item-added]\n  --[default]--> [stamped { cartId, addedAt }]';
+  assert.ok(!ids(view, 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(!ids(cmd, 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(ids(view.replace('addedAt }', 'colour }'), 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(ids(cmd.replace('addedAt }]', 'colour }]'), 'eventmodeling').includes('unsourced-event-field'));
+});
 test('event-contract-mismatch separates the extra and the missing fields with a semicolon', () => {
   const t = 'event item-added { cartId, sku }\nuser -> add(cartId, colour)\n  --[default]--> [item-added { cartId, colour }]';
   const hit = found(t, 'eventmodeling').find((i) => i.rule === 'event-contract-mismatch');

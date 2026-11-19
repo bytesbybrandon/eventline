@@ -421,12 +421,12 @@ Where the board draws such an event, as the event that starts a policy, a declar
 `eventline-axi events` lists declared events and says which are not used and which are not recorded.
 
 A field list is the event's contract.
-It is the event's known payload: `unsourced-view-field` checks the read models that fold the event against it, and `unsourced-event-field` takes it as what an `on [...]` fact carries.
+It is the event's known payload, together with any field a recording computes: `unsourced-view-field` checks the read models that fold the event against it, and `unsourced-event-field` takes it as what an `on [...]` fact carries.
 With `--profile eventmodeling` or `slicerm`, `event-contract-mismatch` checks each command branch and policy rule that records the event, at its own line.
 It warns about a plain field the declaration lacks and a declared field the recording does not carry.
 
 A computed field, such as `addedAt: clock.wall()` above, supplies the declared field of the same name.
-Computed fields the declaration does not list are allowed.
+Computed fields the declaration does not list are allowed, and a read model or an `on [...]` fact may use them.
 
 A declaration with no field list, such as `event cart-abandoned`, has no contract, and no recording is checked against it.
 A recording written with no payload, such as `[item-added]`, is not checked either.
