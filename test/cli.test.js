@@ -56,3 +56,17 @@ test('readmodels lists read models, and views still works', () => {
   assert.equal(a.stdout, b.stdout);
   assert.match(run('--help').stdout, /readmodels/);
 });
+
+test('policies shows a policy name and deps accepts it', () => {
+  const fs = require('node:fs');
+  const tmp = path.join(require('node:os').tmpdir(), `eventline-named-${process.pid}.dsl`);
+  fs.writeFileSync(tmp, 'policy NotifyLiker = tweet-liked { userId } -> notifier -> notify(userId)\n');
+  try {
+    for (const args of [['policies', tmp], ['parse', tmp], ['deps', tmp, 'NotifyLiker']]) {
+      const r = run(...args);
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /NotifyLiker/);
+    }
+    assert.match(run('deps', tmp, 'NotifyLiker').stdout, /event:tweet-liked/);
+  } finally { fs.rmSync(tmp, { force: true }); }
+});

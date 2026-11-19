@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { parse, ParseError } = require('../lib/parser');
+const Model = require('../lib/model');
 
 const load = (name) => parse(fs.readFileSync(path.join(__dirname, '..', 'examples', name), 'utf8'));
 const emitted = (cmd, branch) => cmd.branches.find((b) => (branch === 'default' ? b.default : b.guard === branch)).emits.map((e) => e.event);
@@ -160,4 +161,25 @@ test('a guard must open and close with the same form', () => {
 test('-[ inside a note or annotation is untouched', () => {
   const m = parse('user -> go(id) @note("a -[b]-> c")\n  --[default]--> [x-done { id }]');
   assert.equal(m.commands[0].notes[0], 'a -[b]-> c');
+});
+
+test('policy Name = names a policy with any trigger', () => {
+  const m = parse('policy NotifyLiker = tweet-liked { userId } -> notifier -> notify(userId)\npolicy ShipOrders = from [OrdersToShip] -> shipper -> ship(id)\npolicy Nightly = every 1 days -> reporter -> report()');
+  assert.deepEqual(m.policies.map((p) => p.name), ['NotifyLiker', 'ShipOrders', 'Nightly']);
+  assert.equal(m.policies[0].trigger.event, 'tweet-liked'); assert.equal(m.policies[1].trigger.readModels, true); assert.equal(m.policies[2].trigger.schedule, 'every 1 days');
+  assert.equal(Model.policyName(m.policies[0]), 'policy NotifyLiker');
+  assert.equal(Model.policyLabel(m.policies[0]), 'tweet-liked');
+  assert.equal(parse('x-happened { id } -> w -> go(id)').policies[0].name, null);
+});
+test('policy and event keep their old meanings', () => {
+  assert.equal(parse('policy -> go(id)\n  --[default]--> [x-done { id }]').commands[0].actor, 'policy');
+  assert.equal(parse('policy { id } -> w -> go(id)').policies[0].trigger.event, 'policy');
+  assert.equal(parse('policy --[g]--> w -> go(id)').policies[0].trigger.event, 'policy');
+  assert.equal(parse('policy -[g]-> w -> go(id)').policies[0].trigger.event, 'policy');
+  assert.equal(parse('policy from [V] -> w -> go(id)').policies[0].trigger.event, 'policy');
+});
+test('policy names are unique and never clash with commands or read models', () => {
+  assert.throws(() => parse('policy A = x-y { id } -> w -> go(id)\npolicy A = x-z { id } -> w -> go(id)'), /policy A/);
+  assert.throws(() => parse('user -> Ship(id)\n  --[default]--> [x-done { id }]\npolicy Ship = x-done { id } -> w -> go(id)'), /Ship/);
+  assert.throws(() => parse('readmodel Ship(id) = [x-done*(id)] => { id }\npolicy Ship = x-done { id } -> w -> go(id)'), /Ship/);
 });
