@@ -478,7 +478,7 @@ How to fix it: Remove it, or move it to the statement the rule reports on.
 Severity: warn.
 Category: structure.
 
-A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (what it is about, such as action, data, next, rule, example, who or time) and status (open, resolved).
+A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (`action`, `data`, `next`, `rule`, `example`, `view`, `who`, `time`) and status (open, resolved).
 A request says what must change with concerns="...".
 
 How to fix it: Write @hotspot("Does the guest lose the deposit?", kind=assumption, category=rule).

@@ -242,5 +242,5 @@ test('automation-reads-event: an event-started automation should read a read mod
 });
 
 test('no rule text people read says view where it means a read model', () => {
-  for (const r of RULES) for (const k of ['title', 'why', 'fix']) assert.doesNotMatch(r[k].replace(/state view/gi, '').replace(/`view [^`]*`/g, ''), /\bviews?\b(?! model)/i, `${r.id}.${k}`);
+  for (const r of RULES) for (const k of ['title', 'why', 'fix']) assert.doesNotMatch(r[k].replace(/state view/gi, '').replace(/`[^`]*`/g, ''), /\bviews?\b(?! model)/i, `${r.id}.${k}`);
 });
