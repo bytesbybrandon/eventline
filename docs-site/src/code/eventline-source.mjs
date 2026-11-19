@@ -8,7 +8,7 @@ const lib = require(path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 const SHAPES = [
   /^\s*[A-Za-z_]\w*\s*->\s*\w+\(/m, // user -> postTweet(...)
-  /--\[[^\]]*\]-->/, // a guard edge
+  /--?\[[^\]]*\]--?>/, // a guard edge
   /^\s*(system|actor|boundary|view|readmodel|context|scenario)\s+[A-Za-z_"]/m,
   /^\s*[a-z][a-z0-9]*(-[a-z0-9]+)+\*?\s*\{/m, // a policy trigger: event { ... }
   /^\s*(on|from)\s*\[/m, // the facts a command needs, or a policy that starts from a read model

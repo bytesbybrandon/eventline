@@ -108,3 +108,8 @@ test('the docs explain read models, screens and both automation forms', () => {
   assert.match(read('docs/GLOSSARY.md'), /### Read model[\s\S]*### Screen/);
   assert.match(read('docs/EVENT-MODELING.md'), /\| *SliceRM *\|/);
 });
+
+test('the code-shape check knows the short guard', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('x\n  -[default]-> [x-done { id }]'));
+});

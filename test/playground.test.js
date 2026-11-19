@@ -57,3 +57,7 @@ test('the homepage explains read models and screens, and never mentions a policy
   assert.doesNotMatch(html, /lane below|policy lane/i);
   assert.doesNotMatch(read('examples/twitter-pure.dsl'), /^view /m);
 });
+
+test('the board marks a short -[default]-> line as the default branch', () => {
+  assert.match(read('site/site.js'), /--\?\\\[default\\\]--\?>/);
+});

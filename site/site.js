@@ -178,8 +178,8 @@
     let inDefault = false;
     lines.forEach((ln) => {
       const t = ln.textContent;
-      if (/--\[default\]-->/.test(t)) { ln.dataset.b = 'default'; inDefault = true; }
-      else if (/^\s*--\[/.test(t)) { ln.dataset.b = 'reject'; inDefault = false; }
+      if (/--?\[default\]--?>/.test(t)) { ln.dataset.b = 'default'; inDefault = true; }
+      else if (/^\s*--?\[/.test(t)) { ln.dataset.b = 'reject'; inDefault = false; }
       else if (inDefault) ln.dataset.b = 'default';
     });
   }

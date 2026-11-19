@@ -146,3 +146,18 @@ test('an event called from still starts a policy, as on main', () => {
     assert.equal(p.rules[0].worker, 'w', src);
   }
 });
+
+test('short guard arrows mean the same as long ones', () => {
+  const long = 'user -> go(id)\n  --[bad]--> [x-failed { id }]\n  --[default]--> [x-done { id }]\nx-done { id } --[ok]--> w -> next(id)';
+  const short = long.replace(/--\[/g, '-[').replace(/\]-->/g, ']->');
+  const strip = (m) => JSON.stringify(m, (k, v) => (k === 'line' || k === 'endLine' ? undefined : v));
+  assert.equal(strip(parse(short)), strip(parse(long)));
+});
+test('a guard must open and close with the same form', () => {
+  assert.throws(() => parse('user -> go(id)\n  --[default]-> [x-done { id }]'), /--\[guard\]-->.*-\[guard\]->/);
+  assert.throws(() => parse('user -> go(id)\n  -[default]--> [x-done { id }]'), /-\[guard\]->/);
+});
+test('-[ inside a note or annotation is untouched', () => {
+  const m = parse('user -> go(id) @note("a -[b]-> c")\n  --[default]--> [x-done { id }]');
+  assert.equal(m.commands[0].notes[0], 'a -[b]-> c');
+});
