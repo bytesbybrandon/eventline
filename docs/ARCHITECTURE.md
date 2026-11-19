@@ -67,12 +67,17 @@ The playground's diagram tabs and Links button read and write those parts, and t
 `site/app/` is a static page for writing and keeping models.
 It reuses the playground's code, so it parses, checks and draws exactly as the homepage does.
 `index.html` is the page and `app.css` its styles.
-`app.js` wires the page together, and `editor.js` is the editor popup.
+`app.js` wires the page together.
 `store.js` keeps models in the browser's `localStorage`, and nowhere else.
-`session.js` holds the state of the open model and of practice mode.
+`session.js` holds the state of the open model, reads the page address and checks imported files.
+`editor.js` attaches the completion popup and the editing help to the editor.
 `complete.js` suggests completions as you type.
+`editing.js` handles indentation, Tab, bracket pairs and bracket matching.
 `zip.js` writes the zip a set of models is exported as.
-The pure modules (`store.js`, `session.js`, `complete.js`, `zip.js`) are tested under Node.
+`practice.js` holds the rules of a practice attempt: its timer, pausing, finishing and past attempts.
+`practice-ui.js` draws the practice screens and stores each attempt as a model.
+`prompts.json` holds the practice prompts and their requirements, and names each one's reference model in `site/examples/`.
+The pure modules (`store.js`, `session.js`, `complete.js`, `editing.js`, `zip.js`, `practice.js`) are tested under Node.
 Model text never leaves the browser.
 The homepage playground's "Open in the app" link and the docs' playground links open `app/#play=<base64url of the text>` as a draft.
 
