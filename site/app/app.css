@@ -64,3 +64,10 @@
 @media (prefers-reduced-motion: reduce) {
   .ap *, .ap *::before, .ap *::after { transition: none !important; animation: none !important; }
 }
+
+/* ---------------------------------------------------------- autocomplete -- */
+.ap-pop { position: absolute; z-index: 5; margin: 0; padding: var(--sc-2); list-style: none; min-width: 12rem; max-width: calc(100% - 8px); max-height: 14rem; overflow: auto; background: var(--sc-surface); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); box-shadow: var(--sc-e3); font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); line-height: 1.7; color: var(--sc-ink); }
+.ap-pop li { display: flex; justify-content: space-between; gap: var(--sc-4); padding: 0 var(--sc-2); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.ap-pop li[aria-selected="true"] { background: var(--sc-accent); color: var(--sc-accent-ink); }
+.ap-pop__kind { opacity: 0.7; }
+.ap-probe { position: absolute; visibility: hidden; pointer-events: none; top: 0; left: 0; white-space: pre; overflow: hidden; height: 0; box-sizing: border-box; }

@@ -393,6 +393,7 @@
     onChange: (text, meta) => { if (meta.fromUser) session.edit(text); },
     onView: syncAddress,
   });
+  window.EventlineEditor.attach(playground.textarea, playground.getModel);
   if (startSmall) session.openDraft(playground.getText());
   shown = session.state;
   playground.setReadOnly(shown.readOnly);
