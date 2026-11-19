@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createStore } = require('../site/app/store.js');
+const { createStore, modelName } = require('../site/app/store.js');
 const { createSession, parseAddress, acceptImport, AUTOSAVE_MS } = require('../site/app/session.js');
 
 function fake() {
@@ -32,6 +32,7 @@ function rig() {
   other = createStore(storage, deps);
   s = createSession({
     store,
+    modelName,
     schedule(fn, ms) {
       assert.equal(ms, AUTOSAVE_MS);
       const t = { fn };
@@ -65,6 +66,52 @@ test('a draft keeps the name it was opened with, and is otherwise named from its
   assert.equal(s.state.name, 'Imported');
   s.openDraft('a'); s.edit('system Shop {\n}'); run500ms();
   assert.equal(s.state.name, 'Shop');
+});
+
+test('an unnamed draft is named from its system block before it is saved', () => {
+  s.openAddress(parseAddress('#play=' + encode('system Shop {\n}'), decode));
+  assert.equal(s.state.name, 'Shop'); assert.equal(store.list().length, 0);
+  s.edit('system Cart {\n}');
+  assert.equal(s.state.name, 'Cart');
+  s.openDraft('no block');
+  assert.equal(s.state.name, 'Untitled');
+});
+
+test('a draft with a chosen name keeps it while the text changes', () => {
+  s.openDraft('system Shop {\n}', 'Imported'); s.edit('system Cart {\n}');
+  assert.equal(s.state.name, 'Imported');
+});
+
+test('save as new names the model from its current text and keeps following it', () => {
+  const m = openSaved('system Shop {\n}');
+  other.remove(m.id); s.storageChanged();
+  s.edit('system Cart {\n}');
+  s.saveAsNew();
+  assert.equal(s.state.name, 'Cart'); assert.equal(store.get(s.state.id).name, 'Cart');
+  s.edit('system Mall {\n}'); run500ms();
+  assert.equal(s.state.name, 'Mall'); assert.equal(store.get(s.state.id).name, 'Mall');
+});
+
+test('save as new keeps a name the owner chose', () => {
+  const m = store.create({ name: 'Client board', text: 'system Shop {\n}' }).model;
+  s.openModel(m.id); other.remove(m.id); s.storageChanged();
+  s.edit('system Cart {\n}');
+  s.saveAsNew();
+  assert.equal(s.state.name, 'Client board'); assert.equal(store.get(s.state.id).name, 'Client board');
+});
+
+test('a failed save as new still names the retry from the text', () => {
+  const m = openSaved('system Shop {\n}');
+  other.remove(m.id); s.storageChanged();
+  s.edit('system Cart {\n}');
+  storage.failWrites = true;
+  s.saveAsNew();
+  assert.equal(s.state.status, 'failed'); assert.equal(s.state.name, 'Cart');
+  storage.failWrites = false;
+  s.edit('system Mall {\n}'); run500ms();
+  assert.equal(s.state.status, 'saved'); assert.equal(store.get(s.state.id).name, 'Mall');
+  s.edit('system Shop {\n}'); run500ms();
+  assert.equal(store.get(s.state.id).name, 'Shop');
 });
 
 test('later edits save to the same model and share one timer', () => {

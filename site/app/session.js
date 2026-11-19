@@ -48,8 +48,9 @@
 
   function createSession(deps) {
     var store = deps.store;
-    var state = { id: null, name: 'Untitled', text: '', status: 'draft', theirs: null, readOnly: false };
+    var state = { id: null, name: deps.modelName(''), text: '', status: 'draft', theirs: null, readOnly: false };
     var rev = null; // the stored revision this tab's text is based on
+    var baseText = ''; // the stored text at that revision, which shows whether the name came from the text
     var draftName = null; // only a name the owner chose; otherwise the store names the model from its text
     var cancelAutosave = null;
 
@@ -66,6 +67,7 @@
     function adopt(model) {
       stopAutosave();
       rev = model.rev;
+      baseText = model.text;
       set({ id: model.id, name: model.name, text: model.text, status: 'saved', theirs: null, readOnly: isReadOnly(model) });
     }
     function markDeleted() {
@@ -100,7 +102,7 @@
       flush();
       rev = null;
       draftName = name || null;
-      set({ id: null, name: name || 'Untitled', text: text || '', status: 'draft', theirs: null, readOnly: false });
+      set({ id: null, name: name || deps.modelName(text || ''), text: text || '', status: 'draft', theirs: null, readOnly: false });
     }
     function openModel(id) {
       if (id !== null && id === state.id) return true; // the page rewrites the address after a save; unsaved work must survive that
@@ -130,7 +132,8 @@
       if (text === state.text && !(failed && !state.theirs)) return;
       if (state.theirs || state.status === 'deleted') return set({ text: text });
       // A retry stays 'failed' so the banner and leave warning hold until a write succeeds.
-      set({ text: text, status: failed ? 'failed' : 'saving' });
+      var name = state.id === null && !draftName ? deps.modelName(text) : state.name;
+      set({ name: name, text: text, status: failed ? 'failed' : 'saving' });
       stopAutosave();
       cancelAutosave = deps.schedule(autosave, AUTOSAVE_MS);
     }
@@ -161,12 +164,14 @@
     }
     function saveAsNew() {
       stopAutosave();
-      var name = state.id === null ? draftName : state.name;
+      // A name taken from the text is left out, so the store names the new model and it keeps following its text.
+      var chosen = state.name === deps.modelName(baseText) ? null : state.name;
+      var name = state.id === null ? draftName : chosen;
       var result = store.create({ name: name, text: state.text });
       if (result.ok) return adopt(result.model);
       if (state.theirs) return set({ status: 'failed' });
       draftName = name; // no stored model is left to save to, so the next edit retries as a draft
-      set({ id: null, status: 'failed' });
+      set({ id: null, name: name || deps.modelName(state.text), status: 'failed' });
     }
 
     return {
