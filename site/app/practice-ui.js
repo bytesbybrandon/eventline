@@ -122,10 +122,32 @@
     app.playground.textarea.focus();
   }
 
-  function save(practice, failText) {
+  /* The stored attempt is the authority: another window may have paused, resumed, finished or abandoned it.
+     Returns false, and leaves the timer, when this tab's attempt is no longer the stored one. */
+  function follow() {
+    const id = active.id;
+    const model = app.store.get(id);
+    const stored = model && model.practice;
+    if (stored && stored.startedAt === active.practice.startedAt && stored.status !== 'finished') {
+      const moved = stored.status !== active.practice.status;
+      active.practice = stored;
+      if (moved) { say(stored.status === 'running' ? 'Timer resumed.' : 'Timer paused.'); paintSlot(); }
+      return true;
+    }
+    endWork();
+    app.session.storageChanged();
+    if (!model) { app.showNotice('The attempt was deleted in another window.'); return false; }
+    if (stored && stored.status === 'finished') { app.showNotice('Another window finished this attempt.'); showReview(id); }
+    else app.showNotice('Another window ended this attempt. ' + model.name + ' is now an ordinary saved model.');
+    return false;
+  }
+
+  // change maps the stored practice to the next one, so nothing another window wrote is overwritten.
+  function save(change, failText) {
+    if (!follow()) return false;
+    const practice = change(active.practice);
     const result = app.store.update(active.id, { practice });
     if (result.ok) { active.practice = practice; warnedTick = false; return true; }
-    if (result.reason === 'deleted') { endWork(); app.showNotice('The attempt was deleted in another tab.'); return false; }
     if (failText) app.showNotice(failText);
     else if (!warnedTick) { warnedTick = true; app.showNotice('Timer progress could not be saved. Browser storage is full or blocked.'); }
     return false;
@@ -190,19 +212,19 @@
 
   function onClock() {
     if (!active) return;
+    if (!follow()) return;
     const now = Date.now();
     const p = active.practice;
     // Hidden tabs do not tick: time away is not charged once the gap passes MAX_GAP_MS.
-    if (p.status === 'running' && !document.hidden && now - p.lastTickAt >= P.TICK_MS) save(P.tick(p, now));
+    if (p.status === 'running' && !document.hidden && now - p.lastTickAt >= P.TICK_MS && !save((q) => P.tick(q, now))) return;
     paintTimer(now);
   }
 
   function togglePause() {
-    const p = active.practice;
     const now = Date.now();
-    const next = p.status === 'running' ? P.pause(p, now) : P.resume(p, now);
-    if (!save(next, 'The timer could not be ' + (next.status === 'running' ? 'resumed' : 'paused') + ': browser storage is full or blocked.')) return;
-    say(next.status === 'running' ? 'Timer resumed.' : 'Timer paused.');
+    const pausing = active.practice.status === 'running';
+    if (!save((p) => (pausing ? P.pause(p, now) : P.resume(p, now)), 'The timer could not be ' + (pausing ? 'paused' : 'resumed') + ': browser storage is full or blocked.')) return;
+    say(pausing ? 'Timer paused.' : 'Timer resumed.');
     paintSlot();
     const again = app.topbarSlot.querySelector('button');
     if (again) again.focus();
@@ -212,7 +234,7 @@
     if (!await ask('Finish this attempt?', 'The model becomes read-only and the reference model opens beside it.', 'Finish')) return;
     if (!active || !app.canLeave()) return; // canLeave also hands the last keystrokes to the store
     const id = active.id;
-    if (!save(P.finish(active.practice, Date.now()), 'The attempt could not be finished: browser storage is full or blocked.')) return;
+    if (!save((p) => P.finish(p, Date.now()), 'The attempt could not be finished: browser storage is full or blocked.')) return;
     endWork();
     app.session.storageChanged(); // store.update fires no storage event in this tab
     showReview(id);
@@ -220,7 +242,7 @@
 
   async function abandonAttempt() {
     if (!await ask('Abandon this attempt?', 'The timer stops and the model is kept as an ordinary saved model. It will not appear in practice history.', 'Abandon')) return;
-    if (!active || !app.canLeave()) return;
+    if (!active || !app.canLeave() || !follow()) return; // never strip an attempt another window has finished
     const result = app.store.update(active.id, { practice: null });
     if (!result.ok && result.reason !== 'deleted') { app.showNotice('The attempt could not be abandoned: browser storage is full or blocked.'); return; }
     endWork();
@@ -353,9 +375,12 @@
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) return;
       flushNotes();
-      if (active && active.practice.status === 'running') save(P.tick(active.practice, Date.now())); // charge time up to hiding
+      if (active && active.practice.status === 'running') save((p) => P.tick(p, Date.now())); // charge time up to hiding
     });
     window.addEventListener('pagehide', () => flushNotes());
+    window.addEventListener('storage', (ev) => {
+      if (active && (ev.key === null || (app.store.isModelKey(ev.key) && ev.key.endsWith(active.id)))) follow();
+    });
     if (active) startWork(); else paintSlot();
   }
 
