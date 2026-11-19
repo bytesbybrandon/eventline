@@ -51,3 +51,8 @@ test('readmodel has a snippet', () => {
   assert.ok(SNIPPETS.some((s) => s.label === 'readmodel'));
   assert.ok(SNIPPETS.some((s) => s.label === 'view'));
 });
+test('policy snippet writes a named policy', () => {
+  const s = SNIPPETS.find((i) => i.label === 'policy');
+  assert.equal(s.insert, 'policy Name = event-name { id }\n  -> worker-name -> nextCommand(id)');
+  assert.equal(s.caretOffset, 7);
+});

@@ -61,3 +61,10 @@ test('the homepage explains read models and screens, and never mentions a policy
 test('the board marks a short -[default]-> line as the default branch', () => {
   assert.match(read('site/site.js'), /--\?\\\[default\\\]--\?>/);
 });
+
+test('the highlighter treats policy as a keyword only before a name and =', () => {
+  const HEAD = new Function(`return ${read('site/playground.js').match(/const HEAD = (\/.*\/);/)[1]}`)();
+  assert.equal(HEAD.exec('policy Fan = x-done { id }')[2], 'policy');
+  assert.equal(HEAD.exec('policy -> go(id)'), null);
+  assert.equal(HEAD.exec('policy { id } -> w -> go(id)'), null);
+});

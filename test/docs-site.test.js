@@ -113,3 +113,12 @@ test('the code-shape check knows the short guard', async () => {
   const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
   assert.ok(looksLikeEventline('x\n  -[default]-> [x-done { id }]'));
 });
+
+test('docs grammar and code-shape check know a named policy', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('policy Fan = x-done -> w -> go()'));
+  const grammar = JSON.parse(fs.readFileSync(path.join(root, 'docs-site', 'src', 'code', 'eventline.tmLanguage.json'), 'utf8'));
+  const decl = new RegExp(grammar.repository.declaration.match);
+  assert.deepEqual([...decl.exec('policy Fan = x-done -> w -> go()')].slice(2), ['policy', 'Fan']);
+  assert.equal(decl.exec('policy -> go(id)'), null);
+});

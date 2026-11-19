@@ -271,3 +271,26 @@ test('board svg: the description pluralises its counts', () => {
   assert.match(desc('A -> go(id)\n--[default]--> [done]'), /1 command, 1 event, 0 read models, 0 processors; 2 links, 0 consistency boundaries/);
   assert.match(desc(fs.readFileSync(path.join(__dirname, '..', 'examples', 'twitter-pure.dsl'), 'utf8')), /2 processors/);
 });
+
+const FAN = 'user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Fan = x-done { id }\n  --[a]--> w1 -> one(id)\n  --[b]--> w2 -> two(id)';
+test('board: a named policy is one processor box listing its workers', () => {
+  const b = buildBoard(parse(FAN));
+  const p = b.nodes.find((n) => n.id === 'policy:Fan');
+  assert.equal(p.lane, 'actor'); assert.equal(p.kind, 'policy'); assert.equal(p.label, 'Fan'); assert.equal(p.sub, 'w1, w2');
+  assert.equal(b.nodes.some((n) => n.id === 'pol:w1' || n.id === 'pol:w2'), false);
+  assert.ok(b.edges.some((e) => e.from === 'policy:Fan' && e.to === 'cmd:one'));
+  assert.ok(b.edges.some((e) => e.from === 'policy:Fan' && e.to === 'cmd:two'));
+  assert.ok(b.edges.some((e) => e.from === 'implied:x-done' && e.to === 'policy:Fan'));
+  assert.deepEqual(p.ranges, [[3, 5]]);
+});
+test('board: a named policy rule without a worker is listed as automation; unnamed policies are unchanged', () => {
+  const b = buildBoard(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Mix = x-done { id }\n  --[a]--> [y-done { id }]\n  --[b]--> w2 -> two(id)\nx-done { id } -> w3 -> three(id)'));
+  assert.equal(byId(b, 'policy:Mix').sub, 'automation, w2');
+  assert.ok(byId(b, 'pol:w3'));
+  assert.equal(b.nodes.some((n) => n.id.startsWith('auto:')), false);
+});
+test('board: a named policy keeps its results in source order and shows all its guards', () => {
+  const b = buildBoard(parse(FAN));
+  assert.ok(byId(b, 'cmd:one').col < byId(b, 'cmd:two').col);
+  assert.ok(b.edges.some((e) => e.from === 'implied:x-done' && e.to === 'policy:Fan' && e.label === 'a, b'));
+});

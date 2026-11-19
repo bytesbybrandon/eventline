@@ -77,3 +77,15 @@ test('check reports an @link that cannot work, and stays quiet about ones that d
   assert.equal(rules(MODEL.replace('url="/runbooks/cart"', 'url="ftp-ish"')).length, 1);
   assert.match(rules(MODEL.replace('region: eu, us', '').replace('to="containers", node="api"', 'to="deployment"'))[0], /cannot draw yet/);
 });
+
+test('links: a named policy leads to each of its workers', () => {
+  const map = linkMap(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Fan = x-done { id }\n  --[a]--> w1 -> one(id)\n  --[b]--> w2 -> two(id)'));
+  const to = (d) => (map.eventmodel['policy:Fan'] || []).filter((l) => l.diagram === d).map((l) => l.node).sort();
+  assert.deepEqual(to('containers'), ['worker:w1', 'worker:w2']);
+  assert.deepEqual(to('dataflow'), ['worker:w1', 'worker:w2']);
+  for (const d of ['containers', 'dataflow']) assert.ok(map[d]['worker:w1'].some((l) => l.diagram === 'eventmodel' && l.node === 'policy:Fan'), d);
+});
+test('links: @link on a named policy replaces its derived links', () => {
+  const map = linkMap(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Fan = x-done { id } @link(url="https://x.example/fan")\n  --[a]--> w1 -> one(id)'));
+  assert.deepEqual(map.eventmodel['policy:Fan'].map((l) => l.url), ['https://x.example/fan']);
+});
