@@ -100,6 +100,7 @@
   /* One copy of the parser per page, however many boards ask for it. A failed load can be tried again. */
   let bundle = null;
   function loadEventline(base = '') {
+    if (!bundle && window.eventline) bundle = Promise.resolve(window.eventline); // a page that loads it itself
     if (!bundle) bundle = new Promise((resolve) => {
       const s = document.createElement('script');
       s.src = base + 'eventline.js';
