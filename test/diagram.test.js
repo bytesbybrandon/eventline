@@ -289,8 +289,14 @@ test('board: a named policy rule without a worker is listed as automation; unnam
   assert.ok(byId(b, 'pol:w3'));
   assert.equal(b.nodes.some((n) => n.id.startsWith('auto:')), false);
 });
-test('board: a named policy keeps its results in source order and shows all its guards', () => {
+test('board: a named policy keeps its results in source order and labels each with its guard', () => {
   const b = buildBoard(parse(FAN));
   assert.ok(byId(b, 'cmd:one').col < byId(b, 'cmd:two').col);
-  assert.ok(b.edges.some((e) => e.from === 'implied:x-done' && e.to === 'policy:Fan' && e.label === 'a, b'));
+  const edge = (from, to) => b.edges.find((e) => e.from === from && e.to === to);
+  assert.equal(edge('policy:Fan', 'cmd:one').label, 'a');
+  assert.equal(edge('policy:Fan', 'cmd:two').label, 'b');
+  assert.equal(b.edges.filter((e) => e.to === 'policy:Fan').every((e) => e.label === ''), true);
+  const em = buildBoard(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Rec = x-done { id }\n  --[ok]--> [y-done { id }]\n  --[default]--> [z-done { id }]'));
+  assert.equal(em.edges.find((e) => e.from === 'policy:Rec' && e.to === 'evt:y-done').label, 'ok');
+  assert.equal(em.edges.find((e) => e.from === 'policy:Rec' && e.to === 'evt:z-done').label, '');
 });
