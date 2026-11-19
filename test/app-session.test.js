@@ -458,3 +458,21 @@ test('acceptImport strips a leading BOM and a .dsl ending in any case', () => {
   assert.equal(acceptImport('a.dsl.txt', Buffer.from('a')).name, 'a.dsl.txt');
   assert.equal(acceptImport('a.dsl', Buffer.from('﻿')).reason, 'empty');
 });
+
+test('a #play link with CRLF text opens as the editor shows it, and finds its saved copy', () => {
+  const { decodePlayText } = require('../site/app/session.js');
+  rig();
+  const crlf = 'system Shop {\r\n}\r\nold-mac-line\r';
+  const address = parseAddress('#play=' + encode(crlf), decodePlayText);
+  assert.equal(address.text, 'system Shop {\n}\nold-mac-line\n'); // what a textarea's value holds
+  s.openAddress(address);
+  assert.equal(s.state.status, 'draft');
+  s.edit('system Shop {\n}\nold-mac-line\n'); // the editor reporting the same text is not an edit
+  assert.equal(s.state.status, 'draft');
+  assert.equal(store.list().length, 0);
+  store.create({ text: address.text });
+  s.openAddress(parseAddress('#play=' + encode(crlf), decodePlayText));
+  assert.equal(s.state.status, 'saved');
+  assert.equal(store.list().length, 1);
+  assert.equal(parseAddress('#play=' + Buffer.from([0xff]).toString('base64url'), decodePlayText).type, 'invalid');
+});

@@ -16,7 +16,7 @@
 .ap-menu__note { margin: var(--sc-2) 0 0; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
 .ap-list { list-style: none; margin: var(--sc-3) 0 0; padding: var(--sc-2) 0 0; border-top: 1px solid var(--sc-hairline); display: grid; gap: 2px; }
 .ap-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-1); }
-.ap-row__open { all: unset; box-sizing: border-box; flex: 1 1 10rem; min-width: 0; min-height: 36px; padding: 4px var(--sc-2); border-radius: 6px; cursor: pointer; }
+.ap-row__open { all: unset; box-sizing: border-box; flex: 1 1 10rem; min-width: 0; min-height: 36px; padding: var(--sc-2) var(--sc-3); border-radius: 6px; cursor: pointer; }
 .ap-row__open:hover { background: color-mix(in oklab, var(--sc-ink) 10%, transparent); }
 .ap-row__name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-row__date { display: block; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
@@ -32,6 +32,8 @@
 /* A hidden pane keeps its size: the board measures its boxes while drawing, even when it is not showing. */
 .ap .pg__grid[data-layout="editor"] .pg__bd, .ap .pg__grid[data-layout="board"] .pg__ed { position: absolute; inset: 0; visibility: hidden; }
 .ap .pg__grid[data-board="light"] .pg__bd { background: #ffffff; }
+/* Zoom sits in the board's tab bar here, not floating over the board as a second card. */
+.ap .pg__zoom { position: static; padding: 0; background: none; border: 0; box-shadow: none; }
 
 .ap-foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--sc-2) var(--sc-4); align-items: start; padding: var(--sc-2) var(--sc-4); border-top: 1px solid var(--sc-hairline); }
 .ap-findings summary { cursor: pointer; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); min-height: 24px; }
@@ -40,7 +42,7 @@
 .ap-read .pg__trace { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ap-notices { position: fixed; left: 50%; bottom: var(--sc-4); transform: translateX(-50%); width: min(36rem, calc(100vw - 2rem)); display: grid; gap: var(--sc-2); z-index: 20; pointer-events: none; }
-.ap-notice { pointer-events: auto; display: flex; align-items: center; gap: var(--sc-3); padding: var(--sc-2) var(--sc-3); background: var(--sc-surface); border: 1px solid var(--sc-accent); border-radius: var(--r); box-shadow: var(--sc-e3); font-size: var(--sc-t-sm); }
+.ap-notice { pointer-events: auto; display: flex; align-items: center; gap: var(--sc-3); padding: var(--sc-3) var(--sc-4); background: var(--sc-surface); border: 1px solid var(--sc-accent); border-radius: var(--r); box-shadow: var(--sc-e3); font-size: var(--sc-t-sm); }
 .ap-notice span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
 .ap-dialog { background: var(--sc-surface); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); padding: var(--sc-5); width: min(26rem, calc(100vw - 2rem)); }
@@ -49,7 +51,7 @@
 .ap-dialog p { margin: 0; overflow-wrap: anywhere; color: var(--sc-ink-soft); }
 .ap-dialog__acts { display: flex; justify-content: flex-end; gap: var(--sc-2); margin-top: var(--sc-4); }
 .ap-field { display: grid; gap: var(--sc-1); font-size: var(--sc-t-sm); }
-.ap-field input { min-height: 40px; padding: 0 var(--sc-2); background: var(--sc-canvas); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: 6px; font: inherit; }
+.ap-field input { min-height: 40px; padding: 0 var(--sc-3); background: var(--sc-canvas); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: 6px; font: inherit; }
 
 @media (max-width: 899.98px) {
   .ap-layout [data-layout="split"] { display: none; }

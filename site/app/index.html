@@ -48,17 +48,17 @@
           <button type="button" role="tab" class="pg__kind" data-kind="deployment" aria-selected="false" tabindex="-1">Deployment</button>
           <button type="button" role="tab" class="pg__kind" data-kind="contextmap" aria-selected="false" tabindex="-1">Context map</button>
         </div>
-        <span class="pg__tools">
+        <div class="pg__tools">
+          <div class="pg__zoom" role="group" aria-label="Zoom">
+            <button type="button" class="pg__z" id="pg-zout" aria-label="Zoom out">&minus;</button>
+            <output class="pg__zv" id="pg-zv" aria-live="polite">Fit</output>
+            <button type="button" class="pg__z" id="pg-zin" aria-label="Zoom in">+</button>
+            <button type="button" class="pg__z pg__z--fit" id="pg-fit" aria-pressed="true">Fit</button>
+          </div>
           <button type="button" class="btn btn--quiet" id="pg-links" aria-pressed="false" title="Each box that leads somewhere links to the same thing in another diagram">Links</button>
-        </span>
+        </div>
       </div>
       <div class="pg__board is-fit" id="pg-board" role="tabpanel"><p class="pg__empty">The board appears here.</p></div>
-      <div class="pg__zoom" role="group" aria-label="Zoom">
-        <button type="button" class="pg__z" id="pg-zout" aria-label="Zoom out">&minus;</button>
-        <output class="pg__zv" id="pg-zv" aria-live="polite">Fit</output>
-        <button type="button" class="pg__z" id="pg-zin" aria-label="Zoom in">+</button>
-        <button type="button" class="pg__z pg__z--fit" id="pg-fit" aria-pressed="true">Fit</button>
-      </div>
     </div>
   </div>
 </main>

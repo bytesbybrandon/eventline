@@ -30,6 +30,13 @@
     } catch (e) { return { type: 'invalid' }; }
   }
 
+  // Base64url to text, refusing invalid UTF-8. Line ends become \n, as a textarea holds them, so an untouched link is not an edit.
+  function decodePlayText(value) {
+    var bin = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
+    var bytes = Uint8Array.from(bin, function (c) { return c.charCodeAt(0); });
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/\r\n?/g, '\n');
+  }
+
   function acceptImport(name, bytes) {
     if (bytes.length === 0) return { ok: false, reason: 'empty' };
     if (bytes.length > MAX_IMPORT_BYTES) return { ok: false, reason: 'too-large' };
@@ -191,5 +198,5 @@
     };
   }
 
-  return { AUTOSAVE_MS: AUTOSAVE_MS, parseAddress: parseAddress, acceptImport: acceptImport, createSession: createSession };
+  return { AUTOSAVE_MS: AUTOSAVE_MS, parseAddress: parseAddress, decodePlayText: decodePlayText, acceptImport: acceptImport, createSession: createSession };
 });

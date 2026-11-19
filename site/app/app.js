@@ -3,7 +3,7 @@
   'use strict';
 
   const { createStore, uuidv7, modelName } = window.EventlineStore;
-  const { createSession, parseAddress, acceptImport } = window.EventlineSession;
+  const { createSession, parseAddress, decodePlayText, acceptImport } = window.EventlineSession;
   const { exportFiles, zip } = window.EventlineZip;
 
   const UNDO_MS = 10000;
@@ -99,11 +99,6 @@
     const hash = addressHash();
     writtenHash = hash;
     if (hash !== location.hash) history.replaceState(null, '', hash || location.pathname + location.search);
-  }
-  /* Base64url to text, refusing anything that is not valid UTF-8. */
-  function strictDecode(value) {
-    const bytes = Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   }
   function openAddress(address) {
     playDraft = address.type === 'play' ? { head: location.hash.slice(1).split('&')[0], text: address.text } : null;
@@ -372,7 +367,7 @@
   });
   window.addEventListener('hashchange', () => {
     if (location.hash === writtenHash) return;
-    const address = parseAddress(location.hash, strictDecode);
+    const address = parseAddress(location.hash, decodePlayText);
     if (address.type === 'none') { syncAddress(); return; }
     if (locked) { showNotice('Links cannot be opened during a practice attempt.'); syncAddress(); return; }
     if (!canLeave()) { syncAddress(); return; }
@@ -383,7 +378,7 @@
   });
 
   /* -------------------------------------------------------------- startup -- */
-  const address = parseAddress(location.hash, strictDecode);
+  const address = parseAddress(location.hash, decodePlayText);
   const firstVisit = !store.meta().visited;
   store.setMeta({ visited: true });
   const startNotice = address.type === 'none' ? undefined : openAddress(address);
