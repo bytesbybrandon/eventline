@@ -302,4 +302,14 @@ test('messages about a named policy call it policy Name', () => {
     msgs(named.replace('} ->', '} @accept(rule="many-events") ->')),
   ];
   for (const m of all) { assert.match(m, /[Pp]olicy (ShipOrders|NotifyLiker)\b/); assert.doesNotMatch(m, /"(ShipOrders|NotifyLiker)"/); }
+  const guard = found(named, 'core').find((i) => i.rule === 'policy-guard');
+  assert.equal(guard.message, 'Policy NotifyLiker has an unguarded rule');
+});
+test('automation-reads-event keeps a named policy in its message and suggested rewrite', () => {
+  const rec = 'user -> like(tweetId)\n  --[default]--> [tweet-liked { tweetId }]\n';
+  const msg = (t) => found(rec + t, 'eventmodeling').find((i) => i.rule === 'automation-reads-event').message;
+  assert.equal(msg('policy NotifyLiker = tweet-liked { tweetId } -> notifier -> notify(tweetId)'),
+    'Automation policy NotifyLiker on "tweet-liked" starts straight from the event. Write a read model such as PendingNotifyLiker(...) fed by tweet-liked, and start from it: "policy NotifyLiker = tweet-liked from [PendingNotifyLiker] -> ..." or "policy NotifyLiker = from [PendingNotifyLiker] -> ..."');
+  assert.equal(msg('tweet-liked { tweetId } -> notifier -> notify(tweetId)'),
+    'Automation on "tweet-liked" starts straight from the event. Write a read model such as PendingNotifier(...) fed by tweet-liked, and start from it: "tweet-liked from [PendingNotifier] -> ..." or "from [PendingNotifier] -> ..."');
 });
