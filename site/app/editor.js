@@ -92,14 +92,16 @@
     }
 
     function onKey(ev) {
+      if (ev.isComposing || ev.keyCode === 229) return; // an IME is using the keys
       if (ev.key === ' ' && ev.ctrlKey && !ev.altKey && !ev.metaKey) { ev.preventDefault(); return open(true); }
       if (!result) return;
       if (ev.key === 'ArrowDown') { ev.preventDefault(); move(1); }
       else if (ev.key === 'ArrowUp') { ev.preventDefault(); move(-1); }
-      else if (ev.key === 'Tab' || ev.key === 'Enter') { ev.preventDefault(); accept(active); }
+      else if ((ev.key === 'Tab' || ev.key === 'Enter') && !ev.shiftKey && !ev.ctrlKey && !ev.altKey && !ev.metaKey) { ev.preventDefault(); accept(active); }
       else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close(); }
     }
-    function onInput() { if (!inserting) open(false); }
+    function onInput(ev) { if (!inserting && !ev.isComposing) open(false); }
+    function onScroll() { if (result) place(); } // typing near an edge scrolls the box; follow it
     function onMove(ev) { if (result && /^(Arrow(Left|Right)|Home|End|PageUp|PageDown)$/.test(ev.key)) close(); }
 
     textarea.addEventListener('keydown', onKey);
@@ -107,13 +109,15 @@
     textarea.addEventListener('keyup', onMove);
     textarea.addEventListener('blur', close);
     textarea.addEventListener('mousedown', close);
-    textarea.addEventListener('scroll', close);
+    textarea.addEventListener('scroll', onScroll);
+    textarea.addEventListener('compositionstart', close);
+    pop.addEventListener('mousedown', function (ev) { ev.preventDefault(); }); // a click on the popup's scrollbar keeps focus
 
     return {
       destroy: function () {
         close();
-        ['keydown', 'input', 'keyup', 'blur', 'mousedown', 'scroll'].forEach(function (t, i) {
-          textarea.removeEventListener(t, [onKey, onInput, onMove, close, close, close][i]);
+        ['keydown', 'input', 'keyup', 'blur', 'mousedown', 'scroll', 'compositionstart'].forEach(function (t, i) {
+          textarea.removeEventListener(t, [onKey, onInput, onMove, close, close, onScroll, close][i]);
         });
         ['role', 'aria-autocomplete', 'aria-controls', 'aria-expanded'].forEach(function (a) { textarea.removeAttribute(a); });
         pop.remove(); probe.remove();
