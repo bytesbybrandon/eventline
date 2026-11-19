@@ -447,7 +447,7 @@ Follow the layout sketch in the spec. Mount with `{ base: '../', address: 'none'
 - A `storage` listener that calls `session.storageChanged()` when `store.isModelKey(event.key)`.
 - Startup: first visit opens a draft with the "Start small" text. A returning visit opens a blank draft. An address opens through `session.openAddress`. An active attempt takes priority once Task 10 exists.
 - Updating the address to `#m=<id>` once a draft is saved, and keeping `&d=`, `&n=`, `&links=1` and `&p=` in sync through `onView`.
-- Share button: copy `new URL('#' + hash, location.href)` using `playground.shareHash()`, warning when the link is over 6,000 characters.
+- Share button: copy `new URL(hash, location.href)` using `playground.shareHash()`, warning when the link is over 6,000 characters.
 - Findings collapsed to their one-line summary, expandable.
 - The Models menu: Continue with the last model, New, Open, the saved list, Rename, Duplicate, Delete with confirmation and 10-second Undo, Export all with the last export date. The list renders only when the menu opens.
 - Opening `.dsl` files by file picker and by dropping on the window, through `acceptImport`, with a notice naming each refused file.
