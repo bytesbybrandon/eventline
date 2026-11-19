@@ -127,6 +127,14 @@ test('from without a list is an error that shows both automation forms', () => {
   assert.throws(() => parse('from OrdersToShip -> w -> go()'), /from \[/);
   assert.throws(() => parse('nonsense'), /readmodel/);
 });
+test('an event called readmodel still starts a policy, as on main', () => {
+  for (const src of ['readmodel from [X] -> w -> go(id)', 'readmodel { id } -> w -> go(id)', 'readmodel --[g]--> w -> go(id)', 'readmodel @note("x") -> w -> go(id)']) {
+    const p = parse(src).policies[0];
+    assert.equal(p.trigger.event, 'readmodel', src);
+    assert.equal(p.rules[0].worker, 'w', src);
+  }
+  assert.deepEqual(parse('readmodel from [X] -> w -> go(id)').policies[0].from.map((f) => f.name), ['X']);
+});
 test('from with an empty list is an error', () => {
   assert.throws(() => parse('from [] -> w -> go(id)'), /at least one/);
 });
