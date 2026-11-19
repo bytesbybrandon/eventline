@@ -300,3 +300,15 @@ test('board: a named policy keeps its results in source order and labels each wi
   assert.equal(em.edges.find((e) => e.from === 'policy:Rec' && e.to === 'evt:y-done').label, 'ok');
   assert.equal(em.edges.find((e) => e.from === 'policy:Rec' && e.to === 'evt:z-done').label, '');
 });
+
+test('board: a used declared event is styled declared; an unused one is absent', () => {
+  const b = buildBoard(parse('event cart-opened { cartId }\nevent ghost-seen { id }\nuser -> add(cartId)\non [cart-opened(cartId)]\n  --[default]--> [item-added { cartId }]\ncart-opened { cartId } -> w -> go(cartId)'));
+  const ev = b.nodes.find((n) => n.id === 'evt:cart-opened');
+  assert.equal(ev.sub, 'declared'); assert.ok(!ev.assumed);
+  assert.equal(b.nodes.some((n) => n.id === 'evt:ghost-seen'), false);
+  assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(declared\)/);
+});
+test('board: an undeclared event nothing records is still assumed', () => {
+  const b = buildBoard(parse('user -> add(cartId)\non [cart-opened(cartId)]\n  --[default]--> [item-added { cartId }]'));
+  assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(assumed\)/);
+});
