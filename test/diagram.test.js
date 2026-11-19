@@ -106,6 +106,14 @@ test('board: a rule with no worker gets its own unnamed processor', () => {
   const b = buildBoard(parse('x-happened { id }\n  --[a]--> [y-happened { id }]\n  --[b]--> [z-happened { id }]'));
   const autos = b.nodes.filter((n) => n.id.startsWith('auto:'));
   assert.equal(autos.length, 2); assert.equal(autos[0].label, 'automation'); assert.equal(autos[0].lane, 'actor');
+  assert.equal(autos[0].sub, 'unnamed processor');
+});
+
+test('board: processors on the same trigger keep source order', () => {
+  const b = buildBoard(parse('x-happened { id } -> w1 -> a(id)\nx-happened { id } -> w2 -> b(id)'));
+  assert.ok(byId(b, 'pol:w1').col < byId(b, 'pol:w2').col);
+  const u = buildBoard(parse('x-happened { id }\n  --[a]--> [y-happened { id }]\n  --[b]--> [z-happened { id }]'));
+  assert.ok(byId(u, 'auto:1:0').col < byId(u, 'auto:1:1').col);
 });
 
 test('board: a command shows its decision model instead of arrows from events', () => {

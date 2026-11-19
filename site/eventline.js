@@ -419,6 +419,7 @@ function parsePolicy(sc, model, trigger, line) {
   const annotations = parseAnnotations(sc);
   const policy = { trigger, annotations, notes: notesFrom(annotations), from: [], rules: [], line, endLine: 0 };
   if (sc.keywordBracket('from')) { sc.i += 4; policy.from = parseFactList(sc.balanced(), line); }
+  if (trigger.readModels && !policy.from.length) throw new ParseError('An automation that starts from read models names at least one: from [ReadModel] -> worker -> command()', line);
   while (sc.peek('--[') || sc.peek('->')) {
     const rline = sc.lineAt();
     const rule = { guard: null, worker: null, command: null, emits: [], line: rline };
@@ -578,13 +579,13 @@ function parseOne(sc, model, ctx) {
     if (isCommand) { sc.i += 2; return parseCommand(sc, model, word, line); }
     return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
   }
+  if (sc.peek('{') || sc.peek('--[') || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
   if (word === 'from') {
     // an automation that starts from read models; the cursor goes back onto "from" so parsePolicy reads the list
     if (!/^\s*\[/.test(rest)) throw new ParseError('An automation reads read models: write from [ReadModel] -> worker -> command(), or event from [ReadModel] -> worker -> command()', line);
     sc.i = sc.s.lastIndexOf('from', sc.i);
     return parsePolicy(sc, model, { event: null, schedule: null, readModels: true, fields: [] }, line);
   }
-  if (sc.peek('{') || sc.peek('--[') || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
 
   throw new ParseError(`Unexpected "${word}". A statement starts with system, context, actor, boundary, view or readmodel, "actor -> command(...)", "event { ... }", "from [ReadModel] -> worker -> command()", or "every 5 minutes"`, line);
 }
@@ -1392,7 +1393,9 @@ function buildBoard(model) {
     for (const f of cmd.from) addEdge(readModel(f.name).id, `cmd:${cmd.name}`, 'reads', [f.freshness ? `fresh ${f.freshness}` : '', f.optional ? 'may be empty' : ''].filter(Boolean).join(', '));
   }
 
-  // 3. policies: the processor sits right of what it reads, results right of the processor
+  // 3. policies: the processor sits right of what it reads, results right of the processor;
+  //    a later processor on the same trigger sits right of earlier ones, so siblings keep source order
+  const siblings = new Map();
   for (const pol of model.policies) {
     const ranges = [[pol.line, pol.endLine]];
     const reads = pol.from.map((f) => ({ node: readModel(f.name), label: f.freshness ? `fresh ${f.freshness}` : '' }));
@@ -1403,7 +1406,7 @@ function buildBoard(model) {
     } else if (pol.trigger.event) {
       const eid = `evt:${pol.trigger.event}`;
       if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
-      const fed = reads.find((r) => model.views.some((v) => `view:${v.name}` === r.node.id && v.sources.some((s) => s.name === pol.trigger.event)));
+      const fed = reads.find((r, k) => !needsImpliedReadModel(model, { ...pol, from: [pol.from[k]] }));
       if (fed) gate = fed.node;
       else {
         gate = nodes.get(`implied:${pol.trigger.event}`) || put(`implied:${pol.trigger.event}`, 'command', pol.trigger.event, next('command', colOf.get(eid)), { kind: 'view', implied: true, sub: 'implied read model', ranges: [] });
@@ -1413,10 +1416,14 @@ function buildBoard(model) {
       addEdge(eid, gate.id, 'projects');
     }
     const planned = !!pol.annotations.planned;
+    const sibKey = gate ? gate.id : reads.map((r) => r.node.id).join(',');
+    if (!siblings.has(sibKey)) siblings.set(sibKey, []);
+    const placed = siblings.get(sibKey); // earlier processors on this trigger and their results
     pol.rules.forEach((rule, i) => {
       const wid = rule.worker ? `pol:${rule.worker}` : `auto:${pol.line}:${i}`;
-      const after = Math.max(-1, ...[gate, ...reads.map((r) => r.node)].filter(Boolean).map((n) => n.col)); // live: inserts shift columns
-      const w = nodes.get(wid) || put(wid, 'actor', rule.worker || 'automation', next('actor', after), { kind: 'policy', sub: planned ? 'planned' : 'automation', slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
+      const after = Math.max(-1, ...[gate, ...reads.map((r) => r.node), ...placed.map((id) => nodes.get(id))].filter(Boolean).map((n) => n.col)); // live: inserts shift columns
+      if (!nodes.has(wid)) placed.push(wid);
+      const w = nodes.get(wid) || put(wid, 'actor', rule.worker || 'automation', next('actor', after), { kind: 'policy', sub: planned ? 'planned' : rule.worker ? 'automation' : 'unnamed processor', slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
       (w.ranges = w.ranges || []).push(...ranges);
       bump(w.col);
       const guard = clip(rule.guard || '', 24);
@@ -1425,13 +1432,13 @@ function buildBoard(model) {
       const members = [...(pol.trigger.event ? [`evt:${pol.trigger.event}`] : []), ...(gate ? [gate.id] : []), w.id];
       if (rule.command) {
         const cid = `cmd:${rule.command.name}`;
-        if (!nodes.has(cid)) { const col = next('command', w.col); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); }
+        if (!nodes.has(cid)) { const col = next('command', w.col); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); placed.push(cid); }
         addEdge(w.id, cid, 'invokes', clip(rule.command.args, 24));
         members.push(cid);
       }
       for (const em of rule.emits) {
         const id = `evt:${em.event}`;
-        if (!nodes.has(id)) { const col = next('event', w.col); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); }
+        if (!nodes.has(id)) { const col = next('event', w.col); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); placed.push(id); }
         addEdge(w.id, id, 'emits');
         members.push(id);
       }
