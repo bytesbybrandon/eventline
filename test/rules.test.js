@@ -229,3 +229,14 @@ test('a rejection is covered by a step scenario that expects it, no word match n
   assert.ok(!ids(STEPPED('    when pay(id: 1)\n    then reject NO_FUNDS'), 'slicerm').includes('rejection-uncovered'));
   assert.ok(ids(STEPPED('    when pay(id: 1)\n    then [paid { id: 1 }]'), 'slicerm').includes('rejection-uncovered'));
 });
+
+test('automation-reads-event: an event-started automation should read a read model fed by that event', () => {
+  const bad = 'user -> start(id)\n  --[default]--> [x-happened { id }]\nx-happened { id } -> w -> go(id)';
+  const good = 'user -> start(id)\n  --[default]--> [x-happened { id }]\nreadmodel Todo(id) = [x-happened*(id)] => { id }\nx-happened from [Todo] -> w -> go(id)';
+  const alone = 'user -> start(id)\n  --[default]--> [x-happened { id }]\nreadmodel Todo(id) = [x-happened*(id)] => { id }\nfrom [Todo] -> w -> go(id)';
+  assert.ok(!ids(bad, 'core').includes('automation-reads-event'));
+  const em = found(bad, 'eventmodeling').filter((i) => i.rule === 'automation-reads-event');
+  assert.equal(em.length, 1); assert.equal(em[0].severity, 'info'); assert.match(em[0].message, /from \[/);
+  assert.equal(found(bad, 'slicerm').find((i) => i.rule === 'automation-reads-event').severity, 'warn');
+  for (const text of [good, alone]) assert.ok(!ids(text, 'slicerm').includes('automation-reads-event'));
+});

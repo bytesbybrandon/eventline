@@ -587,6 +587,34 @@ Reading views that other slices define is always fine.
 
 How to fix it: Fold them into one view shaped for how it is read, or give each its own @slice.
 
+### automation-reads-event
+
+**An automation starts straight from an event.**
+Severity: info, warn with `--profile slicerm`.
+Category: slices.
+
+An event reaches an automation through a read model: the read model holds what the automation needs, and the automation starts from it.
+Here the automation reads the event itself, with no read model fed by that event.
+
+How to fix it: Write a read model fed by the event and read it: "x-happened from [PendingWorker] -> worker -> go(id)", or "from [PendingWorker] -> worker -> go(id)" to start from the read model alone.
+
+Instead of:
+
+```text
+user -> start(id)
+  --[default]--> [x-happened { id }]
+x-happened { id } -> w -> go(id)
+```
+
+write:
+
+```text
+user -> start(id)
+  --[default]--> [x-happened { id }]
+readmodel Todo(id) = [x-happened*(id)] => { id }
+x-happened from [Todo] -> w -> go(id)
+```
+
 ### slice-no-scenario
 
 **Commands and views have no scenario.**
