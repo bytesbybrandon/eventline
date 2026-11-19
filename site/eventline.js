@@ -621,15 +621,17 @@ function parse(content) {
   const model = new Model();
   const sc = new Scanner(content.replace(/\r\n?/g, '\n'));
   while (!sc.eof) parseStatement(sc, model, null);
-  const taken = new Map([...model.commands, ...model.views].map((x) => [x.name, x]));
+  model.finalize();
+  const taken = new Map([...model.commands.map((x) => [x.name, `a command on line ${x.line}`]), ...model.views.map((x) => [x.name, `a read model on line ${x.line}`])].reverse());
   const seen = new Set();
   for (const p of model.policies) {
     if (!p.name) continue;
     if (seen.has(p.name)) throw new ParseError(`policy ${p.name} is named twice; policy names are unique across the model`, p.line);
-    if (taken.has(p.name)) throw new ParseError(`policy ${p.name} has the name of a command or read model (line ${taken.get(p.name).line}); give the policy another name`, p.line);
+    const e = model.events.get(p.name);
+    const clash = taken.get(p.name) || (e && (e.declared ? `an event declared on line ${e.declared.line}` : 'an event'));
+    if (clash) throw new ParseError(`Policy "${p.name}" has the same name as ${clash}; give the policy another name`, p.line);
     seen.add(p.name);
   }
-  model.finalize();
   return model;
 }
 
@@ -1097,7 +1099,6 @@ function inventory(model) {
   return out;
 }
 
-/* What each box leads to by default: [diagram, boxId?] pairs, most useful first. */
 /* The board box a worker is drawn in: its named policy's, else its own. */
 const boardBoxes = (model, w) => {
   const named = model.policies.filter((p) => p.name && p.rules.some((r) => r.worker === w)).map((p) => `policy:${p.name}`);
@@ -1106,6 +1107,7 @@ const boardBoxes = (model, w) => {
 };
 const workersOf = (p) => [...new Set(p.rules.map((r) => r.worker).filter(Boolean))];
 
+/* What each box leads to by default: [diagram, boxId?] pairs, most useful first. */
 function derive(model, inv, kind, id) {
   const r = [];
   const worker = (prefix) => id.slice(prefix.length);
@@ -1398,6 +1400,7 @@ function buildBoard(model) {
 
   const assumed = (name) => !(model.events.get(name) || { emittedBy: [] }).emittedBy.length;
   const declaredEv = (name) => assumed(name) && !!(model.events.get(name) || {}).declared; // used, declared, nothing records it
+  const declaredSub = (name) => { const ctx = model.events.get(name).declared.context; return ctx ? `declared · ${ctx}` : 'declared'; };
   const viewLabel = (name) => { const v = model.views.find((x) => x.name === name); return v ? `${name}(${v.params.join(', ')})` : name; };
 
   const cmds = orderCommands(model, commandGroups(model));
@@ -1446,7 +1449,7 @@ function buildBoard(model) {
     const col = srcCols.length ? next('command', Math.max(...srcCols)) : free('command', end);
     const planned = !!view.annotations.planned;
     const v = put(`view:${view.name}`, 'command', viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, ranges: [[view.line, view.endLine]], fullNotes: view.notes, notes: [] });
-    const unemitted = [...new Set(view.sources.map((s) => s.name).filter(assumed))];
+    const unemitted = [...new Set(view.sources.map((s) => s.name).filter(assumed))].map((n) => (declaredEv(n) ? `${n} (declared)` : n));
     if (unemitted.length) v.notes.push(`from ${clip(unemitted.join(', '), 40)}`);
     if (view.triggers.length) v.notes.push(`read in ${clip(view.triggers.map(triggerLabel).join(', '), 36)}`);
     for (const s of view.sources) if (nodes.has(`evt:${s.name}`)) addEdge(`evt:${s.name}`, v.id, 'projects');
@@ -1474,7 +1477,7 @@ function buildBoard(model) {
       bump(gate.col);
     } else if (pol.trigger.event) {
       const eid = `evt:${pol.trigger.event}`;
-      if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, declaredEv(pol.trigger.event) ? { kind: 'event', declared: true, sub: 'declared' } : { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
+      if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, declaredEv(pol.trigger.event) ? { kind: 'event', declared: true, sub: declaredSub(pol.trigger.event) } : { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
       const fed = reads.find((r, k) => !needsImpliedReadModel(model, { ...pol, from: [pol.from[k]] }));
       if (fed) gate = fed.node;
       else {
@@ -1939,14 +1942,27 @@ function scenarioStepIssues(model) {
   return out;
 }
 
+/* An event's known payload: a declared field list plus the fields its recordings compute (name: expression), else every field it is recorded with. */
+function knownPayload(model) {
+  const fieldsOf = eventFields(model);
+  const computed = new Map();
+  const add = (e) => { if (!computed.has(e.event)) computed.set(e.event, new Set()); e.fields.filter((f) => !carried(f)).forEach((f) => computed.get(e.event).add(f.name)); };
+  for (const c of model.commands) for (const b of c.branches) b.emits.forEach(add);
+  for (const p of model.policies) for (const r of p.rules) r.emits.forEach(add);
+  return (event) => {
+    const e = model.events.get(event);
+    const declared = e && e.declared && e.declared.fields;
+    return declared ? [...declared, ...(computed.get(event) || [])] : [...(fieldsOf.get(event) || [])];
+  };
+}
+
 /* ---------------------------------------------------------- eventmodeling */
 
 function unsourcedEventFields(model) {
   const out = [];
-  const fieldsOf = eventFields(model);
   const shape = new Map(model.views.map((v) => [v.name, v.shape.map((f) => f.name)]));
   const declaredFields = (event) => { const e = model.events.get(event); return e && e.declared && e.declared.fields; };
-  const known = (event) => declaredFields(event) || [...(fieldsOf.get(event) || [])];
+  const known = knownPayload(model);
 
   /* A fact nothing records, or a read model nobody declares, may supply anything, so what it supplies is unknown. */
   const unknownSource = (facts) => facts.some((f) => (model.events.has(f.name) ? !declaredFields(f.name) && model.events.get(f.name).emittedBy.length === 0 : !shape.has(f.name)));
@@ -2000,7 +2016,7 @@ function eventContract(model) {
 
 function unsourcedViewFields(model) {
   const out = [];
-  const fieldsOf = eventFields(model);
+  const known = knownPayload(model);
   for (const view of model.views) {
     if (!view.sources.length) continue;
     const events = view.sources.map((s) => model.events.get(s.name));
@@ -2008,8 +2024,7 @@ function unsourcedViewFields(model) {
     // A source nothing records and nothing declares with fields is an assumed fact: its payload is unknown, so there is nothing to check against.
     if (events.some((e) => !declared(e) && (!e || e.emittedBy.length === 0))) continue;
     const have = new Set([...view.params.map(bare), ...view.sources.flatMap((s) => names(s.args)), ...keys(view.annotations)]);
-    // A declaration with fields is the event's known payload.
-    for (const s of view.sources) (declared(model.events.get(s.name)) || fieldsOf.get(s.name) || []).forEach((n) => have.add(n));
+    for (const s of view.sources) known(s.name).forEach((n) => have.add(n));
     const missing = view.shape.filter((f) => carried(f) && !have.has(f.name)).map((f) => f.name);
     if (missing.length) out.push(issue('unsourced-view-field', `Read model "${view.name}" shows ${quote(missing)}, which no event it projects from carries. Add ${missing.length === 1 ? 'it' : 'them'} to an event, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, view.line));
   }
@@ -2211,8 +2226,10 @@ const pascal = (n) => String(n).split(/[^A-Za-z0-9]+/).filter(Boolean).map((w) =
 const automationReadsEvent = (model) => model.policies.filter((p) => needsImpliedReadModel(model, p)).map((p) => {
   const ev = p.trigger.event;
   const worker = (p.rules.find((r) => r.worker) || {}).worker;
-  const rm = `Pending${pascal(worker || ev)}`;
-  return issue('automation-reads-event', `Automation on "${ev}" starts straight from the event. Write a read model such as ${rm}(...) fed by ${ev}, and start from it: "${ev} from [${rm}] -> ..." or "from [${rm}] -> ..."`, p.line);
+  const rm = `Pending${pascal(p.name || worker || ev)}`;
+  const head = p.name ? `policy ${p.name} = ` : '';
+  const who = p.name ? `Automation ${Model.policyName(p)} on "${ev}"` : `Automation on "${ev}"`;
+  return issue('automation-reads-event', `${who} starts straight from the event. Write a read model such as ${rm}(...) fed by ${ev}, and start from it: "${head}${ev} from [${rm}] -> ..." or "${head}from [${rm}] -> ..."`, p.line);
 });
 
 module.exports = {
@@ -2497,7 +2514,7 @@ function renderBoard(board, opts = {}) {
   const ly = ty + 26;
   const legend = [
     ['command', 'command'], ['event', 'event'], ['view', 'read model'], ['implied', 'implied read model'], ['policy', 'processor'], ['assumed', 'assumed event (nothing records it)'],
-    ...(board.nodes.some((n) => n.kind === 'event' && n.declared) ? [['declared', 'declared event (declared, not recorded yet)']] : []),
+    ...(board.nodes.some((n) => n.kind === 'event' && n.declared) ? [['declared', 'declared event (nothing records it yet)']] : []),
   ];
   let lx = M;
   for (const [kind, text] of legend) {
