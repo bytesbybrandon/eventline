@@ -133,7 +133,7 @@
   }
 
   function mount(root, options = {}) {
-    const { base = '', address = 'none', load = 'now', onChange, onView } = options;
+    const { base = '', address = 'none', load = 'now', onChange, onView, dslName = () => 'model.dsl' } = options;
     let theme = options.theme || 'dark';
     const home = address === 'home';
     const $ = (s, r = root) => r.querySelector(s);
@@ -635,7 +635,7 @@
       a.href = URL.createObjectURL(new Blob([body], { type })); a.download = name;
       document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
-    $('#pg-dsl').addEventListener('click', (ev) => { download('model.dsl', 'text/plain', pgEl.text.value); flash(ev.currentTarget); });
+    $('#pg-dsl').addEventListener('click', (ev) => { download(dslName(), 'text/plain', pgEl.text.value); flash(ev.currentTarget); });
     /* The download is the diagram as the CLI writes it: with links on, they point at <diagram>.svg beside the file. */
     $('#pg-svg').addEventListener('click', (ev) => {
       if (!eventline) return;

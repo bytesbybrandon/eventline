@@ -419,6 +419,7 @@
     text: startSmall ? undefined : session.state.text, // left out, the playground starts with its Start small model
     onChange: (text, meta) => { if (meta.fromUser) session.edit(text); },
     onView: syncAddress,
+    dslName: () => exportFiles([session.state])[0].name,
   });
   window.EventlineEditor.attach(playground.textarea, playground.getModel);
   if (startSmall) session.openDraft(playground.getText());
