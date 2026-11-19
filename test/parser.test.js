@@ -178,10 +178,13 @@ test('policy and event keep their old meanings', () => {
   assert.equal(parse('policy -[g]-> w -> go(id)').policies[0].trigger.event, 'policy');
   assert.equal(parse('policy from [V] -> w -> go(id)').policies[0].trigger.event, 'policy');
 });
-test('policy names are unique and never clash with commands or read models', () => {
+test('policy names are unique and never clash with commands, read models or events', () => {
+  const clash = (text, message) => assert.throws(() => parse(text), (e) => e.message === `${message} (line 3)`);
   assert.throws(() => parse('policy A = x-y { id } -> w -> go(id)\npolicy A = x-z { id } -> w -> go(id)'), /policy A/);
-  assert.throws(() => parse('user -> Ship(id)\n  --[default]--> [x-done { id }]\npolicy Ship = x-done { id } -> w -> go(id)'), /Ship/);
-  assert.throws(() => parse('readmodel Ship(id) = [x-done*(id)] => { id }\npolicy Ship = x-done { id } -> w -> go(id)'), /Ship/);
+  clash('user -> Ship(id)\n  --[default]--> [x-done { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as a command on line 1; give the policy another name');
+  clash('readmodel Ship(id) = [x-done*(id)] => { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as a read model on line 1; give the policy another name');
+  clash('user -> go(id)\n  --[default]--> [Ship { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event; give the policy another name');
+  clash('event Ship { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event declared on line 1; give the policy another name');
 });
 
 test('event declarations, with and without fields, inside contexts', () => {

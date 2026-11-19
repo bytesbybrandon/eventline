@@ -384,7 +384,7 @@ policy NightlyReport = every 1 days -> reporter -> buildReport()
 `policy Name =` gives a policy a name.
 What follows the `=` is any policy: one that starts on an event, on a timer or on `from [...]`.
 The name is written like a read model name, such as `NotifyLiker`.
-It is unique across the whole model, contexts included, and may not be the name of a command or read model, so `deps <file> NotifyLiker` always means one thing.
+It is unique across the whole model, contexts included, and may not be the name of a command, read model or event, so `deps <file> NotifyLiker` always means one thing.
 A repeated name is a parse error.
 
 The board draws a named policy as one processor, labelled with its name and listing its workers under it.
