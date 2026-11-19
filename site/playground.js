@@ -595,9 +595,10 @@
     }
     const flash = (btn) => { btn.dataset.done = '1'; setTimeout(() => { delete btn.dataset.done; }, 1800); };
     $('#pg-share').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget; // the event forgets it once the handler awaits
       setAddress(currentHash(true));
       const ok = await copyText(home ? location.href : new URL(currentHash(true), location.href).href);
-      if (ok) flash(ev.currentTarget); else pgEl.status.textContent = home ? 'Copy the address bar: it already holds this model.' : 'Could not copy the link.';
+      if (ok) flash(btn); else pgEl.status.textContent = home ? 'Copy the address bar: it already holds this model.' : 'Could not copy the link.';
     });
     const download = (name, type, body) => {
       const a = document.createElement('a');
