@@ -26,7 +26,7 @@ npx eventline-axi commands <file>
 npx eventline-axi events <file>      # declared events say "not used" or "not recorded"
 npx eventline-axi readmodels <file>   # `views` still works
 npx eventline-axi boundaries <file>
-npx eventline-axi policies <file>    # a named policy shows as "policy NotifyLiker"
+npx eventline-axi policies <file>    # a named policy shows its name in the name column
 
 # Trace dependencies (an entity is a command, read model, event, or a named policy's name)
 npx eventline-axi deps <file> <entity>

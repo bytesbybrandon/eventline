@@ -68,6 +68,9 @@ test('policies shows a policy name and deps accepts it', () => {
       assert.match(r.stdout, /NotifyLiker/);
     }
     assert.match(run('deps', tmp, 'NotifyLiker').stdout, /event:tweet-liked/);
+    const rows = JSON.parse(run('policies', tmp, '-f', 'json').stdout);
+    assert.deepEqual([rows[0].event, rows[0].name], ['tweet-liked', 'NotifyLiker']);
+    assert.match(run('parse', tmp).stdout, /policies\[1\]\{event,rules,name\}:\s*tweet-liked,1,NotifyLiker/);
   } finally { fs.rmSync(tmp, { force: true }); }
 });
 
