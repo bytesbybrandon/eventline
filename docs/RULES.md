@@ -551,6 +551,34 @@ user -> addItem(cartId, sku)
 readmodel Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }
 ```
 
+### event-contract-mismatch
+
+**A recording does not match its event declaration.**
+Severity: warn, warn with `--profile slicerm`.
+Category: fields.
+
+An event declared with a field list has one payload.
+Each place that records it must carry every declared field and no plain field the declaration lacks.
+A computed field (name: expression) counts as carrying the declared field of that name, and computed fields the declaration lacks are allowed.
+
+How to fix it: Change the recording to carry the declared fields, or change the declaration.
+
+Instead of:
+
+```text
+event item-added { cartId, sku }
+user -> add(cartId, colour)
+  --[default]--> [item-added { cartId, colour }]
+```
+
+write:
+
+```text
+event item-added { cartId, sku }
+user -> add(cartId, sku)
+  --[default]--> [item-added { cartId, sku }]
+```
+
 ### dependency-cycle
 
 **Commands depend on each other in a loop.**
@@ -665,6 +693,33 @@ Right when they are one fact told in parts.
 If they are two steps, a policy can take the second.
 
 How to fix it: Keep them if they are one fact, otherwise split the second into a policy.
+
+### event-declared-unused
+
+**A declared event nothing uses.**
+Severity: info.
+Category: hints.
+
+event name { fields } writes an event down before anything records it.
+Nothing records this one, checks it with on [...], folds it in a read model or starts an automation from it yet.
+
+How to fix it: Record it from a command or policy, read it, or remove the declaration.
+
+Instead of:
+
+```text
+event item-added { cartId, sku }
+user -> openCart(cartId)
+  --[default]--> [cart-opened { cartId }]
+```
+
+write:
+
+```text
+event item-added { cartId, sku }
+user -> addItem(cartId, sku)
+  --[default]--> [item-added { cartId, sku }]
+```
 
 ### view-many-sources
 

@@ -244,3 +244,81 @@ test('automation-reads-event: an event-started automation should read a read mod
 test('no rule text people read says view where it means a read model', () => {
   for (const r of RULES) for (const k of ['title', 'why', 'fix']) assert.doesNotMatch(r[k].replace(/state view/gi, '').replace(/`[^`]*`/g, ''), /\bviews?\b(?! model)/i, `${r.id}.${k}`);
 });
+
+test('event-declared-unused hints at a declaration nothing uses', () => {
+  const t = 'event ghost-seen { id }\nevent x-done { id }\nuser -> go(id)\n  --[default]--> [x-done { id }]';
+  const hits = found(t, 'eventmodeling').filter((i) => i.rule === 'event-declared-unused');
+  assert.equal(hits.length, 1); assert.match(hits[0].message, /ghost-seen/); assert.equal(hits[0].severity, 'info'); assert.equal(hits[0].line, 1);
+  assert.ok(ids(t, 'workshop').includes('event-declared-unused'));
+  assert.ok(!ids(t, 'core').includes('event-declared-unused'));
+});
+
+test('a declared event is not assumed, and its declared fields feed unsourced-view-field', () => {
+  assert.ok(!ids('event ghost-seen { id }', 'core').includes('assumed-events'));
+  const view = (fields) => `event item-added { ${fields} }\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }`;
+  assert.ok(!ids(view('cartId, sku'), 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(ids(view('cartId'), 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(!ids('event item-added\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }', 'eventmodeling').includes('unsourced-view-field'));
+});
+
+test('event-contract-mismatch checks each recording against the declaration', () => {
+  const base = 'event item-added { cartId, sku, addedAt }\n';
+  const good = base + 'user -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku, addedAt: clock.wall(), note: "x" }]';
+  const bad = base + 'user -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku, addedAt: clock.wall() }]\nuser -> add2(cartId, colour)\n  --[default]--> [item-added { cartId, colour }]';
+  assert.ok(!ids(good, 'slicerm').includes('event-contract-mismatch'));
+  const hits = found(bad, 'eventmodeling').filter((i) => i.rule === 'event-contract-mismatch');
+  assert.equal(hits.length, 1); assert.equal(hits[0].line, 5); assert.equal(hits[0].severity, 'warn');
+  assert.match(hits[0].message, /colour/); assert.match(hits[0].message, /sku/); assert.match(hits[0].message, /addedAt/);
+  assert.ok(!ids(bad, 'core').includes('event-contract-mismatch'));
+  const noList = 'event item-added\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]';
+  const noPayload = base + 'user -> add(cartId)\n  --[default]--> [item-added]';
+  for (const t of [noList, noPayload]) assert.ok(!ids(t, 'slicerm').includes('event-contract-mismatch'));
+  const policyRecords = base + 'x-done { id } -> w -> [item-added { cartId }]';
+  assert.ok(ids(policyRecords, 'eventmodeling').includes('event-contract-mismatch'));
+});
+test('a read model reading an undeclared field is reported by unsourced-view-field', () => {
+  const t = 'event item-added { cartId }\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }';
+  assert.ok(ids(t, 'eventmodeling').includes('unsourced-view-field'));
+});
+test('a declared field list is the known payload of a fact a command checks with on', () => {
+  const cmd = 'user -> ship(orderId)\n  on [order-paid]\n  --[default]--> [shipped { orderId, carrier }]';
+  assert.ok(ids('event order-paid { orderId, carrier }\n' + cmd, 'eventmodeling').every((r) => r !== 'unsourced-event-field'));
+  assert.ok(ids('event order-paid { orderId }\n' + cmd, 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(ids('event order-paid\n' + cmd, 'eventmodeling').every((r) => r !== 'unsourced-event-field'));
+});
+test('a field a recording computes, beyond the declaration, is still carried downstream', () => {
+  const rec = 'event item-added { cartId, sku }\nuser -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku, addedAt: clock.now() }]\n';
+  const view = rec + 'readmodel Cart(cartId) = [item-added*(cartId)] => { cartId, addedAt }';
+  const cmd = rec + 'user -> stamp(cartId)\n  on [item-added]\n  --[default]--> [stamped { cartId, addedAt }]';
+  assert.ok(!ids(view, 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(!ids(cmd, 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(ids(view.replace('addedAt }', 'colour }'), 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(ids(cmd.replace('addedAt }]', 'colour }]'), 'eventmodeling').includes('unsourced-event-field'));
+});
+test('event-contract-mismatch separates the extra and the missing fields with a semicolon', () => {
+  const t = 'event item-added { cartId, sku }\nuser -> add(cartId, colour)\n  --[default]--> [item-added { cartId, colour }]';
+  const hit = found(t, 'eventmodeling').find((i) => i.rule === 'event-contract-mismatch');
+  assert.match(hit.message, /which the declaration lacks; does not carry "sku"/);
+});
+test('messages about a named policy call it policy Name', () => {
+  const msgs = (t, p = 'eventmodeling') => found(t, p).map((i) => i.message).join('\n');
+  const named = 'policy NotifyLiker = tweet-liked { tweetId } -> w -> notify(tweetId)\n';
+  const all = [
+    msgs('policy ShipOrders = from [Missing] -> w -> ship(id)\n', 'core'),
+    msgs(named, 'core'),
+    msgs('policy NotifyLiker = tweet-liked { tweetId } -> [noted { userId }]\n'),
+    msgs(named.replace('} ->', '} @hotspot("Q", kind=nope) ->')),
+    msgs(named.replace('} ->', '} @accept(rule="many-events") ->')),
+  ];
+  for (const m of all) { assert.match(m, /[Pp]olicy (ShipOrders|NotifyLiker)\b/); assert.doesNotMatch(m, /"(ShipOrders|NotifyLiker)"/); }
+  const guard = found(named, 'core').find((i) => i.rule === 'policy-guard');
+  assert.equal(guard.message, 'Policy NotifyLiker has an unguarded rule');
+});
+test('automation-reads-event keeps a named policy in its message and suggested rewrite', () => {
+  const rec = 'user -> like(tweetId)\n  --[default]--> [tweet-liked { tweetId }]\n';
+  const msg = (t) => found(rec + t, 'eventmodeling').find((i) => i.rule === 'automation-reads-event').message;
+  assert.equal(msg('policy NotifyLiker = tweet-liked { tweetId } -> notifier -> notify(tweetId)'),
+    'Automation policy NotifyLiker on "tweet-liked" starts straight from the event. Write a read model such as PendingNotifyLiker(...) fed by tweet-liked, and start from it: "policy NotifyLiker = tweet-liked from [PendingNotifyLiker] -> ..." or "policy NotifyLiker = from [PendingNotifyLiker] -> ..."');
+  assert.equal(msg('tweet-liked { tweetId } -> notifier -> notify(tweetId)'),
+    'Automation on "tweet-liked" starts straight from the event. Write a read model such as PendingNotifier(...) fed by tweet-liked, and start from it: "tweet-liked from [PendingNotifier] -> ..." or "from [PendingNotifier] -> ..."');
+});

@@ -108,3 +108,42 @@ test('the docs explain read models, screens and both automation forms', () => {
   assert.match(read('docs/GLOSSARY.md'), /### Read model[\s\S]*### Screen/);
   assert.match(read('docs/EVENT-MODELING.md'), /\| *SliceRM *\|/);
 });
+
+test('the code-shape check knows the short guard', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('x\n  -[default]-> [x-done { id }]'));
+});
+
+test('docs grammar and code-shape check know a named policy', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('policy Fan = x-done -> w -> go()'));
+  const grammar = JSON.parse(fs.readFileSync(path.join(root, 'docs-site', 'src', 'code', 'eventline.tmLanguage.json'), 'utf8'));
+  const decl = new RegExp(grammar.repository.declaration.match);
+  assert.deepEqual([...decl.exec('policy Fan = x-done -> w -> go()')].slice(2), ['policy', 'Fan']);
+  assert.equal(decl.exec('policy -> go(id)'), null);
+});
+
+test('docs grammar and code-shape check know an event declaration', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('event item-added { cartId }'));
+  assert.ok(looksLikeEventline('event order-placed'));
+  const grammar = JSON.parse(fs.readFileSync(path.join(root, 'docs-site', 'src', 'code', 'eventline.tmLanguage.json'), 'utf8'));
+  const decl = new RegExp(grammar.repository.eventDeclaration.match);
+  assert.equal(decl.exec('event item-added { cartId }')[2], 'event');
+  assert.equal(decl.exec('event -> go(id)'), null);
+  assert.equal(decl.exec('event { id } -> w -> go(id)'), null);
+});
+
+test('the docs cover short guards, named policies and declared events', () => {
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const lang = read('docs/LANGUAGE.md');
+  assert.match(lang, /-\[[^\]]+\]->/); assert.match(lang, /^policy [A-Z]\w* = /m); assert.match(lang, /^event [a-z]+-[a-z-]+ \{/m);
+  assert.match(lang, /## Named policies/); assert.match(lang, /## Predefined events/);
+  const g = read('docs/GLOSSARY.md'); assert.match(g, /### Named policy/); assert.match(g, /### Declared event/);
+});
+
+test('a block already tagged eventline keeps its closing fence, and the blocks after it pair up as written', async () => {
+  const { tagEventline } = await load();
+  const body = '```eventline\nuser -> go(id)\n  --[default]--> [go-done { id }]\n```\n\n### Next\n\n```eventline\nevent item-added { id }\n```\n';
+  assert.equal(tagEventline(body), body);
+});

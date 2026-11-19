@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { parse, ParseError } = require('../lib/parser');
+const Model = require('../lib/model');
 
 const load = (name) => parse(fs.readFileSync(path.join(__dirname, '..', 'examples', name), 'utf8'));
 const emitted = (cmd, branch) => cmd.branches.find((b) => (branch === 'default' ? b.default : b.guard === branch)).emits.map((e) => e.event);
@@ -145,4 +146,95 @@ test('an event called from still starts a policy, as on main', () => {
     assert.equal(p.trigger.readModels, false, src);
     assert.equal(p.rules[0].worker, 'w', src);
   }
+});
+
+test('short guard arrows mean the same as long ones', () => {
+  const long = 'user -> go(id)\n  --[bad]--> [x-failed { id }]\n  --[default]--> [x-done { id }]\nx-done { id } --[ok]--> w -> next(id)';
+  const short = long.replace(/--\[/g, '-[').replace(/\]-->/g, ']->');
+  const strip = (m) => JSON.stringify(m, (k, v) => (k === 'line' || k === 'endLine' ? undefined : v));
+  assert.equal(strip(parse(short)), strip(parse(long)));
+});
+test('a guard must open and close with the same form', () => {
+  assert.throws(() => parse('user -> go(id)\n  --[default]-> [x-done { id }]'), /--\[guard\]-->.*-\[guard\]->/);
+  assert.throws(() => parse('user -> go(id)\n  -[default]--> [x-done { id }]'), /-\[guard\]->/);
+});
+test('-[ inside a note or annotation is untouched', () => {
+  const m = parse('user -> go(id) @note("a -[b]-> c")\n  --[default]--> [x-done { id }]');
+  assert.equal(m.commands[0].notes[0], 'a -[b]-> c');
+});
+
+test('policy Name = names a policy with any trigger', () => {
+  const m = parse('policy NotifyLiker = tweet-liked { userId } -> notifier -> notify(userId)\npolicy ShipOrders = from [OrdersToShip] -> shipper -> ship(id)\npolicy Nightly = every 1 days -> reporter -> report()');
+  assert.deepEqual(m.policies.map((p) => p.name), ['NotifyLiker', 'ShipOrders', 'Nightly']);
+  assert.equal(m.policies[0].trigger.event, 'tweet-liked'); assert.equal(m.policies[1].trigger.readModels, true); assert.equal(m.policies[2].trigger.schedule, 'every 1 days');
+  assert.equal(Model.policyName(m.policies[0]), 'policy NotifyLiker');
+  assert.equal(Model.policyLabel(m.policies[0]), 'tweet-liked');
+  assert.equal(parse('x-happened { id } -> w -> go(id)').policies[0].name, null);
+});
+test('policy and event keep their old meanings', () => {
+  assert.equal(parse('policy -> go(id)\n  --[default]--> [x-done { id }]').commands[0].actor, 'policy');
+  assert.equal(parse('policy { id } -> w -> go(id)').policies[0].trigger.event, 'policy');
+  assert.equal(parse('policy --[g]--> w -> go(id)').policies[0].trigger.event, 'policy');
+  assert.equal(parse('policy -[g]-> w -> go(id)').policies[0].trigger.event, 'policy');
+  assert.equal(parse('policy from [V] -> w -> go(id)').policies[0].trigger.event, 'policy');
+});
+test('policy names are unique and never clash with commands, read models or events', () => {
+  const clash = (text, message) => assert.throws(() => parse(text), (e) => e.message === `${message} (line 3)`);
+  assert.throws(() => parse('policy A = x-y { id } -> w -> go(id)\npolicy A = x-z { id } -> w -> go(id)'), /policy A/);
+  clash('user -> Ship(id)\n  --[default]--> [x-done { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as a command on line 1; give the policy another name');
+  clash('readmodel Ship(id) = [x-done*(id)] => { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as a read model on line 1; give the policy another name');
+  clash('user -> go(id)\n  --[default]--> [Ship { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event on line 2; give the policy another name');
+  clash('readmodel V(id) = [Ship*(id)] => { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event on line 1; give the policy another name');
+  clash('event Ship { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event declared on line 1; give the policy another name');
+});
+
+test('event declarations, with and without fields, inside contexts', () => {
+  const m = parse('event item-added { cartId, sku, addedAt: clock.wall() }\nevent order-placed\ncontext Shop {\n  event cart-opened { cartId }\n}');
+  assert.deepEqual(m.events.get('item-added').declared.fields, ['cartId', 'sku', 'addedAt']);
+  assert.equal(m.events.get('order-placed').declared.fields, null);
+  assert.equal(m.events.get('cart-opened').declared.context, 'Shop');
+  assert.equal(m.events.get('item-added').declared.line, 1);
+  assert.equal(m.events.get('item-added').emittedBy.length, 0);
+});
+
+test('a declaration with fields is the event known payload', () => {
+  const m = parse('event item-added { cartId, sku }\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]');
+  assert.deepEqual(m.events.get('item-added').fields.map((f) => f.name), ['cartId', 'sku']);
+  const bare = parse('event item-added\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]');
+  assert.deepEqual(bare.events.get('item-added').fields.map((f) => f.name), ['cartId']);
+  assert.equal(parse('user -> add(cartId)\n  --[default]--> [item-added { cartId }]').events.get('item-added').declared, null);
+});
+
+test('event keeps its old meanings, and a second declaration is an error', () => {
+  assert.equal(parse('event -> go(id)\n  --[default]--> [x-done { id }]').commands[0].actor, 'event');
+  assert.equal(parse('event { id } -> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event --[ok]--> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event -[ok]-> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event @note("x") -> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event from [Todo] -> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.throws(() => parse('event x-done { id }\ncontext A {\n  event x-done { id }\n}'), /x-done/);
+  assert.throws(() => parse('event x-done { id }\ncontext A {\n  event x-done { id }\n}'), ParseError);
+});
+
+test('every example parses with declared null on each event', () => {
+  for (const f of fs.readdirSync(path.join(__dirname, '..', 'examples')).filter((n) => n.endsWith('.dsl'))) {
+    for (const e of load(f).events.values()) assert.equal(e.declared, null, `${f} ${e.name}`);
+  }
+});
+
+test('isUsed: recorded, checked with on, folded, or starting an automation; not scenarios', () => {
+  const m = parse([
+    'event a-done', 'event b-done', 'event c-done', 'event d-done', 'event e-done', 'event f-done',
+    'user -> go(id)\n  --[default]--> [a-done { id }]',
+    'user -> check(id) on [b-done]\n  --[default]--> [a-done { id }]\n  scenario "s" {\n    given [f-done]\n    when check(id: 1)\n    then [a-done { id: 1 }]\n  }',
+    'readmodel V(id) = [c-done*(id)] => { id }',
+    'd-done { id } -> w -> go(id)',
+  ].join('\n'));
+  assert.deepEqual(['a-done', 'b-done', 'c-done', 'd-done', 'e-done', 'f-done'].map((n) => Model.isUsed(m, n)), [true, true, true, true, false, false]);
+  assert.equal(Model.isUsed(m, 'nope'), false);
+});
+
+test('error messages mention the short guard, named policies and event declarations', () => {
+  assert.throws(() => parse('user -> go() on [a-b]\n'), (e) => /-\[guard\]->/.test(e.message));
+  assert.throws(() => parse('banana split\n'), (e) => /policy Name = \.\.\./.test(e.message) && /event name \{ fields \}/.test(e.message));
 });

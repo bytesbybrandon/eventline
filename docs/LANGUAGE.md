@@ -66,6 +66,8 @@ Examples:
 - **Guard as Transition:** Put the predicate on the edge, not as a detached statement block (`--[count > limit]-->`).
 - **Explicit Fallback:** Use `--[default]-->` for the final happy path. Never leave a branch implicit.
 - **Multi-Condition Guards:** Use comma-separated conditions inside the guard: `--[count > limit, $tenant_id:xyz]-->`.
+- **Short Form:** `-[guard]->` means exactly what `--[guard]-->` means, wherever a guard is written: `-[default]-> [account-created { email }]`.
+  Open and close a guard with the same form; `--[guard]->` and `-[guard]-->` are errors.
 
 **Example:**
 
@@ -235,7 +237,7 @@ Use this quick pass before you call a model complete.
 4. Freshness: each critical `from [...]` read has explicit freshness/consistency intent.
 5. Confidence: fallback or stale-driven outputs encode confidence metadata (`@confidence(...)`).
 6. Model guards: scored decisions reference explicit model/version (`scoreBy("model", ...)`).
-7. Guards: all branches use `--[guard]-->` and include `--[default]-->` when needed.
+7. Guards: all branches use `--[guard]-->` (or its short form `-[guard]->`) and include `--[default]-->` when needed.
 8. Projection sources: read models are projected from events, not from other read models.
 9. Boundary clarity: each hot-path command states its partition key and consistency boundary with `in BoundaryName(key)`.
 10. Policy coverage: failure/abuse/failover reactions are expressed as policies.
@@ -260,7 +262,10 @@ command = actor "->" verb "(" params ")"
 params = param { "," param }
 param  = name [ "?" ] [ ":" type ]
 
-branch = "--[" guard "]-->" ( "[" emitted_events "]" | "reject" CODE )
+branch = ( "--[" guard "]-->" | "-[" guard "]->" ) ( "[" emitted_events "]" | "reject" CODE )
+
+named_policy      = "policy" PolicyName "=" policy
+event_declaration = "event" event_name [ "{" fields "}" ]
 
 event_fact = event_name "(" params ")"
            | event_name "*" "(" params ")"
@@ -363,6 +368,72 @@ cron "0 * * * *"
 
 A policy can start on a schedule instead of an event, with `every N seconds|minutes|hours|days` or `cron "..."`.
 Any policy can read read models first with `from [...]`, using the same facts and freshness as a command.
+
+### Named policies
+
+```eventline
+policy NotifyLiker = tweet-liked { tweetId, userId }
+  -[userId != ownerId]-> notification-worker -> sendLikeNotification(tweetId, userId)
+  -[default]-> audit-worker -> recordLike(tweetId)
+
+readmodel OrdersToShip(cartId) = [order-placed*(cartId)] => { cartId }
+policy ShipOrders = from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)
+policy NightlyReport = every 1 days -> reporter -> buildReport()
+```
+
+`policy Name =` gives a policy a name.
+What follows the `=` is any policy: one that starts on an event, on a timer or on `from [...]`.
+The name is written like a read model name, such as `NotifyLiker`.
+It is unique across the whole model, contexts included, and may not be the name of a command, read model or event, so `deps <file> NotifyLiker` always means one thing.
+A repeated name is a parse error.
+
+The board draws a named policy as one processor, labelled with its name and listing its workers under it.
+Each rule's result hangs off that one box, labelled with the rule's own guard.
+An unnamed policy is drawn as before, with one processor per worker.
+`eventline-axi policies` shows the name, and findings about the policy call it `policy NotifyLiker`.
+
+Only `policy` followed by a name and `=` is a named policy.
+`policy -> cmd(...)` is still an actor called `policy`, and `policy { ... } -> ...` is still a policy on an event named `policy`.
+
+### Predefined events
+
+```eventline
+event item-added { cartId, sku, addedAt }
+event cart-abandoned
+
+user -> addItem(cartId, sku)
+  --[default]--> [item-added { cartId, sku, addedAt: clock.wall() }]
+```
+
+`event name { fields }` writes an event down before anything records it.
+The field list is optional, and is written like a recorded event's payload; a declared `name: expression` counts as the field `name`.
+An event is declared once in the whole model, and a second declaration, in any context, is a parse error.
+Inside a `context` the event belongs to that context while nothing records it.
+
+A declared event stays off the board until something uses it.
+Used means something records it, checks it with `on [...]`, folds it in a read model, or starts an automation from it.
+Scenario steps and annotations do not count.
+In the model above, `cart-abandoned` is not drawn, and `validate --profile workshop` or `eventmodeling` notes it as `event-declared-unused`.
+
+A used event that nothing records is either declared or assumed.
+A command that checks a declared one says `checks cart-abandoned (declared)` instead of `(assumed)`.
+Where the board draws such an event, as the event that starts a policy, a declared one is filled with a dashed outline and marked `declared` instead of `assumed`, or `declared · Shop` when it is declared inside `context Shop`.
+A read model fed by one says `from cart-abandoned (declared)`.
+`eventline-axi events` lists declared events and says which are not used and which are not recorded.
+
+A field list is the event's contract.
+It is the event's known payload, together with any field a recording computes: `unsourced-view-field` checks the read models that fold the event against it, and `unsourced-event-field` takes it as what an `on [...]` fact carries.
+With `--profile eventmodeling` or `slicerm`, and as info with `workshop`, `event-contract-mismatch` checks each command branch and policy rule that records the event, at its own line.
+It warns about a plain field the declaration lacks and a declared field the recording does not carry.
+
+A computed field, such as `addedAt: clock.wall()` above, supplies the declared field of the same name.
+Computed fields the declaration does not list are allowed, and a read model or an `on [...]` fact may use them.
+
+A declaration with no field list, such as `event cart-abandoned`, has no contract, and no recording is checked against it.
+A recording written with no payload, such as `[item-added]`, is not checked either.
+
+Only `event` followed by an event name is a declaration.
+`event { id } -> worker -> go(id)` is still a policy on an event named `event`.
 
 ### Triggers
 

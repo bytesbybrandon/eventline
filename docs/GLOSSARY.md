@@ -209,6 +209,19 @@ Use an event instead when the refusal must be remembered.
 
 `every N unit` or `cron "..."` starts a policy on a schedule instead of an event.
 
+### Named policy
+
+`policy NotifyLiker = tweet-liked { tweetId } -> ...`: a policy with a name of its own, unique in the model.
+The board draws it as one processor that lists its workers, and the tools call it `policy NotifyLiker`.
+See [Named policies](./LANGUAGE.md#named-policies).
+
+### Declared event
+
+`event item-added { cartId, sku }`: an event written down before, or without, anything that records it.
+It stays off the board until something uses it, and is marked `declared` rather than assumed when nothing records it.
+Its field list is the contract its recordings are checked against.
+See [Predefined events](./LANGUAGE.md#predefined-events).
+
 ### Trigger
 
 `@trigger(type, name, part, route)` on a command or read model: the screen, endpoint, command line tool or agent an actor uses to reach it, the part of it (a button, a toggled read model), and the route it calls.

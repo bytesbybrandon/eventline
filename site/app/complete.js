@@ -19,7 +19,8 @@
     snip('context', 'context  {\n}', 8),
     snip('scenario', 'scenario "" {\n}', 10),
     snip('command', 'Actor -> (id) in Boundary(id)\non [fact-name(id)]\n  --[default]--> [\n    event-name { id }\n  ]', 9),
-    snip('policy', 'event-name { id }\n  -> worker-name -> nextCommand(id)', 0),
+    snip('policy', 'policy Name = event-name { id }\n  -> worker-name -> nextCommand(id)', 7),
+    snip('event', 'event event-name { id }', 6),
   ];
 
   function namesFrom(model) {

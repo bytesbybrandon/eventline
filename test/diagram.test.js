@@ -271,3 +271,56 @@ test('board svg: the description pluralises its counts', () => {
   assert.match(desc('A -> go(id)\n--[default]--> [done]'), /1 command, 1 event, 0 read models, 0 processors; 2 links, 0 consistency boundaries/);
   assert.match(desc(fs.readFileSync(path.join(__dirname, '..', 'examples', 'twitter-pure.dsl'), 'utf8')), /2 processors/);
 });
+
+const FAN = 'user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Fan = x-done { id }\n  --[a]--> w1 -> one(id)\n  --[b]--> w2 -> two(id)';
+test('board: a named policy is one processor box listing its workers', () => {
+  const b = buildBoard(parse(FAN));
+  const p = b.nodes.find((n) => n.id === 'policy:Fan');
+  assert.equal(p.lane, 'actor'); assert.equal(p.kind, 'policy'); assert.equal(p.label, 'Fan'); assert.equal(p.sub, 'w1, w2');
+  assert.equal(b.nodes.some((n) => n.id === 'pol:w1' || n.id === 'pol:w2'), false);
+  assert.ok(b.edges.some((e) => e.from === 'policy:Fan' && e.to === 'cmd:one'));
+  assert.ok(b.edges.some((e) => e.from === 'policy:Fan' && e.to === 'cmd:two'));
+  assert.ok(b.edges.some((e) => e.from === 'implied:x-done' && e.to === 'policy:Fan'));
+  assert.deepEqual(p.ranges, [[3, 5]]);
+});
+test('board: a named policy rule without a worker is listed as automation; unnamed policies are unchanged', () => {
+  const b = buildBoard(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Mix = x-done { id }\n  --[a]--> [y-done { id }]\n  --[b]--> w2 -> two(id)\nx-done { id } -> w3 -> three(id)'));
+  assert.equal(byId(b, 'policy:Mix').sub, 'automation, w2');
+  assert.ok(byId(b, 'pol:w3'));
+  assert.equal(b.nodes.some((n) => n.id.startsWith('auto:')), false);
+});
+test('board: a named policy keeps its results in source order and labels each with its guard', () => {
+  const b = buildBoard(parse(FAN));
+  assert.ok(byId(b, 'cmd:one').col < byId(b, 'cmd:two').col);
+  const edge = (from, to) => b.edges.find((e) => e.from === from && e.to === to);
+  assert.equal(edge('policy:Fan', 'cmd:one').label, 'a');
+  assert.equal(edge('policy:Fan', 'cmd:two').label, 'b');
+  assert.equal(b.edges.filter((e) => e.to === 'policy:Fan').every((e) => e.label === ''), true);
+  const em = buildBoard(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Rec = x-done { id }\n  --[ok]--> [y-done { id }]\n  --[default]--> [z-done { id }]'));
+  assert.equal(em.edges.find((e) => e.from === 'policy:Rec' && e.to === 'evt:y-done').label, 'ok');
+  assert.equal(em.edges.find((e) => e.from === 'policy:Rec' && e.to === 'evt:z-done').label, '');
+});
+
+test('board: a used declared event is styled declared; an unused one is absent', () => {
+  const b = buildBoard(parse('event cart-opened { cartId }\nevent ghost-seen { id }\nuser -> add(cartId)\non [cart-opened(cartId)]\n  --[default]--> [item-added { cartId }]\ncart-opened { cartId } -> w -> go(cartId)'));
+  const ev = b.nodes.find((n) => n.id === 'evt:cart-opened');
+  assert.equal(ev.sub, 'declared'); assert.ok(!ev.assumed);
+  assert.equal(b.nodes.some((n) => n.id === 'evt:ghost-seen'), false);
+  assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(declared\)/);
+});
+test('board: a declared event shows its declaring context, and a read model notes a declared source', () => {
+  const b = buildBoard(parse('context Shop {\n  event cart-opened { cartId }\n}\ncart-opened { cartId } -> w -> go(cartId)\nreadmodel Carts(cartId) = [cart-opened*(cartId)] => { cartId }'));
+  assert.equal(b.nodes.find((n) => n.id === 'evt:cart-opened').sub, 'declared · Shop');
+  assert.deepEqual(b.nodes.find((n) => n.id === 'view:Carts').notes, ['from cart-opened (declared)']);
+});
+test('board: an undeclared event nothing records is still assumed', () => {
+  const b = buildBoard(parse('user -> add(cartId)\non [cart-opened(cartId)]\n  --[default]--> [item-added { cartId }]'));
+  assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(assumed\)/);
+});
+test('svg: a declared event nothing records is filled, with a dashed outline', () => {
+  const svg = render(parse('event cart-opened { cartId }\ncart-opened { cartId } -> w -> go(cartId)\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]'), 'eventmodel');
+  const node = svg.slice(svg.indexOf('data-id="evt:cart-opened"'));
+  assert.match(node.slice(0, node.indexOf('</g>')), /<rect [^>]*fill="#ffd400"[^>]*stroke-dasharray="5 3"/);
+  const recorded = svg.slice(svg.indexOf('data-id="evt:item-added"'));
+  assert.doesNotMatch(recorded.slice(0, recorded.indexOf('</g>')), /stroke-dasharray/);
+});

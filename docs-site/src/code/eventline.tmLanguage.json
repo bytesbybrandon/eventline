@@ -2,13 +2,14 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "eventline",
   "scopeName": "source.eventline",
-  "patterns": [{ "include": "#comment" }, { "include": "#string" }, { "include": "#annotation" }, { "include": "#declaration" }, { "include": "#command" }, { "include": "#clause" }, { "include": "#arrow" }, { "include": "#event" }, { "include": "#number" }],
+  "patterns": [{ "include": "#comment" }, { "include": "#string" }, { "include": "#annotation" }, { "include": "#eventDeclaration" }, { "include": "#declaration" }, { "include": "#command" }, { "include": "#clause" }, { "include": "#arrow" }, { "include": "#event" }, { "include": "#number" }],
   "repository": {
     "comment": { "name": "comment.line.double-slash.eventline", "match": "//.*$" },
     "string": { "name": "string.quoted.double.eventline", "begin": "\"", "end": "\"", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.eventline" }] },
     "annotation": { "name": "storage.type.annotation.eventline", "match": "@[A-Za-z_][\\w]*" },
+    "eventDeclaration": { "match": "^(\\s*)(event)(?=[ \\t]+(?!from\\b)[A-Za-z_][\\w-]*[ \\t]*(?:\\{|//|$))", "captures": { "2": { "name": "keyword.control.eventline" } } },
     "declaration": {
-      "match": "^(\\s*)(system|actor|context|boundary|view|readmodel|scenario)\\b(?:\\s+([A-Za-z_][\\w]*))?",
+      "match": "^(\\s*)(system|actor|context|boundary|view|readmodel|scenario|policy(?=\\s+[A-Za-z_][\\w]*\\s*=))\\b(?:\\s+([A-Za-z_][\\w]*))?",
       "captures": { "2": { "name": "keyword.control.eventline" }, "3": { "name": "entity.name.type.eventline" } }
     },
     "command": {
@@ -16,7 +17,7 @@
       "captures": { "1": { "name": "keyword.operator.arrow.eventline" }, "2": { "name": "entity.name.function.command.eventline" } }
     },
     "clause": { "name": "keyword.control.eventline", "match": "\\bon(?=\\s*\\[)|\\bfrom(?=\\s*\\[)|\\bin(?=\\s+[A-Z])|\\bdefault\\b|\\breject\\b|\\bas\\b(?=\\s+[a-z])" },
-    "arrow": { "name": "keyword.operator.arrow.eventline", "match": "--\\[|\\]-->|-->|->|=>" },
+    "arrow": { "name": "keyword.operator.arrow.eventline", "match": "--?\\[|\\]--?>|-->|->|=>" },
     "event": { "name": "variable.other.event.eventline", "match": "\\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\\*?" },
     "number": { "name": "constant.numeric.eventline", "match": "\\b\\d+(?:\\.\\d+)?\\b" }
   }

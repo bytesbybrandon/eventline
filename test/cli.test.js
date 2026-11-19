@@ -56,3 +56,37 @@ test('readmodels lists read models, and views still works', () => {
   assert.equal(a.stdout, b.stdout);
   assert.match(run('--help').stdout, /readmodels/);
 });
+
+test('policies shows a policy name and deps accepts it', () => {
+  const fs = require('node:fs');
+  const tmp = path.join(require('node:os').tmpdir(), `eventline-named-${process.pid}.dsl`);
+  fs.writeFileSync(tmp, 'policy NotifyLiker = tweet-liked { userId } -> notifier -> notify(userId)\n');
+  try {
+    for (const args of [['policies', tmp], ['parse', tmp], ['deps', tmp, 'NotifyLiker']]) {
+      const r = run(...args);
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /NotifyLiker/);
+    }
+    assert.match(run('deps', tmp, 'NotifyLiker').stdout, /event:tweet-liked/);
+    const rows = JSON.parse(run('policies', tmp, '-f', 'json').stdout);
+    assert.deepEqual([rows[0].event, rows[0].name], ['tweet-liked', 'NotifyLiker']);
+    assert.match(run('parse', tmp).stdout, /policies\[1\]\{event,rules,name\}:\s*tweet-liked,1,NotifyLiker/);
+  } finally { fs.rmSync(tmp, { force: true }); }
+});
+
+test('events lists declared events, unused and unrecorded', () => {
+  const fs = require('node:fs');
+  const tmp = path.join(require('node:os').tmpdir(), `eventline-declared-${process.pid}.dsl`);
+  fs.writeFileSync(tmp, 'event ghost-seen { id }\nevent cart-opened { id }\nevent x-done { id }\nuser -> go(id) on [cart-opened]\n  --[default]--> [x-done { id }]\n');
+  try {
+    const text = run('events', tmp, '-f', 'text');
+    assert.equal(text.status, 0, text.stderr);
+    assert.match(text.stdout, /name: ghost-seen.*declared: not used/);
+    assert.match(text.stdout, /name: cart-opened.*declared: not recorded/);
+    const rows = JSON.parse(run('events', tmp, '-f', 'json').stdout);
+    for (const r of rows) for (const k of ['name', 'emittedBy', 'consumedBy', 'declared']) assert.ok(k in r, k);
+    assert.equal(rows.find((r) => r.name === 'x-done').declared, 'yes');
+    assert.equal(JSON.parse(run('events', file, '-f', 'json').stdout).every((r) => r.declared === ''), true);
+    assert.match(run('events', tmp).stdout, /\{name,emittedBy,consumedBy,declared\}/);
+  } finally { fs.rmSync(tmp, { force: true }); }
+});
