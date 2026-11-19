@@ -600,6 +600,9 @@
       const ok = await copyText(home ? location.href : new URL(currentHash(true), location.href).href);
       if (ok) flash(btn); else pgEl.status.textContent = home ? 'Copy the address bar: it already holds this model.' : 'Could not copy the link.';
     });
+    // A real link, so middle-click and open-in-new-tab work; its address is refreshed just before any of them.
+    const openApp = $('#pg-open-app');
+    if (openApp) for (const t of ['mousedown', 'focus', 'click']) openApp.addEventListener(t, () => { openApp.href = 'app/' + currentHash(true); });
     const download = (name, type, body) => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([body], { type })); a.download = name;

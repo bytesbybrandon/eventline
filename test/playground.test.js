@@ -28,3 +28,9 @@ test('the app has every element the playground needs and loads its modules', () 
   for (const id of requiredIds) assert.ok(app.includes(`id="${id}"`), `missing #${id}`);
   for (const src of ['../eventline.js', '../playground.js', 'store.js', 'session.js', 'zip.js', 'app.js']) assert.ok(app.includes(`src="${src}"`), src);
 });
+
+test('the homepage links to the app and the sitemap lists it', () => {
+  assert.ok(html.includes('id="pg-open-app"'));
+  assert.ok(read('site/sitemap.xml').includes('/eventline/app/'));
+  for (const f of ['docs-site/src/components/Header.astro', 'docs-site/src/components/Hub.astro']) assert.ok(read(f).includes('/eventline/app/'), f);
+});
