@@ -188,7 +188,7 @@
     };
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const TOKEN = /(@[A-Za-z_]\w*)|("(?:[^"\\]|\\.)*")|(->\s*)([A-Za-z_]\w*)(?=\()|(\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\*?)|(\bon(?=\s*\[)|\bfrom(?=\s*\[)|\bin(?=\s+[A-Z])|\b(?:default|reject)\b)/g;
-    const HEAD = /^(\s*)(system|actor|context|boundary|view|readmodel|scenario|policy(?=\s+[A-Za-z_]\w*\s*=))\b/;
+    const HEAD = /^(\s*)(system|actor|context|boundary|view|readmodel|scenario|policy(?=\s+[A-Za-z_]\w*\s*=)|event(?=[ \t]+(?!from\b)[A-Za-z_][\w-]*[ \t]*(?:\{|\/\/|$)))\b/;
     function hlLine(line) {
       let code = line; let cm = '';
       for (let i = 0, q = false; i < line.length; i++) {

@@ -56,3 +56,8 @@ test('policy snippet writes a named policy', () => {
   assert.equal(s.insert, 'policy Name = event-name { id }\n  -> worker-name -> nextCommand(id)');
   assert.equal(s.caretOffset, 7);
 });
+test('event snippet declares an event', () => {
+  const s = SNIPPETS.find((i) => i.label === 'event');
+  assert.equal(s.insert, 'event event-name { id }');
+  assert.equal(s.caretOffset, 6);
+});

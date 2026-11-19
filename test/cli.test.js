@@ -70,3 +70,20 @@ test('policies shows a policy name and deps accepts it', () => {
     assert.match(run('deps', tmp, 'NotifyLiker').stdout, /event:tweet-liked/);
   } finally { fs.rmSync(tmp, { force: true }); }
 });
+
+test('events lists declared events, unused and unrecorded', () => {
+  const fs = require('node:fs');
+  const tmp = path.join(require('node:os').tmpdir(), `eventline-declared-${process.pid}.dsl`);
+  fs.writeFileSync(tmp, 'event ghost-seen { id }\nevent cart-opened { id }\nevent x-done { id }\nuser -> go(id) on [cart-opened]\n  --[default]--> [x-done { id }]\n');
+  try {
+    const text = run('events', tmp, '-f', 'text');
+    assert.equal(text.status, 0, text.stderr);
+    assert.match(text.stdout, /name: ghost-seen.*declared: not used/);
+    assert.match(text.stdout, /name: cart-opened.*declared: not recorded/);
+    const rows = JSON.parse(run('events', tmp, '-f', 'json').stdout);
+    for (const r of rows) for (const k of ['name', 'emittedBy', 'consumedBy', 'declared']) assert.ok(k in r, k);
+    assert.equal(rows.find((r) => r.name === 'x-done').declared, 'yes');
+    assert.equal(JSON.parse(run('events', file, '-f', 'json').stdout).every((r) => r.declared === ''), true);
+    assert.match(run('events', tmp).stdout, /\{name,emittedBy,consumedBy,declared\}/);
+  } finally { fs.rmSync(tmp, { force: true }); }
+});

@@ -666,6 +666,33 @@ If they are two steps, a policy can take the second.
 
 How to fix it: Keep them if they are one fact, otherwise split the second into a policy.
 
+### event-declared-unused
+
+**A declared event nothing uses.**
+Severity: info.
+Category: hints.
+
+event name { fields } writes an event down before anything records it.
+Nothing records this one, checks it with on [...], folds it in a read model or starts an automation from it yet.
+
+How to fix it: Record it from a command or policy, read it, or remove the declaration.
+
+Instead of:
+
+```text
+event item-added { cartId, sku }
+user -> openCart(cartId)
+  --[default]--> [cart-opened { cartId }]
+```
+
+write:
+
+```text
+event item-added { cartId, sku }
+user -> addItem(cartId, sku)
+  --[default]--> [item-added { cartId, sku }]
+```
+
 ### view-many-sources
 
 **Four or more events feed one read model.**

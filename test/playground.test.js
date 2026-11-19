@@ -68,3 +68,12 @@ test('the highlighter treats policy as a keyword only before a name and =', () =
   assert.equal(HEAD.exec('policy -> go(id)'), null);
   assert.equal(HEAD.exec('policy { id } -> w -> go(id)'), null);
 });
+
+test('the highlighter treats event as a keyword only before an event name', () => {
+  const HEAD = new Function(`return ${read('site/playground.js').match(/const HEAD = (\/.*\/);/)[1]}`)();
+  assert.equal(HEAD.exec('event item-added { id }')[2], 'event');
+  assert.equal(HEAD.exec('event order-placed')[2], 'event');
+  assert.equal(HEAD.exec('event -> go(id)'), null);
+  assert.equal(HEAD.exec('event { id } -> w -> go(id)'), null);
+  assert.equal(HEAD.exec('event from [Todo] -> w -> go(id)'), null);
+});

@@ -244,3 +244,19 @@ test('automation-reads-event: an event-started automation should read a read mod
 test('no rule text people read says view where it means a read model', () => {
   for (const r of RULES) for (const k of ['title', 'why', 'fix']) assert.doesNotMatch(r[k].replace(/state view/gi, '').replace(/`[^`]*`/g, ''), /\bviews?\b(?! model)/i, `${r.id}.${k}`);
 });
+
+test('event-declared-unused hints at a declaration nothing uses', () => {
+  const t = 'event ghost-seen { id }\nevent x-done { id }\nuser -> go(id)\n  --[default]--> [x-done { id }]';
+  const hits = found(t, 'eventmodeling').filter((i) => i.rule === 'event-declared-unused');
+  assert.equal(hits.length, 1); assert.match(hits[0].message, /ghost-seen/); assert.equal(hits[0].severity, 'info'); assert.equal(hits[0].line, 1);
+  assert.ok(ids(t, 'workshop').includes('event-declared-unused'));
+  assert.ok(!ids(t, 'core').includes('event-declared-unused'));
+});
+
+test('a declared event is not assumed, and its declared fields feed unsourced-view-field', () => {
+  assert.ok(!ids('event ghost-seen { id }', 'core').includes('assumed-events'));
+  const view = (fields) => `event item-added { ${fields} }\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }`;
+  assert.ok(!ids(view('cartId, sku'), 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(ids(view('cartId'), 'eventmodeling').includes('unsourced-view-field'));
+  assert.ok(!ids('event item-added\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }', 'eventmodeling').includes('unsourced-view-field'));
+});

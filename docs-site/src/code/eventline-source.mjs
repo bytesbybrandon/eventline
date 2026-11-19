@@ -11,6 +11,7 @@ const SHAPES = [
   /--?\[[^\]]*\]--?>/, // a guard edge
   /^\s*(system|actor|boundary|view|readmodel|context|scenario)\s+[A-Za-z_"]/m,
   /^\s*policy\s+[A-Za-z_]\w*\s*=/m, // a named policy
+  /^\s*event[ \t]+[A-Za-z_][\w-]*[ \t]*(\{|$)/m, // an event declaration
   /^\s*[a-z][a-z0-9]*(-[a-z0-9]+)+\*?\s*\{/m, // a policy trigger: event { ... }
   /^\s*(on|from)\s*\[/m, // the facts a command needs, or a policy that starts from a read model
   /@[a-z]+\(/, // an annotation

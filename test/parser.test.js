@@ -183,3 +183,49 @@ test('policy names are unique and never clash with commands or read models', () 
   assert.throws(() => parse('user -> Ship(id)\n  --[default]--> [x-done { id }]\npolicy Ship = x-done { id } -> w -> go(id)'), /Ship/);
   assert.throws(() => parse('readmodel Ship(id) = [x-done*(id)] => { id }\npolicy Ship = x-done { id } -> w -> go(id)'), /Ship/);
 });
+
+test('event declarations, with and without fields, inside contexts', () => {
+  const m = parse('event item-added { cartId, sku, addedAt: clock.wall() }\nevent order-placed\ncontext Shop {\n  event cart-opened { cartId }\n}');
+  assert.deepEqual(m.events.get('item-added').declared.fields, ['cartId', 'sku', 'addedAt']);
+  assert.equal(m.events.get('order-placed').declared.fields, null);
+  assert.equal(m.events.get('cart-opened').declared.context, 'Shop');
+  assert.equal(m.events.get('item-added').declared.line, 1);
+  assert.equal(m.events.get('item-added').emittedBy.length, 0);
+});
+
+test('a declaration with fields is the event known payload', () => {
+  const m = parse('event item-added { cartId, sku }\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]');
+  assert.deepEqual(m.events.get('item-added').fields.map((f) => f.name), ['cartId', 'sku']);
+  const bare = parse('event item-added\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]');
+  assert.deepEqual(bare.events.get('item-added').fields.map((f) => f.name), ['cartId']);
+  assert.equal(parse('user -> add(cartId)\n  --[default]--> [item-added { cartId }]').events.get('item-added').declared, null);
+});
+
+test('event keeps its old meanings, and a second declaration is an error', () => {
+  assert.equal(parse('event -> go(id)\n  --[default]--> [x-done { id }]').commands[0].actor, 'event');
+  assert.equal(parse('event { id } -> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event --[ok]--> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event -[ok]-> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event @note("x") -> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.equal(parse('event from [Todo] -> w -> go(id)').policies[0].trigger.event, 'event');
+  assert.throws(() => parse('event x-done { id }\ncontext A {\n  event x-done { id }\n}'), /x-done/);
+  assert.throws(() => parse('event x-done { id }\ncontext A {\n  event x-done { id }\n}'), ParseError);
+});
+
+test('every example parses with declared null on each event', () => {
+  for (const f of fs.readdirSync(path.join(__dirname, '..', 'examples')).filter((n) => n.endsWith('.dsl'))) {
+    for (const e of load(f).events.values()) assert.equal(e.declared, null, `${f} ${e.name}`);
+  }
+});
+
+test('isUsed: recorded, checked with on, folded, or starting an automation; not scenarios', () => {
+  const m = parse([
+    'event a-done', 'event b-done', 'event c-done', 'event d-done', 'event e-done', 'event f-done',
+    'user -> go(id)\n  --[default]--> [a-done { id }]',
+    'user -> check(id) on [b-done]\n  --[default]--> [a-done { id }]\n  scenario "s" {\n    given [f-done]\n    when check(id: 1)\n    then [a-done { id: 1 }]\n  }',
+    'readmodel V(id) = [c-done*(id)] => { id }',
+    'd-done { id } -> w -> go(id)',
+  ].join('\n'));
+  assert.deepEqual(['a-done', 'b-done', 'c-done', 'd-done', 'e-done', 'f-done'].map((n) => Model.isUsed(m, n)), [true, true, true, true, false, false]);
+  assert.equal(Model.isUsed(m, 'nope'), false);
+});

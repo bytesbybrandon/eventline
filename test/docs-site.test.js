@@ -122,3 +122,14 @@ test('docs grammar and code-shape check know a named policy', async () => {
   assert.deepEqual([...decl.exec('policy Fan = x-done -> w -> go()')].slice(2), ['policy', 'Fan']);
   assert.equal(decl.exec('policy -> go(id)'), null);
 });
+
+test('docs grammar and code-shape check know an event declaration', async () => {
+  const { looksLikeEventline } = await import(pathToFileURL(path.join(root, 'docs-site', 'src', 'code', 'eventline-source.mjs')).href);
+  assert.ok(looksLikeEventline('event item-added { cartId }'));
+  assert.ok(looksLikeEventline('event order-placed'));
+  const grammar = JSON.parse(fs.readFileSync(path.join(root, 'docs-site', 'src', 'code', 'eventline.tmLanguage.json'), 'utf8'));
+  const decl = new RegExp(grammar.repository.eventDeclaration.match);
+  assert.equal(decl.exec('event item-added { cartId }')[2], 'event');
+  assert.equal(decl.exec('event -> go(id)'), null);
+  assert.equal(decl.exec('event { id } -> w -> go(id)'), null);
+});
