@@ -260,3 +260,29 @@ test('a declared event is not assumed, and its declared fields feed unsourced-vi
   assert.ok(ids(view('cartId'), 'eventmodeling').includes('unsourced-view-field'));
   assert.ok(!ids('event item-added\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }', 'eventmodeling').includes('unsourced-view-field'));
 });
+
+test('event-contract-mismatch checks each recording against the declaration', () => {
+  const base = 'event item-added { cartId, sku, addedAt }\n';
+  const good = base + 'user -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku, addedAt: clock.wall(), note: "x" }]';
+  const bad = base + 'user -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku, addedAt: clock.wall() }]\nuser -> add2(cartId, colour)\n  --[default]--> [item-added { cartId, colour }]';
+  assert.ok(!ids(good, 'slicerm').includes('event-contract-mismatch'));
+  const hits = found(bad, 'eventmodeling').filter((i) => i.rule === 'event-contract-mismatch');
+  assert.equal(hits.length, 1); assert.equal(hits[0].line, 5); assert.equal(hits[0].severity, 'warn');
+  assert.match(hits[0].message, /colour/); assert.match(hits[0].message, /sku/); assert.match(hits[0].message, /addedAt/);
+  assert.ok(!ids(bad, 'core').includes('event-contract-mismatch'));
+  const noList = 'event item-added\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]';
+  const noPayload = base + 'user -> add(cartId)\n  --[default]--> [item-added]';
+  for (const t of [noList, noPayload]) assert.ok(!ids(t, 'slicerm').includes('event-contract-mismatch'));
+  const policyRecords = base + 'x-done { id } -> w -> [item-added { cartId }]';
+  assert.ok(ids(policyRecords, 'eventmodeling').includes('event-contract-mismatch'));
+});
+test('a read model reading an undeclared field is reported by unsourced-view-field', () => {
+  const t = 'event item-added { cartId }\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, sku }';
+  assert.ok(ids(t, 'eventmodeling').includes('unsourced-view-field'));
+});
+test('a declared field list is the known payload of a fact a command checks with on', () => {
+  const cmd = 'user -> ship(orderId)\n  on [order-paid]\n  --[default]--> [shipped { orderId, carrier }]';
+  assert.ok(ids('event order-paid { orderId, carrier }\n' + cmd, 'eventmodeling').every((r) => r !== 'unsourced-event-field'));
+  assert.ok(ids('event order-paid { orderId }\n' + cmd, 'eventmodeling').includes('unsourced-event-field'));
+  assert.ok(ids('event order-paid\n' + cmd, 'eventmodeling').every((r) => r !== 'unsourced-event-field'));
+});

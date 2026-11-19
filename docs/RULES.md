@@ -551,6 +551,34 @@ user -> addItem(cartId, sku)
 readmodel Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }
 ```
 
+### event-contract-mismatch
+
+**A recording does not match its event declaration.**
+Severity: warn, warn with `--profile slicerm`.
+Category: fields.
+
+An event declared with a field list has one payload.
+Each place that records it must carry every declared field and no plain field the declaration lacks.
+A computed field (name: expression) counts as carrying the declared field of that name, and computed fields the declaration lacks are allowed.
+
+How to fix it: Change the recording to carry the declared fields, or change the declaration.
+
+Instead of:
+
+```text
+event item-added { cartId, sku }
+user -> add(cartId, colour)
+  --[default]--> [item-added { cartId, colour }]
+```
+
+write:
+
+```text
+event item-added { cartId, sku }
+user -> add(cartId, sku)
+  --[default]--> [item-added { cartId, sku }]
+```
+
 ### dependency-cycle
 
 **Commands depend on each other in a loop.**
