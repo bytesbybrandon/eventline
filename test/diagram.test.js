@@ -312,3 +312,10 @@ test('board: an undeclared event nothing records is still assumed', () => {
   const b = buildBoard(parse('user -> add(cartId)\non [cart-opened(cartId)]\n  --[default]--> [item-added { cartId }]'));
   assert.match(b.nodes.find((n) => n.id === 'cmd:add').notes.join(' '), /checks cart-opened \(assumed\)/);
 });
+test('svg: a declared event nothing records is filled, with a dashed outline', () => {
+  const svg = render(parse('event cart-opened { cartId }\ncart-opened { cartId } -> w -> go(cartId)\nuser -> add(cartId)\n  --[default]--> [item-added { cartId }]'), 'eventmodel');
+  const node = svg.slice(svg.indexOf('data-id="evt:cart-opened"'));
+  assert.match(node.slice(0, node.indexOf('</g>')), /<rect [^>]*fill="#ffd400"[^>]*stroke-dasharray="5 3"/);
+  const recorded = svg.slice(svg.indexOf('data-id="evt:item-added"'));
+  assert.doesNotMatch(recorded.slice(0, recorded.indexOf('</g>')), /stroke-dasharray/);
+});

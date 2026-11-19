@@ -2316,7 +2316,7 @@ function shape(n, g, t) {
     case 'event':
       body = n.assumed
         ? `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.bg}" stroke="${t.ink}" stroke-width="1.5" stroke-dasharray="5 3"/>`
-        : `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.accent}" stroke="${t.ink}" stroke-width="1"/>`;
+        : `<rect x="${n1(x)}" y="${n1(y)}" width="${w}" height="${h}" rx="6" fill="${t.accent}" stroke="${t.ink}" stroke-width="1"${dashed}/>`;
       break;
     case 'command':
     case 'process':
