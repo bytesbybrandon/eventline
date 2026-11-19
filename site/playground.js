@@ -412,9 +412,15 @@
     function setText(text, fromUser) {
       pgEl.text.value = text;
       paintMirror();
+      if (!fromUser) {
+        // Text from outside is another model: forget this one's selected box, and tell the editor to forget its names.
+        pgSel = null; lastModel = null;
+        pgEl.text.dispatchEvent(new Event('eventline:replaced'));
+      }
       clearTimeout(timer);
       timer = setTimeout(() => {
         drawBoard();
+        if (!fromUser) viewChanged(); // a text that does not parse never reaches drawBoard's own call
         if (fromUser) { pgDirty = true; setAddress(currentHash(true)); }
         if (onChange) onChange(text, { fromUser: !!fromUser });
       }, fromUser ? 140 : 0);
@@ -648,12 +654,12 @@
         if (h.kind && kindTabs.some((t) => t.dataset.kind === h.kind)) pgKind = h.kind; else if (!h.kind) pgKind = 'eventmodel';
         pgLinks = h.links;
         pgProfile = h.profile;
-        pgSel = h.node;
         paintKinds();
         if (h.text !== null) {
           const text = b64.dec(h.text);
-          if (text !== pgEl.text.value) { $$('.pg__tab').forEach((t) => t.setAttribute('aria-pressed', 'false')); pgDirty = true; setText(text, false); return true; }
+          if (text !== pgEl.text.value) { $$('.pg__tab').forEach((t) => t.setAttribute('aria-pressed', 'false')); pgDirty = true; setText(text, false); pgSel = h.node; return true; }
         }
+        pgSel = h.node;
         if (eventline) drawBoard();
         return true;
       } catch { return false; }

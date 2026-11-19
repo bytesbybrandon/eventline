@@ -174,6 +174,8 @@
     textarea.addEventListener('mousedown', close);
     textarea.addEventListener('scroll', onScroll);
     textarea.addEventListener('compositionstart', close);
+    function forget() { names = []; close(); } // another model was opened; its names must not be offered
+    textarea.addEventListener('eventline:replaced', forget);
     var MATCH_ON = ['keyup', 'mouseup', 'input', 'focus', 'select'];
     MATCH_ON.forEach(function (t) { textarea.addEventListener(t, paintMatch); });
     textarea.addEventListener('blur', hideMatch);
@@ -187,6 +189,7 @@
         });
         MATCH_ON.forEach(function (t) { textarea.removeEventListener(t, paintMatch); });
         textarea.removeEventListener('blur', hideMatch);
+        textarea.removeEventListener('eventline:replaced', forget);
         ['role', 'aria-autocomplete', 'aria-controls', 'aria-expanded'].forEach(function (a) { textarea.removeAttribute(a); });
         pop.remove(); probe.remove(); boxes.forEach(function (b) { b.remove(); });
       },
