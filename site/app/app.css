@@ -1,0 +1,124 @@
+/* The workspace shell. The editor and board keep their styles from playground.css. */
+
+.ap { height: 100dvh; margin: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); background: var(--sc-canvas); color: var(--sc-ink); overflow: hidden; }
+/* Fixed rows, so the prompt panel showing or hiding never moves the footer into the main row. */
+.ap-top { grid-row: 1; }
+.ap-banners { grid-row: 2; }
+.ap-prompt { grid-row: 3; }
+.ap-main, .ap-practice { grid-row: 4; grid-column: 1; }
+.ap-foot { grid-row: 5; }
+.ap button:focus-visible, .ap a:focus-visible, .ap summary:focus-visible, .ap input:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+
+.ap-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-2) var(--sc-3); padding: var(--sc-2) var(--sc-4); border-bottom: 1px solid var(--sc-hairline); background: #0f1630; }
+.ap-brand { font-family: var(--sc-font-display); font-weight: 700; color: var(--sc-ink); text-decoration: none; }
+.ap-name { font-weight: 600; min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-save { font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
+.ap-save[data-bad] { color: var(--sc-accent); font-weight: 700; }
+.ap-slot { margin-left: auto; display: flex; align-items: center; gap: var(--sc-2); }
+.ap-layout { display: flex; gap: 2px; }
+
+.ap-menu { position: fixed; inset: auto; margin: 0; width: min(30rem, calc(100vw - 2rem)); max-height: min(70dvh, 36rem); overflow: auto; padding: var(--sc-3); background: var(--sc-surface); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); box-shadow: var(--sc-e3); }
+.ap-menu__acts { display: flex; flex-wrap: wrap; gap: var(--sc-2); }
+.ap-menu__note { margin: var(--sc-2) 0 0; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
+.ap-list { list-style: none; margin: var(--sc-3) 0 0; padding: var(--sc-2) 0 0; border-top: 1px solid var(--sc-hairline); display: grid; gap: 2px; }
+.ap-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-1); }
+.ap-row__open { all: unset; box-sizing: border-box; flex: 1 1 10rem; min-width: 0; min-height: 36px; padding: var(--sc-2) var(--sc-3); border-radius: 6px; cursor: pointer; }
+.ap-row__open:hover { background: color-mix(in oklab, var(--sc-ink) 10%, transparent); }
+.ap-row__name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-row__date { display: block; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); }
+
+.ap-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-2) var(--sc-3); padding: var(--sc-2) var(--sc-4); background: var(--sc-accent); color: var(--sc-accent-ink); font-weight: 600; }
+.ap-banner p { margin: 0; flex: 1 1 18rem; }
+.ap-banner .btn { background: var(--sc-accent-ink); color: var(--sc-ink); border-color: var(--sc-accent-ink); }
+.ap .ap-banner button:focus-visible { outline-color: var(--sc-accent-ink); }
+
+.ap-main { min-height: 0; min-width: 0; padding: var(--sc-2); }
+.ap .pg__grid { position: relative; height: 100%; min-height: 0; gap: var(--sc-2); grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); }
+.ap .pg__grid[data-layout="editor"], .ap .pg__grid[data-layout="board"] { grid-template-columns: minmax(0, 1fr); }
+/* A hidden pane keeps its size: the board measures its boxes while drawing, even when it is not showing. */
+.ap .pg__grid[data-layout="editor"] .pg__bd, .ap .pg__grid[data-layout="board"] .pg__ed { position: absolute; inset: 0; visibility: hidden; }
+.ap .pg__grid[data-board="light"] .pg__bd { background: #ffffff; }
+/* Zoom sits in the board's tab bar here, not floating over the board as a second card. */
+.ap .pg__zoom { position: static; padding: 0; background: none; border: 0; box-shadow: none; }
+
+.ap-foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--sc-2) var(--sc-4); align-items: start; padding: var(--sc-2) var(--sc-4); border-top: 1px solid var(--sc-hairline); }
+.ap-findings summary { cursor: pointer; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); color: var(--sc-ink-soft); min-height: 24px; }
+.ap-findings__body { max-height: 30dvh; overflow: auto; padding-top: var(--sc-2); }
+.ap-read { min-width: 0; }
+.ap-read .pg__trace { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ap-notices { position: fixed; left: 50%; bottom: var(--sc-4); transform: translateX(-50%); width: min(36rem, calc(100vw - 2rem)); display: grid; gap: var(--sc-2); z-index: 20; pointer-events: none; }
+.ap-notice { pointer-events: auto; display: flex; align-items: center; gap: var(--sc-3); padding: var(--sc-3) var(--sc-4); background: var(--sc-surface); border: 1px solid var(--sc-accent); border-radius: var(--r); box-shadow: var(--sc-e3); font-size: var(--sc-t-sm); }
+.ap-notice span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.ap-dialog { background: var(--sc-surface); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); padding: var(--sc-5); width: min(26rem, calc(100vw - 2rem)); }
+.ap-dialog::backdrop { background: rgb(5 8 16 / 0.7); }
+.ap-dialog h2 { margin: 0 0 var(--sc-2); font-size: var(--sc-t-lg, 1.25rem); }
+.ap-dialog p { margin: 0; overflow-wrap: anywhere; color: var(--sc-ink-soft); }
+.ap-dialog__acts { display: flex; justify-content: flex-end; gap: var(--sc-2); margin-top: var(--sc-4); }
+.ap-field { display: grid; gap: var(--sc-1); font-size: var(--sc-t-sm); }
+.ap-field input { min-height: 40px; padding: 0 var(--sc-3); background: var(--sc-canvas); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: 6px; font: inherit; }
+
+/* -------------------------------------------------------------- practice -- */
+.ap .ap-pr__link:focus-visible, .ap textarea:focus-visible, .ap input[type="checkbox"]:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+.ap-timer { font-family: var(--sc-font-mono); font-size: var(--sc-t-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-timer[data-over] { color: var(--sc-accent); font-weight: 700; }
+.ap-prompt { border-bottom: 1px solid var(--sc-hairline); padding: var(--sc-2) var(--sc-4); font-size: var(--sc-t-sm); }
+.ap-prompt summary { cursor: pointer; font-weight: 600; min-height: 24px; }
+.ap-prompt__body { max-height: 30dvh; overflow: auto; padding-top: var(--sc-2); }
+
+/* The workspace stays laid out under the practice screen, so the board can still measure while it is hidden. */
+.ap-practice { display: none; min-height: 0; overflow: auto; padding: var(--sc-4); }
+.ap[data-mode="practice"] .ap-practice { display: block; }
+.ap[data-mode="practice"] .ap-main { visibility: hidden; }
+.ap[data-mode="practice"] .ap-foot, .ap[data-mode="practice"] .ap-layout { display: none; }
+.ap-practice > * { max-width: 96rem; margin-inline: auto; }
+.ap-practice h1 { margin: 0; font-family: var(--sc-font-display); font-size: var(--sc-t-xl, 1.6rem); }
+.ap-practice h1:focus { outline: none; }
+.ap-practice h2 { margin: 0 0 var(--sc-2); font-size: var(--sc-t-md, 1.05rem); }
+.ap-pr__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sc-2) var(--sc-4); margin-bottom: var(--sc-3); }
+.ap-pr__acts { display: flex; flex-wrap: wrap; gap: var(--sc-2); }
+.ap-pr__note, .ap-pr__meta { margin: 0 0 var(--sc-3); color: var(--sc-ink-soft); font-size: var(--sc-t-sm); }
+.ap-pr__meta { font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); }
+.ap-pr__text { max-width: 70ch; margin: 0 0 var(--sc-3); line-height: 1.6; }
+.ap-pr__reqs { max-width: 70ch; margin: 0 0 var(--sc-4); padding-left: 1.2em; display: grid; gap: var(--sc-1); line-height: 1.5; }
+.ap-pr__box { padding: var(--sc-3) var(--sc-4); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); background: var(--sc-surface); min-width: 0; }
+.ap-pr__prompts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sc-3); grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); }
+.ap-pr__past { list-style: none; margin: var(--sc-3) 0 0; padding: var(--sc-2) 0 0; border-top: 1px solid var(--sc-hairline); display: grid; gap: 2px; }
+.ap-pr__link { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 32px; padding: var(--sc-1) var(--sc-2); border-radius: 6px; cursor: pointer; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); }
+.ap-pr__link:hover { background: color-mix(in oklab, var(--sc-ink) 10%, transparent); }
+.ap-pr__kinds { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: var(--sc-2); }
+.ap-pr__boards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sc-3); margin-bottom: var(--sc-3); }
+.ap-pr__board { background: #0a0e1a; }
+.ap-pr__boards[data-board="light"] .ap-pr__board { background: #ffffff; color: #0a0e1a; }
+.ap-pr__boards[data-board="light"] .ap-pr__board .pg__trace, .ap-pr__boards[data-board="light"] .ap-pr__board .ap-pr__note { color: #3a4560; }
+.ap-pr__draw .pg__board { height: min(60dvh, 34rem); }
+.ap-pr__draw .pg__trace { margin-top: var(--sc-2); }
+.ap-pr__cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr)); gap: var(--sc-3); }
+.ap-pr__checks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sc-2); }
+.ap-pr__checks label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sc-2); align-items: start; line-height: 1.5; cursor: pointer; }
+.ap-pr__checks input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--sc-accent); }
+.ap-pr__notes { box-sizing: border-box; width: 100%; padding: var(--sc-2) var(--sc-3); background: var(--sc-canvas); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: 6px; font: inherit; resize: vertical; }
+.ap-pr__findings { margin: 0; padding-left: 1.2em; display: grid; gap: var(--sc-1); font-size: var(--sc-t-sm); color: var(--sc-ink-soft); overflow-wrap: anywhere; }
+.ap-pr__ref { margin: 0; max-height: 24rem; overflow: auto; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); line-height: 1.6; tab-size: 2; }
+
+@media (max-width: 899.98px) {
+  .ap-pr__boards { grid-template-columns: minmax(0, 1fr); }
+  .ap-layout [data-layout="split"] { display: none; }
+  .ap .pg__grid { grid-template-columns: minmax(0, 1fr); }
+  .ap-foot { grid-template-columns: minmax(0, 1fr); }
+  .ap .pg__out { justify-content: flex-start; }
+  .ap-slot { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ap *, .ap *::before, .ap *::after { transition: none !important; animation: none !important; }
+}
+
+/* ---------------------------------------------------------- autocomplete -- */
+.ap-pop { position: absolute; z-index: 5; margin: 0; padding: var(--sc-2); list-style: none; min-width: 12rem; max-width: calc(100% - 8px); max-height: 14rem; overflow: auto; background: var(--sc-surface); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); box-shadow: var(--sc-e3); font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); line-height: 1.7; color: var(--sc-ink); }
+.ap-pop li { display: flex; justify-content: space-between; gap: var(--sc-4); padding: 0 var(--sc-2); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.ap-pop li[aria-selected="true"] { background: var(--sc-accent); color: var(--sc-accent-ink); }
+.ap-pop__kind { opacity: 0.7; }
+.ap-match { position: absolute; z-index: 1; pointer-events: none; box-sizing: border-box; outline: 1px solid var(--sc-accent); border-radius: 2px; }
+.ap-probe { position: absolute; visibility: hidden; pointer-events: none; top: 0; left: 0; white-space: pre; overflow: hidden; height: 0; box-sizing: border-box; }

@@ -1,0 +1,69 @@
+[
+  {
+    "id": "rate-limiter",
+    "title": "Rate limiter",
+    "minutes": 30,
+    "scenario": "You are building the front door for a public API. Customers sign in and are on a free or paid plan, and each plan allows a different number of requests per minute. Requests over the allowance must be turned away with a hint about when to retry. Repeat offenders should be blocked for a while, and the system should keep answering when part of it is unavailable.",
+    "requirements": [
+      { "id": "sign-in", "text": "A customer can sign in, and a failed sign-in is recorded.", "covers": ["authenticate", "user-auth-succeeded", "user-auth-failed"] },
+      { "id": "plan-limits", "text": "Each plan has its own request allowance, and that allowance can be raised or lowered.", "covers": ["TierLimit", "tier-created", "tier-limit-increased", "tier-limit-decreased"] },
+      { "id": "count-requests", "text": "Every allowed request is recorded against the customer's current minute.", "covers": ["makeRequest", "request-logged"] },
+      { "id": "turn-away", "text": "A request over the allowance is turned away and tells the caller when to retry.", "covers": ["rate-limit-reached"] },
+      { "id": "unauthorised", "text": "A request for a resource the customer may not use is refused.", "covers": ["request-failed"] },
+      { "id": "abuse-ban", "text": "A customer who keeps hitting the allowance is temporarily banned, away from the main request path.", "covers": ["rate-limit-reached"] },
+      { "id": "quota-view", "text": "A customer can see how many requests they have left and when the allowance resets.", "covers": ["UserQuota"] },
+      { "id": "degraded", "text": "When the usual counter is unavailable, a request is still answered and marked as less certain.", "covers": ["unavailable-shard-request-received", "request-logged"] }
+    ],
+    "reference": "rate-limiter.dsl"
+  },
+  {
+    "id": "payment-webhook",
+    "title": "Payment webhook",
+    "minutes": 30,
+    "scenario": "Your company invoices customers and uses an outside payment provider that tells you about payments by calling your server. The provider may send the same notice more than once, and payments can later be refunded. Make sure each payment is applied exactly once, keep a current picture of every invoice's payment state, and watch for fraud.",
+    "requirements": [
+      { "id": "ingest", "text": "A payment notice from the provider is turned into a charge against the right invoice.", "covers": ["ingestCharge", "invoice-issued"] },
+      { "id": "capture", "text": "A valid, first-time payment is recorded as captured.", "covers": ["payment-captured"] },
+      { "id": "duplicate", "text": "A notice the system has already seen is ignored and the duplicate is recorded.", "covers": ["webhook-duplicate-ignored", "WebhookDedupView"] },
+      { "id": "already-paid", "text": "A notice for an invoice that is already paid is recorded without charging again.", "covers": ["payment-already-captured"] },
+      { "id": "status-view", "text": "Anyone can look up an invoice and see whether it is paid, and how much was paid and refunded.", "covers": ["PaymentStatusView", "payment-refunded"] },
+      { "id": "dedup-down", "text": "When the duplicate check cannot be reached, the payment is still accepted and marked as low confidence.", "covers": ["payment-captured", "WebhookDedupView"] },
+      { "id": "fraud", "text": "A payment that a fraud score rates as very likely fraudulent is flagged.", "covers": ["payment-fraud-detected"] }
+    ],
+    "reference": "payment-webhook.dsl"
+  },
+  {
+    "id": "billing",
+    "title": "Billing",
+    "minutes": 45,
+    "scenario": "Design the billing side of a subscription product. Customers receive invoices, and an administrator can refund them, but only once. Customers who fall behind should be reminded on a schedule, and they also get an email when a new invoice appears. Some of this work is not built yet, and your model should show that.",
+    "requirements": [
+      { "id": "open-invoice", "text": "A customer can open an invoice for an amount, and a non-positive amount is refused.", "covers": ["openInvoice", "invoice-opened"] },
+      { "id": "refund", "text": "An administrator can refund an invoice.", "covers": ["refundInvoice", "invoice-refunded"] },
+      { "id": "refund-once", "text": "An invoice cannot be refunded twice.", "covers": ["refundInvoice", "invoice-refunded"] },
+      { "id": "invoice-state", "text": "Anyone can look up the current state of an invoice.", "covers": ["InvoiceStatus"] },
+      { "id": "overdue-list", "text": "There is a list of accounts with overdue invoices and how late each one is.", "covers": ["OverdueInvoices"] },
+      { "id": "reminders", "text": "Overdue accounts are reminded automatically on a schedule.", "covers": ["OverdueInvoices"] },
+      { "id": "invoice-email", "text": "A customer is emailed when a new invoice is opened.", "covers": ["invoice-opened"] }
+    ],
+    "reference": "billing.dsl"
+  },
+  {
+    "id": "twitter-pure",
+    "title": "Twitter-style feed",
+    "minutes": 45,
+    "scenario": "Design the core of a short-post social network. People post short messages, follow each other, like and reshare posts, and delete their own. Each person sees a home feed built from the people they follow, and the system should notice topics that are suddenly everywhere. Reads vastly outnumber writes.",
+    "requirements": [
+      { "id": "post", "text": "A signed-in user can post a message, and one that is too long is refused.", "covers": ["postTweet", "tweet-created", "tweet-rejected"] },
+      { "id": "follow", "text": "A user can follow another user, but not twice.", "covers": ["followUser", "user-followed", "follow-rejected"] },
+      { "id": "like", "text": "A user can like a post, but not twice.", "covers": ["likeTweet", "tweet-liked", "like-rejected"] },
+      { "id": "reshare", "text": "A user can reshare a post, but not twice.", "covers": ["retweet", "tweet-retweeted", "retweet-rejected"] },
+      { "id": "delete", "text": "Only the author can delete a post.", "covers": ["deleteTweet", "tweet-deleted", "delete-rejected"] },
+      { "id": "home-feed", "text": "A user sees a feed of posts and reshares from the people they follow.", "covers": ["UserTimeline"] },
+      { "id": "post-and-profile", "text": "A post can be shown with its counts, and a profile with its name and follower numbers.", "covers": ["TweetDetails", "UserProfile"] },
+      { "id": "trending", "text": "A topic that appears very often in a short time is detected as trending.", "covers": ["trend-detected", "tweet-created"] },
+      { "id": "like-notice", "text": "The author is notified when someone likes their post.", "covers": ["tweet-liked"] }
+    ],
+    "reference": "twitter-pure.dsl"
+  }
+]

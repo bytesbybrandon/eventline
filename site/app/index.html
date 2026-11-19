@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eventline app</title>
+<meta name="description" content="Model a system in eventline. Models stay in this browser.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../frontstage.css">
+<link rel="stylesheet" href="../playground.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="ap">
+<header class="ap-top">
+  <a class="ap-brand" href="../">eventline</a>
+  <button type="button" class="btn btn--quiet" id="ap-models" popovertarget="ap-menu">Models</button>
+  <div class="ap-menu" id="ap-menu" popover role="group" aria-label="Models"></div>
+  <span class="ap-name" id="ap-name"></span>
+  <span class="ap-save" id="ap-save"></span>
+  <div class="ap-slot" id="ap-slot"></div>
+  <div class="ap-layout" role="group" aria-label="Layout">
+    <button type="button" class="btn btn--quiet" data-layout="editor" aria-keyshortcuts="Alt+1" title="Alt+1">Editor</button>
+    <button type="button" class="btn btn--quiet" data-layout="split" aria-keyshortcuts="Alt+2" title="Alt+2">Split</button>
+    <button type="button" class="btn btn--quiet" data-layout="board" aria-keyshortcuts="Alt+3" title="Alt+3">Board</button>
+  </div>
+  <button type="button" class="btn btn--quiet" id="ap-theme" aria-pressed="false">Light board</button>
+</header>
+
+<div class="ap-banners" id="ap-banners"></div>
+
+<details class="ap-prompt" id="ap-prompt" hidden>
+  <summary id="ap-prompt-title">Prompt</summary>
+  <div class="ap-prompt__body" id="ap-prompt-body"></div>
+</details>
+
+<section class="ap-practice" id="ap-practice" aria-label="Practice"></section>
+
+<main class="ap-main">
+  <div class="pg__grid" id="pg" data-state="idle">
+    <div class="pg__ed">
+      <div class="pg__bar"><span class="sc-label">model.dsl</span><span class="pg__hint">Click a box to find its lines</span></div>
+      <div class="pg__code">
+        <div class="pg__hl" aria-hidden="true"><div class="pg__hl-in" id="pg-hl"></div><div class="pg__hl-in pg__marks" id="pg-marks"></div></div>
+        <pre class="pg__mirror" id="pg-mirror" aria-hidden="true"><code></code></pre>
+        <textarea id="pg-text" class="pg__area" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="eventline model, editable. The board updates as you type." aria-describedby="pg-status ap-ed-help"></textarea>
+        <span id="ap-ed-help" hidden>Press Esc, then Tab, to leave the editor.</span>
+      </div>
+    </div>
+    <div class="pg__bd">
+      <div class="pg__bar pg__bar--kinds">
+        <div class="pg__kinds" role="tablist" aria-label="Diagram, all derived from the model">
+          <button type="button" role="tab" class="pg__kind" data-kind="eventmodel" aria-selected="true">Event model</button>
+          <button type="button" role="tab" class="pg__kind" data-kind="context" aria-selected="false" tabindex="-1">Context</button>
+          <button type="button" role="tab" class="pg__kind" data-kind="containers" aria-selected="false" tabindex="-1">Containers</button>
+          <button type="button" role="tab" class="pg__kind" data-kind="dataflow" aria-selected="false" tabindex="-1">Data flow</button>
+          <button type="button" role="tab" class="pg__kind" data-kind="deployment" aria-selected="false" tabindex="-1">Deployment</button>
+          <button type="button" role="tab" class="pg__kind" data-kind="contextmap" aria-selected="false" tabindex="-1">Context map</button>
+        </div>
+        <div class="pg__tools">
+          <div class="pg__zoom" role="group" aria-label="Zoom">
+            <button type="button" class="pg__z" id="pg-zout" aria-label="Zoom out">&minus;</button>
+            <output class="pg__zv" id="pg-zv" aria-live="polite">Fit</output>
+            <button type="button" class="pg__z" id="pg-zin" aria-label="Zoom in">+</button>
+            <button type="button" class="pg__z pg__z--fit" id="pg-fit" aria-pressed="true">Fit</button>
+          </div>
+          <button type="button" class="btn btn--quiet" id="pg-links" aria-pressed="false" title="Each box that leads somewhere links to the same thing in another diagram">Links</button>
+        </div>
+      </div>
+      <div class="pg__board is-fit" id="pg-board" role="tabpanel"><p class="pg__empty">The board appears here.</p></div>
+    </div>
+  </div>
+</main>
+
+<footer class="ap-foot">
+  <details class="ap-findings">
+    <summary><span id="pg-summary" aria-live="polite">No findings.</span></summary>
+    <div class="ap-findings__body">
+      <div class="pg__checks" role="group" aria-label="Which checks to run">
+        <span class="pg__checks-label">Checks</span>
+        <button type="button" class="pg__check" data-profile="core" aria-pressed="true" title="The language itself: what cannot mean what it says">Language</button>
+        <button type="button" class="pg__check" data-profile="workshop" aria-pressed="false" title="The guidelines, every one as a hint: for exploring">Workshop</button>
+        <button type="button" class="pg__check" data-profile="eventmodeling" aria-pressed="false" title="Event Modeling guidelines: information completeness, loops, slices">Event Modeling</button>
+        <button type="button" class="pg__check" data-profile="slicerm" aria-pressed="false" title="Stricter: a slice is one unit of delivery">Stricter</button>
+      </div>
+      <ul class="pg__issues" id="pg-issues" aria-label="Checks on this model"></ul>
+      <button type="button" class="pg__more" id="pg-more" hidden></button>
+    </div>
+  </details>
+  <div class="ap-read">
+    <p class="pg__status" id="pg-status" role="status">Loading the parser.</p>
+    <p class="pg__trace" id="pg-trace" aria-live="polite">Point at a box on the board to trace its lineage.</p>
+  </div>
+  <div class="pg__out">
+    <button type="button" class="btn btn--quiet" id="pg-share">Share</button>
+    <button type="button" class="btn btn--quiet" id="pg-dsl">Download .dsl</button>
+    <button type="button" class="btn btn--quiet" id="pg-svg">Download event-model.svg</button>
+  </div>
+</footer>
+
+<input type="file" id="ap-file" accept=".dsl" multiple hidden>
+<div class="ap-notices" id="ap-notices" role="status" aria-live="polite"></div>
+<p class="sc-sr" id="ap-say" aria-live="polite"></p>
+
+<dialog class="ap-dialog" id="ap-confirm" aria-labelledby="ap-confirm-title" aria-describedby="ap-confirm-text">
+  <form method="dialog">
+    <h2 id="ap-confirm-title"></h2>
+    <p id="ap-confirm-text"></p>
+    <div class="ap-dialog__acts">
+      <button class="btn btn--quiet" value="cancel" autofocus>Cancel</button>
+      <button class="btn btn--go" value="ok" id="ap-confirm-ok"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ap-dialog" id="ap-delete" aria-labelledby="ap-delete-title" aria-describedby="ap-delete-name">
+  <form method="dialog">
+    <h2 id="ap-delete-title">Delete this model?</h2>
+    <p id="ap-delete-name"></p>
+    <div class="ap-dialog__acts">
+      <button class="btn btn--quiet" value="cancel" autofocus>Cancel</button>
+      <button class="btn btn--go" value="delete">Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ap-dialog" id="ap-rename" aria-labelledby="ap-rename-title">
+  <form method="dialog">
+    <h2 id="ap-rename-title">Rename model</h2>
+    <label class="ap-field">Name <input id="ap-rename-input" type="text" maxlength="120" required autocomplete="off"></label>
+    <div class="ap-dialog__acts">
+      <button type="button" class="btn btn--quiet" id="ap-rename-cancel">Cancel</button>
+      <button class="btn btn--go" value="rename">Rename</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="../eventline.js"></script>
+<script src="../playground.js"></script>
+<script src="store.js"></script>
+<script src="session.js"></script>
+<script src="zip.js"></script>
+<script src="complete.js"></script>
+<script src="editing.js"></script>
+<script src="editor.js"></script>
+<script src="practice.js"></script>
+<script src="practice-ui.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

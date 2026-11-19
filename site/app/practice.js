@@ -1,0 +1,58 @@
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.EventlinePractice = factory();
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const TICK_MS = 5000;
+  const MAX_GAP_MS = 15000;
+
+  function startAttempt(promptId, now) {
+    return { promptId, status: 'running', startedAt: now, elapsedSeconds: 0, lastTickAt: now, covered: [], notes: '' };
+  }
+
+  // Adds the gap since the last tick, but only while running and only if the gap is plausible.
+  function advance(p, now) {
+    if (p.status !== 'running' || p.lastTickAt == null) return p.elapsedSeconds;
+    const gap = now - p.lastTickAt;
+    return gap >= 0 && gap <= MAX_GAP_MS ? p.elapsedSeconds + gap / 1000 : p.elapsedSeconds;
+  }
+
+  function tick(p, now) {
+    if (p.status !== 'running') return { ...p };
+    return { ...p, elapsedSeconds: advance(p, now), lastTickAt: now };
+  }
+
+  function pause(p, now) {
+    if (p.status !== 'running') return { ...p };
+    return { ...p, status: 'paused', elapsedSeconds: advance(p, now), lastTickAt: null };
+  }
+
+  function resume(p, now) {
+    if (p.status !== 'paused') return { ...p };
+    return { ...p, status: 'running', lastTickAt: now };
+  }
+
+  function finish(p, now) {
+    if (p.status === 'finished') return { ...p };
+    return { ...p, status: 'finished', elapsedSeconds: advance(p, now), lastTickAt: null };
+  }
+
+  function reopen(p) {
+    if (p.status !== 'running') return { ...p };
+    return { ...p, status: 'paused', lastTickAt: null };
+  }
+
+  function remaining(p, minutes) {
+    const left = minutes * 60 - p.elapsedSeconds;
+    return left >= 0 ? { seconds: Math.floor(left), overtime: false } : { seconds: Math.floor(-left), overtime: true };
+  }
+
+  function historyFor(summaries, promptId) {
+    return summaries
+      .filter((s) => s.practice && s.practice.promptId === promptId && s.practice.status === 'finished')
+      .sort((a, b) => b.practice.startedAt - a.practice.startedAt);
+  }
+
+  return { TICK_MS, MAX_GAP_MS, startAttempt, tick, pause, resume, finish, reopen, remaining, historyFor };
+});

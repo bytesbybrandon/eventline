@@ -21,6 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/bricolage-grotesque.woff2" crossorigin>
 <link rel="stylesheet" href="frontstage.css">
+<link rel="stylesheet" href="playground.css">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -263,6 +264,7 @@
         <button type="button" class="btn" id="pg-share">Copy share link</button>
         <button type="button" class="btn" id="pg-dsl">Download .dsl</button>
         <button type="button" class="btn" id="pg-svg">Download event-model.svg</button>
+        <a class="btn" id="pg-open-app" href="app/">Open in the app</a>
       </div>
     </div>
   </section>
@@ -286,7 +288,7 @@
         </details>
         <details name="faq">
           <summary>What is a Dynamic Consistency Boundary?</summary>
-          <p>It scopes a decision by a key, such as <code>userId</code>, instead of by an aggregate. A command reads only the events inside its boundary, so two users never contend for the same lock.</p>
+          <p>It keeps a decision consistent without tying it to one aggregate's stream. Each event is tagged with what it is about, such as a <code>userId</code>. A command reads the events whose types and tags it needs, decides, and appends only if no matching event was added since it read. In eventline, <code>in UserTimeline(userId)</code> names those tags. <a href="https://dcb.events/">Read more at dcb.events.</a></p>
         </details>
         <details name="faq">
           <summary>Can I use it in a system design interview?</summary>
@@ -350,6 +352,7 @@ system:
 </dialog>
 
 <script src="frontstage.js"></script>
+<script src="playground.js"></script>
 <script src="site.js"></script>
 </body>
 </html>
