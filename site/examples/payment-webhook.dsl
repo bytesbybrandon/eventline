@@ -47,12 +47,12 @@ from [WebhookDedupView(stripeEventId) @eventual as dedup]
   ]
 
 // 3b. Dedup read model: has this webhook event already been captured?
-view WebhookDedupView(stripeEventId) = [payment-captured(invoiceId)] => {
+readmodel WebhookDedupView(stripeEventId) = [payment-captured(invoiceId)] => {
   seen
 } @bergcache(key="dedup:{stripeEventId}", ttl=24h)
 
 // 4. Read model
-view PaymentStatusView(invoiceId) = [
+readmodel PaymentStatusView(invoiceId) = [
   payment-captured(invoiceId),
   payment-refunded*(invoiceId)
 ] => {

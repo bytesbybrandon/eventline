@@ -28,7 +28,7 @@ on [user-created(email)]
   ]
 
 // 3. Tier Limit Projection
-view TierLimit(tierId) = [
+readmodel TierLimit(tierId) = [
   tier-created(tierId),
   tier-limit-increased*(tierId),
   tier-limit-decreased*(tierId)
@@ -62,7 +62,7 @@ from [
   ]
 
 // 5. In-Memory Read View (O(1) in memory)
-view UserQuota(userId) = [user-auth-succeeded(userId), request-logged*(userId)] => {
+readmodel UserQuota(userId) = [user-auth-succeeded(userId), request-logged*(userId)] => {
   tierId,
   remainingRequests,
   resetsIn

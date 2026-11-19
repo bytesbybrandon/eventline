@@ -45,5 +45,9 @@ test('namesFrom lists each model name once', () => {
     commands: [{ name: 'go' }, { name: 'go' }],
     views: [{ name: 'v' }], boundaries: [{ name: 'B' }], actors: [{ name: 'a-b' }],
   };
-  assert.deepEqual(namesFrom(model).map((n) => n.kind + ':' + n.label), ['event:a-b', 'command:go', 'view:v', 'boundary:B']);
+  assert.deepEqual(namesFrom(model).map((n) => n.kind + ':' + n.label), ['event:a-b', 'command:go', 'read model:v', 'boundary:B']);
+});
+test('readmodel has a snippet', () => {
+  assert.ok(SNIPPETS.some((s) => s.label === 'readmodel'));
+  assert.ok(SNIPPETS.some((s) => s.label === 'view'));
 });

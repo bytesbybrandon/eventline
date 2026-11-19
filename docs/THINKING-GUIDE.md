@@ -8,7 +8,7 @@ The goal is not to answer every question. The goal is to notice which ones you *
 
 ## How to Use This
 
-1. Write your event model (actors, system context, commands, boundaries, views, policies).
+1. Write your event model (actors, system context, commands, boundaries, read models, policies).
 2. Walk through each section below and ask the questions.
 3. Anything you can't answer confidently is a gap to fill.
 
@@ -63,15 +63,15 @@ The goal is not to answer every question. The goal is to notice which ones you *
 
 ---
 
-## Views
+## Read models
 
 - What's the freshness requirement? Is `@eventual` really acceptable?
 - What's the read RPS? Does the cache have enough headroom?
-- What happens when the view is stale? Does the guard still work correctly?
-- Can the view be rebuilt from events if the cache dies?
+- What happens when the read model is stale? Does the guard still work correctly?
+- Can the read model be rebuilt from events if the cache dies?
 - What's the eviction strategy? LRU? TTL? Size-based?
-- Does the view contain derived data? If so, is the derivation deterministic?
-- Is the view accessed in the hot path? Could it become a bottleneck?
+- Does the read model contain derived data? If so, is the derivation deterministic?
+- Is the read model accessed in the hot path? Could it become a bottleneck?
 
 ---
 
@@ -91,7 +91,7 @@ The goal is not to answer every question. The goal is to notice which ones you *
 
 - Is the guard evaluating against stale data?
 - Can the guard be bypassed by race conditions?
-- What's the failure mode if the guard's view dependency is unavailable?
+- What's the failure mode if the guard's read model dependency is unavailable?
 - Are there side effects in the guard? (There shouldn't be.)
 - Is the guard logic expensive? Does it fit in the latency budget?
 - Can the guard be cached? If so, what's the invalidation strategy?
@@ -105,7 +105,7 @@ The goal is not to answer every question. The goal is to notice which ones you *
 - Are events immutable? Can they be deleted or modified?
 - What's the retention policy? How long are events kept?
 - Can events be replayed? Are projections deterministic?
-- Is the event payload minimal? Are there derived fields that should be in views instead?
+- Is the event payload minimal? Are there derived fields that should be in read models instead?
 - Are there events that should never be emitted (e.g., sensitive data in logs)?
 - What's the event schema? Is it versioned?
 
@@ -116,7 +116,7 @@ The goal is not to answer every question. The goal is to notice which ones you *
 - Which clock is used? `clock.wall()` (processing time) or `clock.event()` (event time)?
 - Are time windows aligned across boundaries?
 - What's the clock skew budget? Is it realistic for the deployment region?
-- Are temporal operators (`*` for "zero or more") used correctly? Only on events, not views.
+- Are temporal operators (`*` for "zero or more") used correctly? Only on events, not read models.
 - What happens at window boundaries? Is there a race between window roll and request?
 
 ---
@@ -125,7 +125,7 @@ The goal is not to answer every question. The goal is to notice which ones you *
 
 - Are `@cost` annotations realistic? How were the numbers derived?
 - Are `@ops` annotations complete? Owner, SLO, alert, dashboard, runbook?
-- Who is on call for this boundary/view/policy?
+- Who is on call for this boundary/read model/policy?
 - What's the alert threshold? Is it tuned to the SLO?
 - Is there a runbook for the most likely failure mode?
 - Are costs tracked per-boundary, or just at the system level?

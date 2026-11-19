@@ -64,7 +64,8 @@
       const node = nodes.get(id);
       readout.replaceChildren();
       const strong = document.createElement('b'); strong.textContent = node.dataset.label;
-      readout.append(strong, ` is ${/^[aeiou]/.test(node.dataset.kind) ? 'an' : 'a'} ${node.dataset.kind}.`);
+      const kind = node.dataset.kind === 'view' ? 'read model' : node.dataset.kind; // data-kind is library output and keeps its name
+      readout.append(strong, ` is ${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind}.`);
       if (by.length) readout.append(` Fed by ${by.join(', ')}.`);
       if (to.length) readout.append(` Read by ${to.join(', ')}.`);
       if (!by.length && !to.length) readout.append(' Nothing links to it in this model.');
@@ -171,8 +172,8 @@
       '    order-placed { cartId, placedAt: clock.wall() }',
       '  ]',
       '',
-      '// A view is a fold over events. It answers questions without asking the commands.',
-      'view CartSummary(cartId) = [item-added*(cartId)] => {',
+      '// A read model is a fold over events. It answers questions without asking the commands.',
+      'readmodel CartSummary(cartId) = [item-added*(cartId)] => {',
       '  items: count(item-added*(cartId))',
       '}',
       '',
@@ -187,7 +188,7 @@
     };
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const TOKEN = /(@[A-Za-z_]\w*)|("(?:[^"\\]|\\.)*")|(->\s*)([A-Za-z_]\w*)(?=\()|(\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\*?)|(\bon(?=\s*\[)|\bfrom(?=\s*\[)|\bin(?=\s+[A-Z])|\b(?:default|reject)\b)/g;
-    const HEAD = /^(\s*)(system|actor|context|boundary|view|scenario)\b/;
+    const HEAD = /^(\s*)(system|actor|context|boundary|view|readmodel|scenario)\b/;
     function hlLine(line) {
       let code = line; let cm = '';
       for (let i = 0, q = false; i < line.length; i++) {
@@ -284,7 +285,7 @@
       if (!drawable) {
         clearBoard();
         pgEl.grid.dataset.state = 'empty';
-        pgEl.status.textContent = 'Nothing to draw yet. Add a command, an event, a view or a policy.';
+        pgEl.status.textContent = 'Nothing to draw yet. Add a command, an event, a read model or a policy.';
         const p = document.createElement('p'); p.className = 'pg__empty'; p.textContent = 'Write a command and the board appears.';
         pgEl.board.replaceChildren(p);
         lastSvg = '';
@@ -318,7 +319,7 @@
         const grp = $$('.gp', svg).find((g) => g.dataset.id === wanted);
         if (grp) { grp.classList.add('is-flash'); setTimeout(() => grp.classList.remove('is-flash'), 1400); }
       }
-      pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'view'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
+      pgEl.status.textContent = [plural(model.commands.length, 'command'), plural(model.events.size, 'event'), plural(model.views.length, 'read model'), plural(model.policies.length, 'policy')].join(', ') + '. Parsed and drawn in your browser.';
       paintChecks(eventline.check(model, { profile: pgProfile }));
       viewChanged();
     }
@@ -363,14 +364,17 @@
       moreBtn.hidden = allIssues.length <= limit;
       moreBtn.textContent = showAll ? 'Show fewer' : 'Show all ' + allIssues.length;
     }
+    /* The smaller line range wins; on a tie the processor beats the implied read model that shares its lines. */
+    const closer = (el, len, size) => len < size || (len === size && el.dataset.kind === 'policy');
     /* A finding on the first line of a statement is about all of it. Its box, if the diagram has one, lights up too. */
     function focusIssue(it) {
       const ranges = [[it.line, it.endLine || it.line]];
       const subject = it.subject;
-      let id = null;
+      let id = null; let size = Infinity;
       if (pgBoard && subject) {
         for (const [nid, el] of pgBoard.tracer.nodes) {
-          if (el.dataset.lines && rangesOf(el).some(([from, to]) => subject.line >= from && subject.line <= to) && el.dataset.kind !== 'actor') { id = nid; break; }
+          if (!el.dataset.lines || el.dataset.kind === 'actor') continue;
+          for (const [from, to] of rangesOf(el)) if (subject.line >= from && subject.line <= to && closer(el, to - from, size)) { id = nid; size = to - from; }
         }
       }
       if (pgBoard) pgBoard.tracer.setBase(id);
@@ -515,7 +519,7 @@
       let best = null; let size = Infinity;
       for (const [id, el] of pgBoard.tracer.nodes) {
         if (!el.dataset.lines || el.dataset.kind === 'actor' || el.dataset.kind === 'external') continue;
-        for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && to - from < size) { best = id; size = to - from; }
+        for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && closer(el, to - from, size)) { best = id; size = to - from; }
       }
       return best;
     }

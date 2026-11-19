@@ -232,13 +232,13 @@ function sourceFrom(ann) {
   return s && typeof s === 'object' ? { system: s.system || null, version: s.version || null } : null;
 }
 
-/* How a view is read: @query(returns=list, spec="the open invoices of an account"). */
+/* How a read model is read: @query(returns=list, spec="the open invoices of an account"). */
 function queryFrom(ann) {
   const q = [].concat(ann.query || [])[0];
   return q && typeof q === 'object' ? { returns: q.returns || null, spec: q.spec || null } : null;
 }
 
-/* How someone or something reaches a command or view: @trigger(type=ui, name="AuditScreen", part="Fail button", route="POST /audits/{id}/fail").
+/* How someone or something reaches a command or read model: @trigger(type=ui, name="AuditScreen", part="Fail button", route="POST /audits/{id}/fail").
    Parsed as written; validate checks the values. A bare @trigger or a missing key reads as null. */
 function triggersFrom(ann) {
   return [].concat(ann.trigger || []).map((t) => {
@@ -266,7 +266,7 @@ function parseFields(inner) {
 /* name  name*  name(args)  name*(args)  [@fresh<10s> | @eventual | @strong]  [as alias] */
 function parseFact(text, line) {
   const sc = new Scanner(text, line - 1);
-  const name = sc.ident('an event or view name');
+  const name = sc.ident('an event or read model name');
   const wildcard = sc.s[sc.i] === '*';
   if (wildcard) sc.i++;
   const args = sc.s[sc.i] === '(' ? squash(sc.balanced()) : '';
@@ -357,11 +357,11 @@ function parseBoundary(sc, model) {
 
 function parseView(sc, model) {
   const line = sc.lineAt();
-  const name = sc.ident('a view name');
+  const name = sc.ident('a read model name');
   const paramDefs = parseParams(sc.balanced());
-  sc.expect('=', '"=" after the view name');
+  sc.expect('=', '"=" after the read model name');
   const sources = parseFactList(sc.balanced(), line);
-  sc.expect('=>', '"=>" before the view shape');
+  sc.expect('=>', '"=>" before the read model shape');
   const shape = parseFields(sc.balanced());
   const annotations = parseAnnotations(sc);
   const view = { name, params: paramNames(paramDefs), paramDefs, sources, shape, annotations, notes: notesFrom(annotations), triggers: triggersFrom(annotations), query: queryFrom(annotations), scenarios: [], line, endLine: 0 };
@@ -419,6 +419,7 @@ function parsePolicy(sc, model, trigger, line) {
   const annotations = parseAnnotations(sc);
   const policy = { trigger, annotations, notes: notesFrom(annotations), from: [], rules: [], line, endLine: 0 };
   if (sc.keywordBracket('from')) { sc.i += 4; policy.from = parseFactList(sc.balanced(), line); }
+  if (trigger.readModels && !policy.from.length) throw new ParseError('An automation that starts from read models names at least one: from [ReadModel] -> worker -> command()', line);
   while (sc.peek('--[') || sc.peek('->')) {
     const rline = sc.lineAt();
     const rule = { guard: null, worker: null, command: null, emits: [], line: rline };
@@ -438,7 +439,7 @@ function parsePolicy(sc, model, trigger, line) {
     }
     policy.rules.push(rule);
   }
-  const what = trigger.event ? `on "${trigger.event}"` : `on "${trigger.schedule}"`;
+  const what = trigger.event ? `on "${trigger.event}"` : trigger.readModels ? 'from read models' : `on "${trigger.schedule}"`;
   if (!policy.rules.length) throw new ParseError(`Policy ${what} needs a rule such as -> worker -> command()`, line);
   policy.endLine = sc.endLine();
   model.policies.push(policy);
@@ -507,7 +508,7 @@ function parseSteps(raw, firstLine, name) {
 function parseScenario(sc, target, line) {
   const head = /^\s*"((?:[^"\\]|\\.)*)"[ \t]*\{[ \t]*\n/.exec(sc.s.slice(sc.i));
   if (!head) throw new ParseError('A scenario is: scenario "name" {, then its lines, then } on a line of its own', line);
-  if (!target) throw new ParseError('A scenario goes right after the command or view it checks', line);
+  if (!target) throw new ParseError('A scenario goes right after the command or read model it checks', line);
   const name = unquote(`"${head[1]}"`);
   sc.i += head[0].length;
   const lines = [];
@@ -554,18 +555,19 @@ function parseOne(sc, model, ctx) {
   if (word === 'scenario' && /^\s*"/.test(rest)) return parseScenario(sc, sc.prev, line);
   if (word === 'actor' && /^\s*[A-Za-z_][\w-]*\s*\{/.test(rest)) return parseActor(sc, model);
   if (word === 'boundary' && /^\s*[A-Za-z_]/.test(rest)) return parseBoundary(sc, model);
-  if (word === 'view' && /^\s*[A-Za-z_]/.test(rest)) return parseView(sc, model);
+  // readmodel from [...] is a policy on an event called readmodel, as it was before readmodel became a keyword
+  if ((word === 'view' || word === 'readmodel') && /^\s*[A-Za-z_]/.test(rest) && !(word === 'readmodel' && /^\s*from\s*\[/.test(rest))) return parseView(sc, model);
 
   // a timer starts a policy: every 5 minutes, or cron "0 * * * *"
   const every = word === 'every' && /^\s*(\d+)\s+(seconds?|minutes?|hours?|days?)\b/.exec(rest);
   if (every) {
     sc.i += every[0].length;
-    return parsePolicy(sc, model, { event: null, schedule: `every ${every[1]} ${every[2]}`, fields: [] }, line);
+    return parsePolicy(sc, model, { event: null, schedule: `every ${every[1]} ${every[2]}`, readModels: false, fields: [] }, line);
   }
   const cron = word === 'cron' && /^\s*"([^"]*)"/.exec(rest);
   if (cron) {
     sc.i += cron[0].length;
-    return parsePolicy(sc, model, { event: null, schedule: `cron "${cron[1]}"`, fields: [] }, line);
+    return parsePolicy(sc, model, { event: null, schedule: `cron "${cron[1]}"`, readModels: false, fields: [] }, line);
   }
 
   // actor -> command(...)   or   event -> worker -> ...
@@ -576,11 +578,17 @@ function parseOne(sc, model, ctx) {
     const isCommand = sc.s[sc.i] === '(' || /^\s*\(/.test(sc.s.slice(sc.i));
     sc.i = save;
     if (isCommand) { sc.i += 2; return parseCommand(sc, model, word, line); }
-    return parsePolicy(sc, model, { event: word, fields: [] }, line);
+    return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
   }
-  if (sc.peek('{') || sc.peek('--[') || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, fields: [] }, line);
+  if (sc.peek('{') || sc.peek('--[') || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
+  if (word === 'from') {
+    // an automation that starts from read models; the cursor goes back onto "from" so parsePolicy reads the list
+    if (!/^\s*\[/.test(rest)) throw new ParseError('An automation reads read models: write from [ReadModel] -> worker -> command(), or event from [ReadModel] -> worker -> command()', line);
+    sc.i = sc.s.lastIndexOf('from', sc.i);
+    return parsePolicy(sc, model, { event: null, schedule: null, readModels: true, fields: [] }, line);
+  }
 
-  throw new ParseError(`Unexpected "${word}". A statement starts with system, context, actor, boundary, view, "actor -> command(...)", "event { ... }", or "every 5 minutes"`, line);
+  throw new ParseError(`Unexpected "${word}". A statement starts with system, context, actor, boundary, view or readmodel, "actor -> command(...)", "event { ... }", "from [ReadModel] -> worker -> command()", or "every 5 minutes"`, line);
 }
 
 function parse(content) {
@@ -636,7 +644,7 @@ class Model {
       for (const src of view.sources) ev(src.name).consumedBy.push({ kind: 'view', name: view.name, context: view.context });
     }
     for (const pol of this.policies) {
-      const who = pol.trigger.event || pol.trigger.schedule;
+      const who = Model.policyLabel(pol);
       if (pol.trigger.event) {
         const t = ev(pol.trigger.event);
         t.consumedBy.push({ kind: 'policy', name: pol.trigger.event, context: pol.context });
@@ -678,12 +686,16 @@ class Model {
   }
 }
 
+/* How a policy's trigger reads: its event, its timer, or from [ReadModel, ...]. */
+Model.policyLabel = (p) => p.trigger.event || p.trigger.schedule || `from [${p.from.map((f) => f.name).join(', ')}]`;
+
 module.exports = Model;
 
 },
 function (module, exports, __r) {
 'use strict';
 
+const Model = __r(2);
 const { RULES, BY_ID, CATEGORIES, PROFILES } = __r(4);
 const { coreIssues } = __r(5);
 const { scheduleIssues, scenarioStepIssues, hotspotIssues, acceptIssues, eventmodelingIssues, slicermIssues, sliceOf } = __r(10);
@@ -696,7 +708,7 @@ function statements(model) {
   const add = (kind, name, s, slice) => list.push({ kind, name, line: s.line, endLine: s.endLine || s.line, slice: slice || null });
   for (const c of model.commands) add('command', c.name, c, sliceOf(c.annotations));
   for (const v of model.views) add('view', v.name, v, sliceOf(v.annotations));
-  for (const p of model.policies) add('policy', p.trigger.event || p.trigger.schedule, p, sliceOf(p.annotations));
+  for (const p of model.policies) add('policy', Model.policyLabel(p), p, sliceOf(p.annotations));
   for (const b of model.boundaries) add('boundary', b.name, b);
   for (const c of model.contexts) add('context', c.name, c);
   for (const a of model.actors) add('actor', a.name, a);
@@ -787,10 +799,10 @@ const CATEGORIES = {
   fields: 'Information that appears from nowhere',
   references: 'A name points at something that is not there',
   naming: 'Names that break the project convention',
-  routes: 'How triggers reach commands and views',
+  routes: 'How triggers reach commands and read models',
   schedule: 'When timers fire',
   scenarios: 'Given, when, then examples',
-  triggers: 'What a person or system uses to reach a command or view',
+  triggers: 'What a person or system uses to reach a command or read model',
   links: 'Links between diagrams',
   slices: 'What belongs together in one unit of delivery',
   hints: 'Allowed, but often worth a second look',
@@ -800,11 +812,11 @@ const R = (id, profile, severity, category, title, why, fix, extra = {}) => ({ i
 
 const RULES = [
   // ---- core: the language itself ----
-  R('on-facts', 'core', 'error', 'references', 'A view listed in on [...]', 'on [...] lists the events a command needs. A view is read with from [...], not on.', 'Move the view to from [...], or list the event the view is built from.'),
-  R('from-facts', 'core', 'warn', 'references', 'Reads a view that is not declared', 'from [...] names a view that no view statement defines, so nothing says what it holds.', 'Declare the view, or fix the name.'),
+  R('on-facts', 'core', 'error', 'references', 'A read model listed in on [...]', 'on [...] lists the events a command needs. A read model is read with from [...], not on.', 'Move the read model to from [...], or list the event the read model is built from.'),
+  R('from-facts', 'core', 'warn', 'references', 'Reads a read model that is not declared', 'from [...] names a read model that no declaration defines, so nothing says what it holds.', 'Declare the read model, or fix the name.'),
   R('unknown-boundary', 'core', 'error', 'boundary', 'Command is in a boundary that is not declared', 'in Name(key) scopes a command to a boundary, and no boundary statement defines it.', 'Add boundary Name(key), or fix the name.'),
-  R('view-from-view', 'core', 'error', 'references', 'A view projects from a view', 'Views are folds over events. A view cannot be built from another view.', 'List the events the second view needs, not the view.'),
-  R('view-sources', 'core', 'warn', 'structure', 'A view has no source events', 'A view with no events folds nothing.', 'List the events it projects from between the brackets.'),
+  R('view-from-view', 'core', 'error', 'references', 'A read model projects from a read model', 'Read models are folds over events. A read model cannot be built from another read model.', 'List the events the second read model needs, not the read model.'),
+  R('view-sources', 'core', 'warn', 'structure', 'A read model has no source events', 'A read model with no events folds nothing.', 'List the events it projects from between the brackets.'),
   R('no-events', 'core', 'warn', 'structure', 'A command never records an event', 'Every command records at least one event on its happy path, or nothing happened.', 'Add events to the --[default]--> branch.'),
   R('missing-default', 'core', 'warn', 'structure', 'A command has no default branch', 'The default branch is the happy path. Without it a reader cannot tell what success looks like.', 'Add --[default]--> [ ... ] as the last branch.'),
   R('default-rejects', 'core', 'warn', 'structure', 'The default branch refuses', 'The default branch should record events. A refusal belongs on a guarded branch.', 'Put the refusal on a --[guard]--> reject CODE branch.'),
@@ -814,7 +826,7 @@ const RULES = [
   R('command-boundary', 'core', 'info', 'boundary', 'A command does not say which boundary it is in', 'When the model has boundaries, each command should say which one its decision is scoped to.', 'Add in BoundaryName(key).'),
   R('boundaries', 'core', 'info', 'boundary', 'No boundary declared', 'Commands have no stated consistency scope.', 'Add boundary Name(key) and put commands in it.'),
   R('unknown-actor', 'core', 'info', 'references', 'A command actor is not declared', 'The actor is neither a declared actor nor a system external.', 'Declare it with actor Name { ... } or list it under external in the system block.'),
-  R('freshness', 'core', 'info', 'references', 'A view is read without a freshness stance', 'A command that reads a view decides on something that may be stale.', 'Add @fresh<10s>, @eventual or @strong to the fact.'),
+  R('freshness', 'core', 'info', 'references', 'A read model is read without a freshness stance', 'A command that reads a read model decides on something that may be stale.', 'Add @fresh<10s>, @eventual or @strong to the fact.'),
   R('policy-guard', 'core', 'info', 'structure', 'A policy rule has no guard', 'An event-triggered rule with no guard runs on every occurrence.', 'Add --[condition]--> or leave it if that is intended.'),
   R('unpublished-event', 'core', 'warn', 'boundary', 'An event crosses a context without being published', 'A context reads an event another context records but does not list in publishes.', 'Add the event to publishes of the context that records it, or stop reading it.'),
   R('assumed-events', 'core', 'info', 'references', 'Events nothing records', 'No command or policy records these, so the model assumes the facts exist.', 'Fine for facts from outside. Otherwise add the command that records them.'),
@@ -828,10 +840,10 @@ const RULES = [
   R('trigger-route', 'core', 'warn', 'routes', 'A trigger route is not METHOD /path', 'Only ui and endpoint triggers have a route, written as METHOD /path.', 'Write route="POST /audits/{id}/fail", or drop it.'),
   R('scenario-name', 'core', 'warn', 'scenarios', 'A scenario has no name', 'Names make scenarios findable.', 'Name it: scenario "name" {'),
   R('scenario-empty', 'core', 'warn', 'scenarios', 'A scenario has no lines', 'An empty scenario checks nothing.', 'Add its Given, When and Then lines.'),
-  R('scenario-duplicate', 'core', 'warn', 'scenarios', 'Two scenarios share a name under one command or view', 'Names must tell scenarios apart.', 'Rename one.'),
+  R('scenario-duplicate', 'core', 'warn', 'scenarios', 'Two scenarios share a name under one command or read model', 'Names must tell scenarios apart.', 'Rename one.'),
   R('link-target', 'core', 'warn', 'links', 'An @link cannot work', 'It names a diagram or box that is not there, or none at all, or a diagram this model cannot draw yet.', 'Check to= and node= against the diagram.'),
   R('link-url', 'core', 'warn', 'links', 'An @link url is not an address', 'A url is an http(s) address or a path.', 'Write https://... or a path.'),
-  R('scenario-steps', 'core', 'warn', 'scenarios', 'A scenario with steps is not complete', 'A scenario written as steps has any number of given steps, exactly one when naming the command it sits under, and one then. Views and policies take prose scenarios for now.', 'Add the missing step, or point when at the command above.'),
+  R('scenario-steps', 'core', 'warn', 'scenarios', 'A scenario with steps is not complete', 'A scenario written as steps has any number of given steps, exactly one when naming the command it sits under, and one then. Read models and policies take prose scenarios for now.', 'Add the missing step, or point when at the command above.'),
   R('scenario-unknown-event', 'core', 'warn', 'scenarios', 'A scenario names an event the model does not have', 'A given or then step lists an event that no command or policy records or reads.', 'Fix the name, or add the command that records the event.'),
   R('scenario-then-mismatch', 'core', 'warn', 'scenarios', 'A scenario expects something the command cannot do', 'then lists an event the command never records, or rejects with a code the command does not have.', 'Fix the then step, or add the branch to the command.',
     { example: { bad: 'user -> other(id)\n  --[default]--> [other { id }]\nuser -> go(id)\n  --[default]--> [went { id }]\n  scenario "x" {\n    when go(id: 1)\n    then [other { id: 1 }]\n  }', good: 'user -> other(id)\n  --[default]--> [other { id }]\nuser -> go(id)\n  --[default]--> [went { id }]\n  scenario "x" {\n    when go(id: 1)\n    then [went { id: 1 }]\n  }' } }),
@@ -840,26 +852,28 @@ const RULES = [
 
   R('accept-invalid', 'core', 'warn', 'structure', 'An @accept that cannot work', 'An @accept says the team knowingly keeps something a rule reports, and why. It needs rule="..." naming a rule in the catalogue, and a reason.', 'Write @accept(rule="many-events", reason="One fact told in two parts").'),
   R('accept-unused', 'core', 'info', 'hints', 'An @accept that accepts nothing', 'The rule it names reports nothing on this statement, so the acceptance is out of date or on the wrong statement.', 'Remove it, or move it to the statement the rule reports on.'),
-  R('hotspot-invalid', 'core', 'warn', 'structure', 'A @hotspot that cannot work', 'A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (action, data, next, rule, example, view, who, time) and status (open, resolved). A request says what must change with concerns="...".', 'Write @hotspot("Does the guest lose the deposit?", kind=assumption, category=rule).'),
+  R('hotspot-invalid', 'core', 'warn', 'structure', 'A @hotspot that cannot work', 'A hotspot is an open question: @hotspot("text") with an optional kind (question, assumption, request), category (`action`, `data`, `next`, `rule`, `example`, `view`, `who`, `time`) and status (open, resolved). A request says what must change with concerns="...".', 'Write @hotspot("Does the guest lose the deposit?", kind=assumption, category=rule).'),
   R('hotspot-open', 'eventmodeling', 'info', 'hints', 'A hotspot is still open', 'Someone wrote down something the model does not answer yet.', 'Answer it in the model, then set status=resolved, or keep it as a known gap.'),
 
   // ---- eventmodeling: the guidelines ----
   R('unsourced-event-field', 'eventmodeling', 'warn', 'fields', 'An event carries a field nothing supplies', 'Information flows one way. An event can only hold what its command was given: its parameters, the boundary key, the facts it needs, or a value it computes.', 'Add the field to the command, to a fact it needs, or compute it with name: expression.',
     { example: { bad: 'user -> addItem(cartId) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]', good: 'user -> addItem(cartId, sku) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]' } }),
-  R('unsourced-view-field', 'eventmodeling', 'warn', 'fields', 'A view shows a field no event carries', 'A view is a fold over events, so every plain field must be in the payload of an event it projects from. Computed fields are exempt.', 'Add the field to an event it reads, or compute it, as in total: count(order-placed*(id)).',
-    { example: { bad: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nview Cart(cartId) = [item-added*(cartId)] => { cartId, total }', good: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nview Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }' } }),
+  R('unsourced-view-field', 'eventmodeling', 'warn', 'fields', 'A read model shows a field no event carries', 'A read model is a fold over events, so every plain field must be in the payload of an event it projects from. Computed fields are exempt.', 'Add the field to an event it reads, or compute it, as in total: count(order-placed*(id)).',
+    { example: { bad: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, total }', good: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }' } }),
   R('dependency-cycle', 'eventmodeling', 'warn', 'order', 'Commands depend on each other in a loop', 'Commands wait for events that others record. If they wait on each other in a loop, no order of work can start. A command that reads events it records itself is fine: that is how a decision checks what already happened.', 'Break the loop with an event that does not depend on the others, or mark one fact as coming from outside.'),
   R('slice-multiple-commands', 'eventmodeling', 'warn', 'slices', 'One slice holds several commands', 'A write slice has one command. A command can record several events. Two commands are two slices.', 'Give each command its own @slice name.'),
-  R('slice-multiple-views', 'eventmodeling', 'info', 'slices', 'One slice defines several read models', 'A slice owns one query. Several read models in one slice invite several queries where one shaped for the reader would do. Reading views that other slices define is always fine.', 'Fold them into one view shaped for how it is read, or give each its own @slice.', { slicerm: 'warn' }),
-  R('slice-no-scenario', 'eventmodeling', 'info', 'scenarios', 'Commands and views have no scenario', 'A slice is specified with a given, when, then example. This counts the commands and views that have none. Models that keep scenarios elsewhere can ignore it.', 'Add scenario "name" { ... } under the command or view.'),
-  R('translation-no-dedupe', 'eventmodeling', 'info', 'fields', 'An outside fact has no deduplication key', 'A command issued by an outside system is a fact someone else recorded. It can be delivered twice, so the model says which field tells a repeat from a new one. @dedupe names it, and @correlate names the field that ties the fact to something here. Both count as supplying that field to the events and views that carry it.', 'Add @dedupe(eventId) to the command, view or policy that consumes the fact.',
+  R('slice-multiple-views', 'eventmodeling', 'info', 'slices', 'One slice defines several read models', 'A slice owns one query. Several read models in one slice invite several queries where one shaped for the reader would do. Reading read models that other slices define is always fine.', 'Fold them into one read model shaped for how it is read, or give each its own @slice.', { slicerm: 'warn' }),
+  R('automation-reads-event', 'eventmodeling', 'info', 'slices', 'An automation starts straight from an event', 'An event reaches an automation through a read model: the read model holds what the automation needs, and the automation starts from it. Here the automation reads the event itself, with no read model fed by that event.', 'Write a read model fed by the event and read it: "x-happened from [PendingWorker] -> worker -> go(id)", or "from [PendingWorker] -> worker -> go(id)" to start from the read model alone.', { slicerm: 'warn',
+    example: { bad: 'user -> start(id)\n  --[default]--> [x-happened { id }]\nx-happened { id } -> w -> go(id)', good: 'user -> start(id)\n  --[default]--> [x-happened { id }]\nreadmodel Todo(id) = [x-happened*(id)] => { id }\nx-happened from [Todo] -> w -> go(id)' } }),
+  R('slice-no-scenario', 'eventmodeling', 'info', 'scenarios', 'Commands and read models have no scenario', 'A slice is specified with a given, when, then example. This counts the commands and read models that have none. Models that keep scenarios elsewhere can ignore it.', 'Add scenario "name" { ... } under the command or read model.'),
+  R('translation-no-dedupe', 'eventmodeling', 'info', 'fields', 'An outside fact has no deduplication key', 'A command issued by an outside system is a fact someone else recorded. It can be delivered twice, so the model says which field tells a repeat from a new one. @dedupe names it, and @correlate names the field that ties the fact to something here. Both count as supplying that field to the events and read models that carry it.', 'Add @dedupe(eventId) to the command, read model or policy that consumes the fact.',
     { example: { bad: 'system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId)\n  --[default]--> [parcel-scanned { parcelId }]', good: 'system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId) @dedupe(scanId)\n  --[default]--> [parcel-scanned { parcelId, scanId }]' } }),
   R('many-events', 'eventmodeling', 'info', 'hints', 'A happy path records several events', 'Right when they are one fact told in parts. If they are two steps, a policy can take the second.', 'Keep them if they are one fact, otherwise split the second into a policy.'),
-  R('view-many-sources', 'eventmodeling', 'info', 'hints', 'Four or more events feed one view', 'Combining streams is fine, but each event ties the view to the command that records it, so fewer is easier to change.', 'Check that every source is needed.'),
+  R('view-many-sources', 'eventmodeling', 'info', 'hints', 'Four or more events feed one read model', 'Combining streams is fine, but each event ties the read model to the command that records it, so fewer is easier to change.', 'Check that every source is needed.'),
 
   // ---- slicerm: stricter, for tools where a slice is a unit of delivery ----
   R('rejection-uncovered', 'slicerm', 'warn', 'scenarios', 'A rejection code has no scenario', 'Each way a command can refuse is a behaviour to specify. Only checked when the model has scenarios at all.', 'Add a scenario whose text names the code.'),
-  R('route-duplicate', 'slicerm', 'warn', 'routes', 'Two commands or views share a method and route', 'One route in one context should reach one thing. Two triggers reaching the same command are fine.', 'Give one of them its own route.'),
+  R('route-duplicate', 'slicerm', 'warn', 'routes', 'Two commands or read models share a method and route', 'One route in one context should reach one thing. Two triggers reaching the same command are fine.', 'Give one of them its own route.'),
 ];
 
 const BY_ID = new Map(RULES.map((r) => [r.id, r]));
@@ -871,6 +885,7 @@ module.exports = { RULES, BY_ID, CATEGORIES, PROFILES };
 function (module, exports, __r) {
 'use strict';
 
+const Model = __r(2);
 const { linkIssues } = __r(6);
 
 const NAMING = {
@@ -925,11 +940,11 @@ function check(model) {
     const hasDefault = model.commands.some((c) => c.actor === cmd.actor && c.name === cmd.name && c.branches.some((b) => b.default));
     if (!hasDefault) add('warn', 'missing-default', `Command "${id}" has no --[default]--> branch`, cmd.line);
     for (const f of cmd.on) {
-      if (viewNames.has(f.name)) add('error', 'on-facts', `Command "${id}" lists view "${f.name}" in on [...]; on takes events, from takes views`, cmd.line);
+      if (viewNames.has(f.name)) add('error', 'on-facts', `Command "${id}" lists read model "${f.name}" in on [...]; on takes events, from takes read models`, cmd.line);
     }
     for (const f of cmd.from) {
-      if (!viewNames.has(f.name)) add('warn', 'from-facts', `Command "${id}" reads "${f.name}" in from [...], but no such view is declared`, cmd.line);
-      else if (!f.freshness) add('info', 'freshness', `Command "${id}" reads view "${f.name}" without @fresh<>, @eventual or @strong`, cmd.line);
+      if (!viewNames.has(f.name)) add('warn', 'from-facts', `Command "${id}" reads "${f.name}" in from [...], but no such read model is declared`, cmd.line);
+      else if (!f.freshness) add('info', 'freshness', `Command "${id}" reads read model "${f.name}" without @fresh<>, @eventual or @strong`, cmd.line);
     }
     if (model.actorKind(cmd.actor) === 'unknown') add('info', 'unknown-actor', `"${cmd.actor}" in "${cmd.name}" is neither a declared actor nor a system external`, cmd.line);
     if (cmd.boundary) {
@@ -943,20 +958,20 @@ function check(model) {
   }
 
   for (const view of model.views) {
-    if (!view.sources.length) add('warn', 'view-sources', `View "${view.name}" has no source events`, view.line);
-    for (const t of view.triggers) checkTrigger(t, `View "${view.name}"`, view.line);
-    if (view.query && !['one', 'list', 'page'].includes(view.query.returns)) add('warn', 'query-returns', `View "${view.name}" has @query returns "${view.query.returns || ''}". Use one, list or page.`, view.line);
-    if (view.annotations.projection && view.triggers.length) add('warn', 'projection-trigger', `View "${view.name}" is a @projection, which is never shown, but has a @trigger`, view.line);
-    checkScenarios(view.scenarios, `View "${view.name}"`);
+    if (!view.sources.length) add('warn', 'view-sources', `Read model "${view.name}" has no source events`, view.line);
+    for (const t of view.triggers) checkTrigger(t, `Read model "${view.name}"`, view.line);
+    if (view.query && !['one', 'list', 'page'].includes(view.query.returns)) add('warn', 'query-returns', `Read model "${view.name}" has @query returns "${view.query.returns || ''}". Use one, list or page.`, view.line);
+    if (view.annotations.projection && view.triggers.length) add('warn', 'projection-trigger', `Read model "${view.name}" is a @projection, which is never shown, but has a @trigger`, view.line);
+    checkScenarios(view.scenarios, `Read model "${view.name}"`);
     for (const s of view.sources) {
-      if (viewNames.has(s.name)) add('error', 'view-from-view', `View "${view.name}" projects from view "${s.name}"; views project from events`, view.line);
+      if (viewNames.has(s.name)) add('error', 'view-from-view', `Read model "${view.name}" projects from read model "${s.name}"; read models project from events`, view.line);
     }
   }
 
   for (const pol of model.policies) {
-    const who = pol.trigger.event ? `on "${pol.trigger.event}"` : `on "${pol.trigger.schedule}"`;
+    const who = pol.trigger.readModels ? Model.policyLabel(pol) : `on "${Model.policyLabel(pol)}"`;
     for (const f of pol.from) {
-      if (!viewNames.has(f.name)) add('warn', 'from-facts', `Policy ${who} reads "${f.name}" in from [...], but no such view is declared`, pol.line);
+      if (!viewNames.has(f.name)) add('warn', 'from-facts', `Policy ${who} reads "${f.name}" in from [...], but no such read model is declared`, pol.line);
     }
     for (const r of pol.rules) {
       if (!r.guard && pol.trigger.event) add('info', 'policy-guard', `Policy ${who} has an unguarded rule`, r.line);
@@ -1009,6 +1024,7 @@ function (module, exports, __r) {
 const { KINDS, NAMES } = __r(7);
 const { buildBoard } = __r(8);
 const { BUILDERS } = __r(9);
+const Model = __r(2);
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const SKIPPED = new Set(['NO_REGIONS', 'NO_CONTEXTS']);
@@ -1092,11 +1108,11 @@ function elements(model, inv) {
   const ids = (kind, test) => (inv[kind] ? [...inv[kind].labels.keys()].filter(test) : []);
   for (const c of model.commands) out.push({ what: `command ${c.name}`, line: c.line, ranges: [[c.line, c.endLine]], links: linksOf(c.annotations), boxes: { eventmodel: [`cmd:${c.name}`], dataflow: [`cmd:${c.name}`] } });
   for (const v of model.views) {
-    out.push({ what: `view ${v.name}`, line: v.line, ranges: [[v.line, v.endLine]], links: linksOf(v.annotations), boxes: { eventmodel: [`view:${v.name}`], containers: [`view:${v.name}`], dataflow: [`view:${v.name}`], deployment: ids('deployment', (id) => id.endsWith(`:view:${v.name}`)) } });
+    out.push({ what: `read model ${v.name}`, line: v.line, ranges: [[v.line, v.endLine]], links: linksOf(v.annotations), boxes: { eventmodel: [`view:${v.name}`], containers: [`view:${v.name}`], dataflow: [`view:${v.name}`], deployment: ids('deployment', (id) => id.endsWith(`:view:${v.name}`)) } });
   }
   for (const p of model.policies) {
     const names = [...new Set(p.rules.map((r) => r.worker).filter(Boolean))];
-    out.push({ what: `policy ${p.trigger.event || p.trigger.schedule}`, line: p.line, ranges: [[p.line, p.endLine]], links: linksOf(p.annotations), boxes: {
+    out.push({ what: `policy ${Model.policyLabel(p)}`, line: p.line, ranges: [[p.line, p.endLine]], links: linksOf(p.annotations), boxes: {
       eventmodel: names.map((w) => `pol:${w}`), containers: names.map((w) => `worker:${w}`), dataflow: names.map((w) => `worker:${w}`),
       deployment: names.flatMap((w) => ids('deployment', (id) => id.endsWith(`:worker:${w}`))),
     } });
@@ -1192,27 +1208,42 @@ function (module, exports, __r) {
 /*
  * Event Modeling board, derived from a model.
  *
- * Lanes, top to bottom: actor, command, event, view, policy.
+ * Three rows, top to bottom, as on a classic Event Modeling board:
+ *   ACTOR                 actors, timers, and processors (workers and unnamed automations)
+ *   COMMAND · READ MODEL  commands and read models, sharing the timeline
+ *   EVENT                 events
  * Time runs left to right. The model has no explicit timeline, so order comes from
  * causality: a command that reads events another command emits comes after it.
  *
  * Layout, as on a hand-drawn board:
  *   - each command owns a column; its actor sits above it
  *   - the events it emits hang beneath it as a small tree
- *   - a view sits right of the latest event that feeds it
- *   - a policy worker sits right of the event that wakes it, and the command or
- *     events it produces sit right of the worker
- *   - facts the model assumes (nobody emits them) are a note under the command
+ *   - a read model sits right of the latest event that feeds it
+ *   - an event never wakes a processor directly: it feeds a read model the processor
+ *     reads, either one the policy reads with from [...] or an implied one
+ *   - a processor sits right of what it reads, and the command or events it
+ *     produces sit right of the processor
+ *   - a command's decision model (its on [...] facts) is a note, not arrows
  *
  * Slices follow the four Event Modeling patterns the README maps one to one:
  *   state change, state view, automation, translation.
  */
 
-const LANES = ['actor', 'command', 'event', 'view', 'policy'];
+const Model = __r(2);
+
+const LANES = ['actor', 'command', 'event'];
+const LANE_LABELS = { actor: 'ACTOR', command: 'COMMAND · READ MODEL', event: 'EVENT' };
 const clip = (s, n = 34) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 /* "AuditScreen > Fail button": the thing someone uses, and the part of it. */
 const triggerLabel = (t) => `${t.name || 'unnamed'}${t.part ? ` > ${t.part}` : ''}`;
+
+/* An event-triggered policy needs an implied read model unless it already reads, with
+   from [...], a read model fed by its trigger event. The automation-reads-event rule agrees. */
+const needsImpliedReadModel = (model, pol) => !!pol.trigger.event && !pol.from.some((f) => {
+  const v = model.views.find((x) => x.name === f.name);
+  return v && v.sources.some((s) => s.name === pol.trigger.event);
+});
 
 /* One entry per actor+command name; a second block with the same name is a variant
    (for example a fallback path) and contributes more facts and branches. */
@@ -1284,6 +1315,19 @@ function buildBoard(model) {
   };
   let end = 0; // first column past everything placed so far
   const bump = (c) => { end = Math.max(end, c + 1); };
+  /* The column right after `col` in `lane`: used as is when free there, otherwise a new
+     column is inserted at that point and every later column shifts right, so time still
+     reads left to right. */
+  const next = (lane, col) => {
+    const at = col + 1;
+    if (!occupied.has(`${lane}:${at}`)) return at;
+    for (const n of nodes.values()) if (n.col >= at) { n.col++; colOf.set(n.id, n.col); }
+    for (const k of [...occupied.keys()].filter((k) => +k.split(':')[1] >= at).sort((a, b) => b.split(':')[1] - a.split(':')[1])) {
+      const [l, c] = k.split(':'); occupied.set(`${l}:${+c + 1}`, occupied.get(k)); occupied.delete(k);
+    }
+    if (at < end) end++;
+    return at;
+  };
 
   const assumed = (name) => !(model.events.get(name) || { emittedBy: [] }).emittedBy.length;
   const viewLabel = (name) => { const v = model.views.find((x) => x.name === name); return v ? `${name}(${v.params.join(', ')})` : name; };
@@ -1295,7 +1339,7 @@ function buildBoard(model) {
     const kind = model.actorKind(cmd.actor);
     const declared = model.actors.find((a) => a.name.toLowerCase() === cmd.actor.toLowerCase());
     const actor = put(`actor:${cmd.name}`, 'actor', declared ? declared.name : cmd.actor, col, { kind: kind === 'external' ? 'external' : 'actor', ranges: cmd.ranges.map(([from]) => [from, from]) });
-    const facts = [...new Set(cmd.on.map((f) => f.name).filter(assumed))];
+    const checks = [...new Set(cmd.on.map((f) => `${f.name}${f.wildcard ? '*' : ''}${assumed(f.name) ? ' (assumed)' : ''}`))];
     const rejects = [...new Set(cmd.branches.map((b) => b.reject).filter(Boolean))];
     const planned = !!cmd.annotations.planned;
     const c = put(`cmd:${cmd.name}`, 'command', `${cmd.name}(${cmd.params.join(', ')})`, col, {
@@ -1304,10 +1348,11 @@ function buildBoard(model) {
       ranges: cmd.ranges,
       notes: [
         ...(cmd.source && cmd.source.system ? [`translates from ${clip(`${cmd.source.system} ${cmd.source.version || ''}`.trim(), 30)}`] : []),
-        ...(facts.length ? [`assumes ${clip(facts.join(', '), 40)}`] : []),
+        ...(checks.length ? [`checks ${checks.join(', ')}`] : []),
         ...(rejects.length ? [`rejects ${clip(rejects.join(', '), 40)}`] : []),
       ],
       fullNotes: cmd.notes,
+      checks,
     });
     addEdge(actor.id, c.id, 'triggers', cmd.triggers.length ? clip(`${triggerLabel(cmd.triggers[0])}${cmd.triggers.length > 1 ? ` +${cmd.triggers.length - 1}` : ''}`, 32) : '');
     bump(col);
@@ -1327,12 +1372,12 @@ function buildBoard(model) {
     cmd.__members = members;
   });
 
-  // 2. views: right of the latest event that feeds them
+  // 2. read models: in the command row, right of the latest event that feeds them
   for (const view of model.views) {
     const srcCols = view.sources.map((s) => colOf.get(`evt:${s.name}`)).filter((c) => c !== undefined);
-    const col = free('view', srcCols.length ? Math.max(...srcCols) + 1 : end);
+    const col = srcCols.length ? next('command', Math.max(...srcCols)) : free('command', end);
     const planned = !!view.annotations.planned;
-    const v = put(`view:${view.name}`, 'view', viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, ranges: [[view.line, view.endLine]], fullNotes: view.notes, notes: [] });
+    const v = put(`view:${view.name}`, 'command', viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, ranges: [[view.line, view.endLine]], fullNotes: view.notes, notes: [] });
     const unemitted = [...new Set(view.sources.map((s) => s.name).filter(assumed))];
     if (unemitted.length) v.notes.push(`from ${clip(unemitted.join(', '), 40)}`);
     if (view.triggers.length) v.notes.push(`read in ${clip(view.triggers.map(triggerLabel).join(', '), 36)}`);
@@ -1340,64 +1385,66 @@ function buildBoard(model) {
     bump(col);
     slices.push({ type: 'state view', name: view.name, nodes: [v.id, ...view.sources.map((s) => `evt:${s.name}`).filter((id) => nodes.has(id))] });
   }
-  // reads: a command reads a view (the view may sit to its right: the arrow loops back)
+  const readModel = (name) => {
+    if (!nodes.has(`view:${name}`)) { const col = free('command', end); put(`view:${name}`, 'command', viewLabel(name), col, { kind: 'view', declared: false, sub: 'not declared' }); bump(col); }
+    return nodes.get(`view:${name}`);
+  };
+  // reads: a command reads a read model (it may sit to its right: the arrow loops back)
   for (const cmd of cmds) {
-    for (const f of cmd.from) {
-      if (!nodes.has(`view:${f.name}`)) { const col = free('view', end); put(`view:${f.name}`, 'view', viewLabel(f.name), col, { kind: 'view', declared: false, sub: 'not declared' }); bump(col); }
-      addEdge(`view:${f.name}`, `cmd:${cmd.name}`, 'reads', [f.freshness ? `fresh ${f.freshness}` : '', f.optional ? 'may be empty' : ''].filter(Boolean).join(', '));
-    }
-    for (const f of cmd.on) if (nodes.has(`evt:${f.name}`) && nodes.get(`evt:${f.name}`).owner !== `cmd:${cmd.name}`) addEdge(`evt:${f.name}`, `cmd:${cmd.name}`, 'given');
+    for (const f of cmd.from) addEdge(readModel(f.name).id, `cmd:${cmd.name}`, 'reads', [f.freshness ? `fresh ${f.freshness}` : '', f.optional ? 'may be empty' : ''].filter(Boolean).join(', '));
   }
 
-  // 3. policies: worker right of its trigger, results right of the worker
+  // 3. policies: the processor sits right of what it reads, results right of the processor;
+  //    a later processor on the same trigger sits right of earlier ones, so siblings keep source order
+  const siblings = new Map();
   for (const pol of model.policies) {
-    const timer = !pol.trigger.event;
-    const tid = timer ? `timer:${pol.trigger.schedule}` : `evt:${pol.trigger.event}`;
-    if (!timer && !nodes.has(tid)) { const col = free('event', end); put(tid, 'event', pol.trigger.event, col, { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
-    const tcol = timer ? end : colOf.get(tid);
-    if (timer) {
-      const col = free('actor', end);
-      put(tid, 'actor', pol.trigger.schedule, col, { kind: 'timer' });
-      bump(col);
+    const ranges = [[pol.line, pol.endLine]];
+    const reads = pol.from.map((f) => ({ node: readModel(f.name), label: f.freshness ? `fresh ${f.freshness}` : '' }));
+    let gate; // the node that wakes the processor: a timer, or the read model its trigger event feeds
+    if (pol.trigger.schedule) {
+      gate = nodes.get(`timer:${pol.trigger.schedule}`) || put(`timer:${pol.trigger.schedule}`, 'actor', pol.trigger.schedule, free('actor', end), { kind: 'timer' });
+      bump(gate.col);
+    } else if (pol.trigger.event) {
+      const eid = `evt:${pol.trigger.event}`;
+      if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
+      const fed = reads.find((r, k) => !needsImpliedReadModel(model, { ...pol, from: [pol.from[k]] }));
+      if (fed) gate = fed.node;
+      else {
+        gate = nodes.get(`implied:${pol.trigger.event}`) || put(`implied:${pol.trigger.event}`, 'command', pol.trigger.event, next('command', colOf.get(eid)), { kind: 'view', implied: true, sub: 'implied read model', ranges: [] });
+        gate.ranges.push(...ranges);
+        bump(gate.col);
+      }
+      addEdge(eid, gate.id, 'projects');
     }
-    for (const rule of pol.rules) {
-      const members = [tid];
-      if (!rule.worker) {
-        for (const em of rule.emits) {
-          const id = `evt:${em.event}`;
-          if (!nodes.has(id)) { const col = free('event', tcol + 1); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); }
-          addEdge(tid, id, 'emits', clip(rule.guard || '', 24));
-          members.push(id);
-        }
-        slices.push({ type: 'automation', name: pol.trigger.event || pol.trigger.schedule, nodes: members });
-        continue;
-      }
-      const wid = `pol:${rule.worker}`;
-      const wcol = timer ? colOf.get(tid) : free('policy', tcol + 1);
-      const planned = !!pol.annotations.planned;
-      const w = nodes.get(wid) || put(wid, 'policy', rule.worker, wcol, { kind: 'policy', sub: planned ? 'planned' : 'automation', slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
-      (w.ranges = w.ranges || []).push([pol.line, pol.endLine]);
+    const planned = !!pol.annotations.planned;
+    const sibKey = gate ? gate.id : reads.map((r) => r.node.id).join(',');
+    if (!siblings.has(sibKey)) siblings.set(sibKey, []);
+    const placed = siblings.get(sibKey); // earlier processors on this trigger and their results
+    pol.rules.forEach((rule, i) => {
+      const wid = rule.worker ? `pol:${rule.worker}` : `auto:${pol.line}:${i}`;
+      const after = Math.max(-1, ...[gate, ...reads.map((r) => r.node), ...placed.map((id) => nodes.get(id))].filter(Boolean).map((n) => n.col)); // live: inserts shift columns
+      if (!nodes.has(wid)) placed.push(wid);
+      const w = nodes.get(wid) || put(wid, 'actor', rule.worker || 'automation', next('actor', after), { kind: 'policy', sub: planned ? 'planned' : rule.worker ? 'automation' : 'unnamed processor', slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
+      (w.ranges = w.ranges || []).push(...ranges);
       bump(w.col);
-      for (const f of pol.from) {
-        if (!nodes.has(`view:${f.name}`)) { const vcol = free('view', end); put(`view:${f.name}`, 'view', viewLabel(f.name), vcol, { kind: 'view', declared: false, sub: 'not declared' }); bump(vcol); }
-        addEdge(`view:${f.name}`, w.id, 'reads', f.freshness ? `fresh ${f.freshness}` : '');
-      }
-      addEdge(tid, w.id, 'triggers', clip(rule.guard || '', 24));
-      members.push(w.id);
+      const guard = clip(rule.guard || '', 24);
+      for (const r of reads) addEdge(r.node.id, w.id, 'reads', [r.label, r.node === gate ? guard : ''].filter(Boolean).join(', '));
+      if (gate && !reads.some((r) => r.node === gate)) addEdge(gate.id, w.id, gate.kind === 'timer' ? 'triggers' : 'reads', guard);
+      const members = [...(pol.trigger.event ? [`evt:${pol.trigger.event}`] : []), ...(gate ? [gate.id] : []), w.id];
       if (rule.command) {
         const cid = `cmd:${rule.command.name}`;
-        if (!nodes.has(cid)) { const col = free('command', w.col + 1); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); }
+        if (!nodes.has(cid)) { const col = next('command', w.col); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); placed.push(cid); }
         addEdge(w.id, cid, 'invokes', clip(rule.command.args, 24));
         members.push(cid);
       }
       for (const em of rule.emits) {
         const id = `evt:${em.event}`;
-        if (!nodes.has(id)) { const col = free('event', w.col + 1); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); }
+        if (!nodes.has(id)) { const col = next('event', w.col); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); placed.push(id); }
         addEdge(w.id, id, 'emits');
         members.push(id);
       }
-      slices.push({ type: 'automation', name: rule.worker, nodes: members });
-    }
+      slices.push({ type: 'automation', name: rule.worker || Model.policyLabel(pol), nodes: [...new Set(members)] });
+    });
   }
 
   for (const cmd of cmds) {
@@ -1428,12 +1475,12 @@ function boardToGraph(board) {
     title: `${board.title} event model`,
     direction: 'LR',
     nodes: board.nodes.map((n) => ({ id: n.id, label: n.label, kind: n.kind, sub: n.sub || '' })),
-    edges: board.edges.map((e) => ({ from: e.from, to: e.to, label: e.label || '', style: e.kind === 'given' || e.kind === 'reads' ? 'dashed' : 'solid' })),
+    edges: board.edges.map((e) => ({ from: e.from, to: e.to, label: e.label || '', style: e.kind === 'reads' ? 'dashed' : 'solid' })),
     groups: board.groups.map((g) => ({ id: g.id, label: g.label, members: g.members })),
   };
 }
 
-module.exports = { buildBoard, boardToGraph, LANES };
+module.exports = { buildBoard, boardToGraph, needsImpliedReadModel, LANES, LANE_LABELS };
 
 },
 function (module, exports, __r) {
@@ -1446,7 +1493,7 @@ function (module, exports, __r) {
  *
  *   context     the system, who uses it, what it depends on
  *   containers  command API, event store, read models, workers, externals
- *   dataflow    commands and workers as processes, the event log and views as stores
+ *   dataflow    commands and workers as processes, the event log and read models as stores
  *   deployment  regions, each running the stack, with shards per boundary
  */
 
@@ -1517,7 +1564,7 @@ function workersOf(model) {
       if (!w.has(r.worker)) w.set(r.worker, { triggers: [], schedules: [], reads: [], commands: [], emits: [] });
       const x = w.get(r.worker);
       if (p.trigger.event) x.triggers.push(p.trigger.event);
-      else x.schedules.push(p.trigger.schedule);
+      else if (p.trigger.schedule) x.schedules.push(p.trigger.schedule);
       x.reads.push(...p.from.map((f) => f.name));
       if (r.command) x.commands.push(r.command.name);
       x.emits.push(...r.emits.map((e) => e.event));
@@ -1612,13 +1659,13 @@ function dataflow(model) {
   const known = new Set(nodes.map((n) => n.id));
   const flows = edges.filter((e) => known.has(e.from) && known.has(e.to));
   const connected = new Set(flows.flatMap((e) => [e.from, e.to]));
-  return { title: `${sysName} · data flow`, subtitle: `${subtitle(model)}   ·   dashed = a command reads existing facts or a view`, direction: 'LR', nodes: nodes.filter((n) => connected.has(n.id)), edges: flows, groups: [] };
+  return { title: `${sysName} · data flow`, subtitle: `${subtitle(model)}   ·   dashed = a command reads existing facts or a read model`, direction: 'LR', nodes: nodes.filter((n) => connected.has(n.id)), edges: flows, groups: [] };
 }
 
 function deployment(model) {
   const regions = model.system ? model.system.regions : [];
   if (!regions.length) {
-    const err = new Error('No regions declared. Add "region: a, b" to the system block to get a deployment view.');
+    const err = new Error('No regions declared. Add "region: a, b" to the system block to get a deployment diagram.');
     err.code = 'NO_REGIONS';
     throw err;
   }
@@ -1680,7 +1727,7 @@ function contextMap(model) {
   const nodes = model.contexts.map((c) => ({
     id: `ctx:${c.name}`,
     label: c.name,
-    sub: `${c.role} · ${count(model.commands, c)} commands, ${count(model.views, c)} views`,
+    sub: `${c.role} · ${count(model.commands, c)} commands, ${count(model.views, c)} read models`,
     kind: c.role === 'adapter' ? 'external' : 'process',
   }));
   const flows = new Map();
@@ -1717,6 +1764,8 @@ function (module, exports, __r) {
  * what each one means; a test checks the two agree.
  */
 
+const Model = __r(2);
+const { needsImpliedReadModel } = __r(8);
 const { BY_ID } = __r(4);
 
 const issue = (rule, message, line) => ({ severity: BY_ID.get(rule).severity, rule, message, line: line || '' });
@@ -1795,7 +1844,7 @@ function scenarioStepIssues(model) {
     for (const sc of owner.scenarios) {
       const st = sc.steps;
       if (!st) continue;
-      if (kind === 'view') { out.push(issue('scenario-steps', `Scenario "${sc.name}" on view "${owner.name}" is written as steps, which a view does not take yet. Write it as prose`, sc.line)); continue; }
+      if (kind === 'view') { out.push(issue('scenario-steps', `Scenario "${sc.name}" on read model "${owner.name}" is written as steps, which a read model does not take yet. Write it as prose`, sc.line)); continue; }
       if (!st.when) out.push(issue('scenario-steps', `Scenario "${sc.name}" has no when step`, sc.line));
       else if (st.when.name !== owner.name) out.push(issue('scenario-steps', `Scenario "${sc.name}" sits under "${owner.name}" but its when step runs "${st.when.name}"`, st.when.line));
       if (!st.then) out.push(issue('scenario-steps', `Scenario "${sc.name}" has no then step`, sc.line));
@@ -1826,7 +1875,7 @@ function unsourcedEventFields(model) {
   const shape = new Map(model.views.map((v) => [v.name, v.shape.map((f) => f.name)]));
   const known = (event) => [...(fieldsOf.get(event) || [])];
 
-  /* A fact nothing records, or a view nobody declares, may supply anything, so what it supplies is unknown. */
+  /* A fact nothing records, or a read model nobody declares, may supply anything, so what it supplies is unknown. */
   const unknownSource = (facts) => facts.some((f) => (model.events.has(f.name) ? model.events.get(f.name).emittedBy.length === 0 : !shape.has(f.name)));
 
   for (const cmd of model.commands) {
@@ -1842,7 +1891,7 @@ function unsourcedEventFields(model) {
     }
   }
   for (const pol of model.policies) {
-    const who = pol.trigger.event ? `on "${pol.trigger.event}"` : `on "${pol.trigger.schedule}"`;
+    const who = pol.trigger.readModels ? Model.policyLabel(pol) : `on "${Model.policyLabel(pol)}"`;
     if (unknownSource(pol.from)) continue;
     const supplied = new Set([...(pol.trigger.fields || []).map((f) => f.name), ...keys(pol.annotations)]);
     for (const f of pol.from) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); (shape.get(f.name) || []).forEach((n) => supplied.add(n)); }
@@ -1868,7 +1917,7 @@ function unsourcedViewFields(model) {
     const have = new Set([...view.params.map(bare), ...view.sources.flatMap((s) => names(s.args)), ...keys(view.annotations)]);
     for (const s of view.sources) (fieldsOf.get(s.name) || []).forEach((n) => have.add(n));
     const missing = view.shape.filter((f) => carried(f) && !have.has(f.name)).map((f) => f.name);
-    if (missing.length) out.push(issue('unsourced-view-field', `View "${view.name}" shows ${quote(missing)}, which no event it projects from carries. Add ${missing.length === 1 ? 'it' : 'them'} to an event, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, view.line));
+    if (missing.length) out.push(issue('unsourced-view-field', `Read model "${view.name}" shows ${quote(missing)}, which no event it projects from carries. Add ${missing.length === 1 ? 'it' : 'them'} to an event, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, view.line));
   }
   return out;
 }
@@ -1905,14 +1954,16 @@ function dependencyCycles(model) {
   const node = (key, label, line) => { if (!nodes.has(key)) { nodes.set(key, { label, line }); edges.set(key, new Set()); } };
   const edge = (from, to) => { if (edges.has(from) && edges.has(to) && from !== to) edges.get(from).add(to); };
   for (const c of model.commands) node(`c:${c.name}`, `command "${c.name}"`, c.line);
-  model.policies.forEach((p, i) => node(`p:${i}`, `policy on "${p.trigger.event || p.trigger.schedule}"`, p.line));
+  model.policies.forEach((p, i) => node(`p:${i}`, p.trigger.readModels ? `policy ${Model.policyLabel(p)}` : `policy on "${Model.policyLabel(p)}"`, p.line));
   const emitters = (event) => ((model.events.get(event) || {}).emittedBy || []).flatMap((e) => {
     if (e.kind === 'command') return [`c:${e.name}`];
-    return model.policies.flatMap((p, i) => ((p.trigger.event || p.trigger.schedule) === e.name ? [`p:${i}`] : []));
+    return model.policies.flatMap((p, i) => (Model.policyLabel(p) === e.name ? [`p:${i}`] : []));
   });
   for (const c of model.commands) for (const f of c.on) for (const from of emitters(f.name)) edge(from, `c:${c.name}`);
   model.policies.forEach((p, i) => {
     if (p.trigger.event) for (const from of emitters(p.trigger.event)) edge(from, `p:${i}`);
+    // a read-model policy waits on whatever emits the events its read models are built from
+    if (p.trigger.readModels) for (const f of p.from) for (const v of model.views.filter((x) => x.name === f.name)) for (const s of v.sources) for (const from of emitters(s.name)) edge(from, `p:${i}`);
     for (const r of p.rules) if (r.command) edge(`p:${i}`, `c:${r.command.name}`);
   });
   for (const group of loops(edges)) {
@@ -1935,7 +1986,7 @@ function sliceShapes(model) {
     for (const [slice, members] of by) {
       if (members.size < 2) continue;
       const list = [...members.entries()].sort((a, b) => a[1] - b[1]);
-      out.push(issue(ruleId, `Slice "${slice}" holds ${list.length} ${what}: ${quote(list.map(([n]) => n))}. ${ruleId === 'slice-multiple-views' ? 'A slice owns one query, so fold them into one view shaped for how it is read. Reading views other slices define is fine' : 'A write slice has one command, so give each its own slice'}`, list[1][1]));
+      out.push(issue(ruleId, `Slice "${slice}" holds ${list.length} ${what}: ${quote(list.map(([n]) => n))}. ${ruleId === 'slice-multiple-views' ? 'A slice owns one query, so fold them into one read model shaped for how it is read. Reading read models other slices define is fine' : 'A write slice has one command, so give each its own slice'}`, list[1][1]));
     }
   };
   group(model.commands, (c) => c.name, 'slice-multiple-commands', 'commands');
@@ -1956,7 +2007,7 @@ function scenarioCoverage(model) {
     if (!has) without.push(x);
   }
   if (!without.length) return [];
-  return [issue('slice-no-scenario', `${without.length} of ${seen.size} commands and views have no scenario, starting with "${without[0].name}"`, without[0].line)];
+  return [issue('slice-no-scenario', `${without.length} of ${seen.size} commands and read models have no scenario, starting with "${without[0].name}"`, without[0].line)];
 }
 
 /* A command an outside system issues is a fact that can arrive twice. Say which field tells the copies apart. */
@@ -1979,7 +2030,7 @@ function hints(model) {
     }
   }
   for (const v of model.views) {
-    if (v.sources.length >= 4) out.push(issue('view-many-sources', `${v.sources.length} events feed view "${v.name}". Combining streams is fine, but each event ties the view to the command that records it`, v.line));
+    if (v.sources.length >= 4) out.push(issue('view-many-sources', `${v.sources.length} events feed read model "${v.name}". Combining streams is fine, but each event ties the read model to the command that records it`, v.line));
   }
   return out;
 }
@@ -1999,7 +2050,7 @@ function hotspotIssues(model, open) {
       const q = text(h).trim();
       const o = h && typeof h === 'object' ? h : {};
       const bad = !q ? 'has no question' : o.kind && !KINDS.includes(o.kind) ? `has kind "${o.kind}", which is not one of ${KINDS.join(', ')}` : o.category && !CATEGORIES.includes(o.category) ? `has category "${o.category}", which is not one of ${CATEGORIES.join(', ')}` : o.status && !['open', 'resolved'].includes(o.status) ? `has status "${o.status}", which is not open or resolved` : o.kind === 'request' && !o.concerns ? 'is a request, which says what must change with concerns="..."' : o.kind !== 'request' && o.concerns ? 'has concerns, which only a request has' : null;
-      if (bad) out.push(issue('hotspot-invalid', `A @hotspot on "${c.name || c.trigger.event || c.trigger.schedule}" ${bad}`, c.line));
+      if (bad) out.push(issue('hotspot-invalid', `A @hotspot on "${c.name || Model.policyLabel(c)}" ${bad}`, c.line));
       else if (open && (o.status || 'open') === 'open') out.push(issue('hotspot-open', `Open ${o.kind || 'question'}: ${q}`, c.line));
     }
   }
@@ -2010,7 +2061,7 @@ function acceptIssues(model, known) {
   for (const c of carriers(model)) {
     for (const a of asList(c.annotations.accept)) {
       const o = a && typeof a === 'object' ? a : {};
-      const who = c.name || c.trigger.event || c.trigger.schedule;
+      const who = c.name || Model.policyLabel(c);
       if (!o.rule || !known.has(o.rule)) out.push(issue('accept-invalid', `An @accept on "${who}" needs rule="..." naming a rule in the catalogue${o.rule ? `, and "${o.rule}" is not one` : ''}`, c.line));
       else if (!String(o.reason || '').trim()) out.push(issue('accept-invalid', `The @accept of ${o.rule} on "${who}" needs a reason="..."`, c.line));
     }
@@ -2057,9 +2108,18 @@ function routeDuplicates(model) {
   return out;
 }
 
+/* An event reaches an automation through a read model. Same test the board uses to draw an implied one. */
+const pascal = (n) => String(n).split(/[^A-Za-z0-9]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+const automationReadsEvent = (model) => model.policies.filter((p) => needsImpliedReadModel(model, p)).map((p) => {
+  const ev = p.trigger.event;
+  const worker = (p.rules.find((r) => r.worker) || {}).worker;
+  const rm = `Pending${pascal(worker || ev)}`;
+  return issue('automation-reads-event', `Automation on "${ev}" starts straight from the event. Write a read model such as ${rm}(...) fed by ${ev}, and start from it: "${ev} from [${rm}] -> ..." or "from [${rm}] -> ..."`, p.line);
+});
+
 module.exports = {
   scheduleIssues, scenarioStepIssues, hotspotIssues, acceptIssues,
-  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...dedupeCoverage(model), ...hints(model)],
+  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...dedupeCoverage(model), ...automationReadsEvent(model), ...hints(model)],
   slicermIssues: (model) => [...rejectionCoverage(model), ...routeDuplicates(model)],
   sliceOf,
 };
@@ -2104,7 +2164,7 @@ function (module, exports, __r) {
 'use strict';
 
 const { layering } = __r(13);
-const { LANES } = __r(8);
+const { LANES, LANE_LABELS } = __r(8);
 
 /*
  * Dependency-free SVG output. Two renderers:
@@ -2125,6 +2185,22 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const n1 = (n) => Math.round(n * 10) / 10;
 const textW = (s, size = 12) => s.length * CW * (size / 12);
 
+/* The lines under a box. A decision model's checks list wraps at about 40 characters, so a long one
+   makes the note taller, not the column wider; "(assumed)" stays with its fact. */
+function noteLines(n) {
+  const out = [];
+  for (const note of n.notes || []) {
+    if (!n.checks || !note.startsWith('checks ')) { out.push(note); continue; }
+    let line = 'checks';
+    n.checks.forEach((c, i) => {
+      const part = c + (i < n.checks.length - 1 ? ',' : '');
+      if (line.length > 6 && line.length + 1 + part.length > 40) { out.push(line); line = '  ' + part; } else line += ' ' + part;
+    });
+    out.push(line);
+  }
+  return out;
+}
+
 function nodeSize(n, minW = 96) {
   const w = Math.max(minW, textW(n.label) + 28, n.sub ? textW(n.sub, 10) * 0.9 + 28 : 0);
   return { w: Math.ceil(w), h: n.sub ? 50 : 40 };
@@ -2133,7 +2209,7 @@ function nodeSize(n, minW = 96) {
 /* One shape per kind. Shape and outline carry the meaning, colour only reinforces it. */
 function shape(n, g, t) {
   const { x, y, w, h } = g;
-  const dashed = n.declared === false || n.assumed || n.planned ? ' stroke-dasharray="5 3"' : '';
+  const dashed = n.declared === false || n.assumed || n.planned || n.implied ? ' stroke-dasharray="5 3"' : '';
   const onAccent = n.kind === 'system' || (n.kind === 'event' && !n.assumed);
   const label = `<text x="${n1(x + w / 2)}" y="${n1(y + (n.sub ? h / 2 - 4 : h / 2 + 4))}" text-anchor="middle" font-family="${MONO}" font-size="12" font-weight="${n.kind === 'event' ? 600 : 500}" fill="${onAccent ? t.accentInk : t.ink}">${esc(n.label)}</text>`;
   const sub = n.sub ? `<text x="${n1(x + w / 2)}" y="${n1(y + h / 2 + 12)}" text-anchor="middle" font-family="${SANS}" font-size="10" fill="${onAccent ? t.accentInk : t.soft}">${esc(n.sub)}</text>` : '';
@@ -2241,14 +2317,14 @@ ${inner}
 function renderBoard(board, opts = {}) {
   const t = THEMES[opts.theme] || THEMES.light;
   const M = 28;
-  const LABEL_W = 84;
+  const LABEL_W = 128; // fits "COMMAND · READ MODEL"
   const GAP = 48;
   const TOP = 56;
   const ROW_H = 78;
 
   const size = new Map(board.nodes.map((n) => [n.id, nodeSize(n)]));
   const colW = Array(board.cols).fill(0);
-  for (const n of board.nodes) colW[n.col] = Math.max(colW[n.col], (n.indent || 0) + size.get(n.id).w, ...(n.notes || []).map((t) => textW(t, 9.5)));
+  for (const n of board.nodes) colW[n.col] = Math.max(colW[n.col], (n.indent || 0) + size.get(n.id).w, ...noteLines(n).map((t) => textW(t, 9.5)));
   const colX = [];
   let x = M + LABEL_W + 16;
   for (let c = 0; c < board.cols; c++) { colX.push(x); x += colW[c] + GAP; }
@@ -2273,7 +2349,7 @@ function renderBoard(board, opts = {}) {
   LANES.forEach((lane, i) => {
     const y = lanesTop(lane);
     if (i % 2 === 0) inner += `<rect x="${M}" y="${y}" width="${n1(width - 2 * M)}" height="${laneH(lane)}" fill="${t.band}"/>`;
-    inner += `<text x="${M + 10}" y="${y + laneH(lane) / 2 + 4}" font-family="${MONO}" font-size="10" letter-spacing="1" fill="${t.soft}">${lane.toUpperCase()}</text>`;
+    inner += `<text x="${M + 10}" y="${y + laneH(lane) / 2 + 4}" font-family="${MONO}" font-size="9" letter-spacing="0.5" fill="${t.soft}">${esc(LANE_LABELS[lane])}</text>`;
   });
 
   board.groups.forEach((g, i) => {
@@ -2317,24 +2393,26 @@ function renderBoard(board, opts = {}) {
     const tip = n.fullNotes && n.fullNotes.length ? `<title>${esc(n.fullNotes.join(' | '))}</title>` : '';
     const nt = opts.links && opts.links.get(n.id);
     inner += `<g class="nd"${idAttr(opts, n.id)} data-id="${esc(n.id)}" data-kind="${esc(n.kind)}" data-label="${esc(n.label)}"${n.ranges && n.ranges.length ? ` data-lines="${n.ranges.map(([a, b]) => `${a}-${b}`).join(',')}"` : ''}>${tip}${anchored(shape(n, g, t), nt)}${badges(nt, g, t)}</g>`;
-    (n.notes || []).forEach((line, i) => { inner += `<text x="${n1(g.x)}" y="${n1(g.y + g.h + 12 + i * 11)}" font-family="${SANS}" font-size="9.5" fill="${t.soft}">${esc(line)}</text>`; });
+    noteLines(n).forEach((line, i) => { inner += `<text x="${n1(g.x)}" y="${n1(g.y + g.h + 12 + i * 11)}" font-family="${SANS}" font-size="9.5" fill="${t.soft}">${esc(line)}</text>`; });
   }
 
   const ly = ty + 26;
   const legend = [
-    ['command', 'command'], ['event', 'event'], ['view', 'view'], ['policy', 'policy / worker'], ['assumed', 'assumed event (nobody emits it)'],
+    ['command', 'command'], ['event', 'event'], ['view', 'read model'], ['implied', 'implied read model'], ['policy', 'processor'], ['assumed', 'assumed event (nothing records it)'],
   ];
   let lx = M;
   for (const [kind, text] of legend) {
-    const n = kind === 'assumed' ? { kind: 'event', assumed: true, label: '' } : { kind, label: '' };
+    const n = kind === 'assumed' ? { kind: 'event', assumed: true, label: '' } : kind === 'implied' ? { kind: 'view', implied: true, label: '' } : { kind, label: '' };
     inner += shape(n, { x: lx, y: ly - 9, w: 26, h: 16 }, t);
     inner += `<text x="${lx + 34}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">${esc(text)}</text>`;
     lx += 34 + textW(text, 11) * 0.88 + 26;
   }
-  inner += `<text x="${lx}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">dashed arrow = fact or view the command reads</text>`;
+  inner += `<text x="${lx}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">dashed arrow = read model read</text>`;
 
-  const counts = ['command', 'event', 'view', 'policy'].map((k) => `${board.nodes.filter((n) => n.lane === k).length} ${k}`).join(', ');
-  return wrap(Math.max(width, lx + 330), height, `${board.title} event model`, `Event Modeling board with lanes for actor, command, event, view and policy. ${counts} nodes, ${board.edges.length} links, ${board.groups.length} consistency boundaries.`, t, inner);
+  const plural = (k, one, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+  const count = (f, one) => plural(board.nodes.filter(f).length, one);
+  const counts = [count((n) => n.kind === 'command', 'command'), count((n) => n.kind === 'event', 'event'), count((n) => n.kind === 'view', 'read model'), count((n) => n.kind === 'policy', 'processor')].join(', ');
+  return wrap(Math.max(width, lx + 330), height, `${board.title} event model`, `Event Modeling board with rows for actor, command and read model, and event. ${counts}; ${plural(board.edges.length, 'link')}, ${plural(board.groups.length, 'consistency boundary', 'consistency boundaries')}.`, t, inner);
 }
 
 /* Places nodes in layers, left to right. Coordinates start at 0,0.

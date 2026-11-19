@@ -42,3 +42,18 @@ test('board links keep only the addresses the link-url check allows', () => {
   for (const bad of ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', '\u0001\tjavascript:x', 'data:text/html,x', 'vbscript:x', '']) assert.equal(safeHref(bad), false, bad);
   for (const ok of ['https://x', 'http://x', ' HTTPS://x', '/eventline/', './a.svg', '../a.svg', '#d=context', '#d=context&n=Cart']) assert.equal(safeHref(ok), true, ok);
 });
+test('click-to-source prefers the processor when it shares lines with an implied read model', () => {
+  const js = read('site/playground.js');
+  assert.match(js, /len === size && el\.dataset\.kind === 'policy'/);
+  assert.equal(js.split('closer(el,').length - 1, 2); // one helper, used by the caret and by a finding
+});
+
+test('the highlighter knows readmodel', () => {
+  assert.match(read('site/playground.js'), /\|readmodel\|/);
+});
+
+test('the homepage explains read models and screens, and never mentions a policy lane', () => {
+  assert.match(html, /Is a read model a screen\?/);
+  assert.doesNotMatch(html, /lane below|policy lane/i);
+  assert.doesNotMatch(read('examples/twitter-pure.dsl'), /^view /m);
+});

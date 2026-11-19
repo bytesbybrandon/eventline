@@ -8,7 +8,7 @@
     "string": { "name": "string.quoted.double.eventline", "begin": "\"", "end": "\"", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.eventline" }] },
     "annotation": { "name": "storage.type.annotation.eventline", "match": "@[A-Za-z_][\\w]*" },
     "declaration": {
-      "match": "^(\\s*)(system|actor|context|boundary|view|scenario)\\b(?:\\s+([A-Za-z_][\\w]*))?",
+      "match": "^(\\s*)(system|actor|context|boundary|view|readmodel|scenario)\\b(?:\\s+([A-Za-z_][\\w]*))?",
       "captures": { "2": { "name": "keyword.control.eventline" }, "3": { "name": "entity.name.type.eventline" } }
     },
     "command": {

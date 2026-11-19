@@ -10,16 +10,16 @@ This glossary captures the precise definitions that emerged from grilling and do
 
 A **Fact** is a typed precondition input to a command decider.
 
-Facts are resolved at command handling time and bind to guard evaluation. Every fact has a declared source (Event or View) and consistency contract. Facts are never raw data; they are assertions bound to a specific command execution within a boundary.
+Facts are resolved at command handling time and bind to guard evaluation. Every fact has a declared source (Event or Read model) and consistency contract. Facts are never raw data; they are assertions bound to a specific command execution within a boundary.
 
 A fact can be one of two kinds:
 - **Event Fact**: resolved from event history; represents what must have happened.
-- **View Fact**: resolved from a projection; represents current state.
+- **Read model fact**: resolved from a projection; represents current state.
 
 **Example:**
 ```text
 on [ user-authenticated(userId) ]              ← Event Fact
-from [ UserTierCache(userId) as tier ]         ← View Fact
+from [ UserTierCache(userId) as tier ]         ← Read model fact
 ```
 
 ---
@@ -44,7 +44,7 @@ Events are the single source of truth for:
 - Replay (projections recompute from events)
 - Audit (events form an immutable ledger)
 
-Events can be queried in commands via `on [...]` clauses. Temporal operators (e.g., `*` for "zero or more in window") apply only to events, not views.
+Events can be queried in commands via `on [...]` clauses. Temporal operators (e.g., `*` for "zero or more in window") apply only to events, not read models.
 
 **Key property:** Events are never mutated; they are only appended.
 
@@ -57,22 +57,24 @@ rate-limit-exceeded { userId, resourceId, retryAfter }
 
 ---
 
-### View
+### Read model
 
-A **View** is a deterministic projection derived from events for read efficiency.
+A **Read model** is a deterministic projection derived from events for read efficiency.
+It is written with `readmodel`; `view` is the short form and means the same.
+It is not a screen: a screen is where a person sees a read model (see [Screen](#screen)).
 
-Views are:
+Read models are:
 - **Derived, not authoritative:** Computed from events; if a projection falls behind, its outputs can be stale.
-- **Read models:** Optimized for queries; may use caching, denormalization, or other performance tricks.
+- **Optimized for queries:** May use caching, denormalization, or other performance tricks.
 - **Materialized or computed:** Can be eagerly cached (Bergcache) or computed on-demand.
 
-Views are read in commands via `from [...]` clauses. Freshness policy must be declared or inferred (default: eventual consistency).
+Read models are read in commands via `from [...]` clauses. Freshness policy must be declared or inferred (default: eventual consistency).
 
-**Key property:** Views can be reconstructed from events; they are not primary domain state.
+**Key property:** Read models can be reconstructed from events; they are not primary domain state.
 
 **Example:**
 ```text
-view UserQuotaWindow(userId, minute) = [
+readmodel UserQuotaWindow(userId, minute) = [
   request-logged*(userId, minute)
 ] => {
   count,
@@ -80,10 +82,28 @@ view UserQuotaWindow(userId, minute) = [
   windowStart, windowEnd
 } @bergcache(ttl=60s)
 
-view UserTierCache(userId) = [
+readmodel UserTierCache(userId) = [
   tier-assigned(userId, tier)
 ] => { tier, limit } @bergcache(ttl=24h)
 ```
+
+---
+
+### View
+
+The short form of `readmodel`, and an older name for a [read model](#read-model).
+Many Event Modeling practitioners mean a screen by "view", so eventline says read model for the data and [screen](#screen) for where it is shown.
+
+---
+
+### Screen
+
+A **Screen** is where a person sees a read model or starts a command.
+eventline writes it as `@trigger(type=ui, name="CartScreen", part="Checkout button")` on a command or a read model.
+The board shows it on the arrow from the actor, for a command, or as `read in CartScreen`, for a read model.
+
+An endpoint, a command line tool or an agent is also a place where something is read or started.
+None of them is a read model.
 
 ---
 
@@ -93,11 +113,11 @@ A **Command** is an intent evaluated by a pure decider against resolved Facts.
 
 Commands:
 - Accept actor input and parameters.
-- Declare event preconditions (`on`) and view preconditions (`from`).
+- Declare event preconditions (`on`) and read model preconditions (`from`).
 - Apply guards to Facts to make decisions.
 - Emit zero or more Events atomically within a Boundary.
 
-Commands are **pure:** they do not mutate Views directly. Views are updated asynchronously by projection workers after events commit.
+Commands are **pure:** they do not mutate Read models directly. Read models are updated asynchronously by projection workers after events commit.
 
 **Example:**
 ```text
@@ -124,7 +144,7 @@ Boundaries:
 - Ensure that all reads and writes within one command execution are consistent with the same version of event history.
 - Allow concurrent commands on *different* partitions; serialize commands on the *same* partition.
 
-**Key property:** All Facts resolved in `on` are read from the same consistent snapshot of events. Views in `from` may be stale (subject to freshness policy).
+**Key property:** All Facts resolved in `on` are read from the same consistent snapshot of events. Read models in `from` may be stale (subject to freshness policy).
 
 **Example:**
 ```text
@@ -172,7 +192,7 @@ quota-anomaly-detected { userId, excessCount }
 
 ### Context
 
-A bounded context: a group of commands, views and policies with its own language and rules, written as `context Name { ... }`.
+A bounded context: a group of commands, read models and policies with its own language and rules, written as `context Name { ... }`.
 It lists the events other contexts may rely on in `publishes`.
 It is not a [boundary](#boundary-dynamic-consistency-boundary), which is a consistency scope.
 
@@ -183,7 +203,7 @@ Use an event instead when the refusal must be remembered.
 
 ### Note
 
-`@note("...")` free text on a command, view, policy or boundary, for what the notation does not model.
+`@note("...")` free text on a command, read model, policy or boundary, for what the notation does not model.
 
 ### Timer
 
@@ -191,18 +211,18 @@ Use an event instead when the refusal must be remembered.
 
 ### Trigger
 
-`@trigger(type, name, part, route)` on a command or view: the screen, endpoint, command line tool or agent an actor uses to reach it, the part of it (a button, a toggled view), and the route it calls.
+`@trigger(type, name, part, route)` on a command or read model: the screen, endpoint, command line tool or agent an actor uses to reach it, the part of it (a button, a toggled read model), and the route it calls.
 A scheduled job is a [timer](#timer), not a trigger.
 
 ### Slice
 
 One step of the process: a state change (a trigger, one command, the events it records), a state view (a read model and what shows it), an automation, or a translation.
-`@slice("name")` names the slice a command, view or policy belongs to.
-A slice has one command and defines one read model, but it may read any number of views that other slices define.
+`@slice("name")` names the slice a command, read model or policy belongs to.
+A slice has one command and defines one read model, but it may read any number of read models that other slices define.
 
 ### Link
 
-`@link(to="containers", node="view:Orders")` or `@link(url="...")` on a command, view, policy or boundary says where its box leads in the diagrams.
+`@link(to="containers", node="view:Orders")` or `@link(url="...")` on a command, read model, policy or boundary says where its box leads in the diagrams.
 Without it, `diagrams --links` derives links between the diagrams of one model.
 
 ### Deduplication key
@@ -252,20 +272,20 @@ The partition key determines:
 The **Consistency Model** describes when Facts become visible to subsequent commands.
 
 - **on [...]** (event facts): Evaluated at command time; visible within the boundary's isolation scope.
-- **from [...]** (view facts): Subject to freshness policy; may be stale.
+- **from [...]** (read model facts): Subject to freshness policy; may be stale.
 
-**Default:** Views are eventual-consistent (stale is acceptable unless otherwise specified).
+**Default:** Read models are eventual-consistent (stale is acceptable unless otherwise specified).
 
 ---
 
 ### Freshness Policy
 
-A **Freshness Policy** specifies how recent a view must be.
+A **Freshness Policy** specifies how recent a read model must be.
 
 Options:
-- `@fresh<X>`: View must be updated within X duration (e.g., `@fresh<60s>` means < 1 minute old).
-- `@eventual`: View is eventually consistent; staleness is acceptable.
-- `@strong`: View must reflect all prior events (expensive; rarely needed).
+- `@fresh<X>`: Read model must be updated within X duration (e.g., `@fresh<60s>` means < 1 minute old).
+- `@eventual`: Read model is eventually consistent; staleness is acceptable.
+- `@strong`: Read model must reflect all prior events (expensive; rarely needed).
 
 **Default:** `@eventual` (no staleness bound).
 
@@ -315,7 +335,7 @@ boundary UserRateLimit(userId, currentMinute)
 
 `@cost(...)` captures expected scale and resource assumptions near the modeled component.
 
-Use it on boundaries, views, and heavy policies to make trade-offs reviewable during design.
+Use it on boundaries, read models, and heavy policies to make trade-offs reviewable during design.
 
 **Example:**
 ```text
@@ -354,14 +374,14 @@ This does NOT mean events are up-to-date globally; they are up-to-date within th
 
 ### Projection
 
-A **Projection** is the process of deriving a View from events.
+A **Projection** is the process of deriving a Read model from events.
 
 Projections:
 - Transform events into readable state (e.g., sum requests per minute → count).
 - Run asynchronously after events commit.
 - Can be replayed if state is lost.
 
-Projections are the implementation of Views; the DSL models projections as Views.
+Projections are the implementation of Read models; the DSL models projections as Read models.
 
 ---
 
@@ -400,9 +420,9 @@ Use event facts when:
 on [ user-authenticated(userId), tier-assigned(userId, tier) ]
 ```
 
-### When to Use Views in `from`
+### When to Use Read Models in `from`
 
-Use view facts when:
+Use read model facts when:
 - You need **current state** (e.g., what's the user's tier *now*?).
 - The value **changes frequently** and recomputing is expensive (e.g., request count in a window).
 - **Staleness is acceptable** (within bounds of freshness policy).
@@ -433,13 +453,13 @@ quota-anomaly-detected { userId, excessCount }
 
 ## Anti-Patterns
 
-### ❌ Mixing Events and Views in `on`
+### ❌ Mixing Events and Read Models in `on`
 
 **Bad:**
 ```text
 on [
   user-authenticated(userId),  ← event
-  user-tier(userId),           ← view (ambiguous!)
+  user-tier(userId),           ← read model (ambiguous!)
   request-logged*(userId, min) ← event
 ]
 ```
@@ -454,7 +474,7 @@ from [ UserTierCache(userId) ]
 
 ---
 
-### ❌ Assuming Views Are Always Fresh
+### ❌ Assuming Read Models Are Always Fresh
 
 **Bad:**
 ```text
@@ -472,7 +492,7 @@ from [ UserTierCache(userId) @fresh<1h> ]  ← explicit staleness bound
 
 ---
 
-### ❌ Putting Temporal Operators on Views
+### ❌ Putting Temporal Operators on Read Models
 
 **Bad:**
 ```text
@@ -484,16 +504,16 @@ from [ user-requests(userId)* over 1m ]  ← wrong; temporal is for events
 on [ request-logged*(userId, window: 1m) ]
 ```
 
-**Why:** Temporal windows describe event history; views describe current state.
+**Why:** Temporal windows describe event history; read models describe current state.
 
 ---
 
-### ❌ Commands Mutating Views
+### ❌ Commands Mutating Read Models
 
 **Bad:**
 ```text
 // In a command:
-user-tier.limit := 200  ← NO! Views are read-only.
+user-tier.limit := 200  ← NO! Read models are read-only.
 ```
 
 **Good:**
@@ -501,7 +521,7 @@ user-tier.limit := 200  ← NO! Views are read-only.
 // Command emits event:
   --[new_plan == "pro"]--> [ user-upgraded-to-pro { userId } ]
 
-// Policy listens and any projection updates views asynchronously:
+// Policy listens and any projection updates read models asynchronously:
 user-upgraded-to-pro { userId }
   -> tier-projector -> update-user-tier-cache(userId, "pro")
 ```
@@ -515,8 +535,8 @@ user-upgraded-to-pro { userId }
 | Concept | Role | Source | Mutability | Consistency |
 |---------|------|--------|-----------|---|
 | **Event** | Authoritative record | Appended by commands | Immutable | Boundary-consistent (within partition) |
-| **View** | Read model | Computed from events | Immutable (from command perspective) | Subject to freshness policy (default: eventual) |
-| **Fact** | Precondition to command | Event or View | Immutable | Varies by kind |
+| **Read model** | What a screen shows or a query returns | Computed from events | Immutable (from command perspective) | Subject to freshness policy (default: eventual) |
+| **Fact** | Precondition to command | Event or Read model | Immutable | Varies by kind |
 | **Command** | Intent decider | Actor (client) | No; only emits events | Atomic within boundary |
 | **Boundary** | Consistency scope | Configuration | No | Defines isolation and atomicity |
 | **Policy** | Automated reaction | Event listener | No; only emits new events | Eventually consistent |

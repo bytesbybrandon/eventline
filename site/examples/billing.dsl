@@ -27,9 +27,9 @@ context Billing {
     --[the invoice was refunded before]--> reject ALREADY_REFUNDED
     --[default]--> [invoice-refunded { invoiceId, amount }]
 
-  view InvoiceStatus(invoiceId: id) = [invoice-opened(invoiceId), invoice-refunded*(invoiceId)] => { state: text }
+  readmodel InvoiceStatus(invoiceId: id) = [invoice-opened(invoiceId), invoice-refunded*(invoiceId)] => { state: text }
 
-  view OverdueInvoices(accountId: id) = [invoice-opened*(accountId)] => { invoiceId: id, daysLate: number }
+  readmodel OverdueInvoices(accountId: id) = [invoice-opened*(accountId)] => { invoiceId: id, daysLate: number }
 
   every 1 hours
   from [OverdueInvoices(accountId) @fresh<5m>]

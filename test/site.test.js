@@ -56,7 +56,7 @@ test('block nodes on the board carry the source lines the parser found, so a cli
   const lines = dsl.split('\n');
   const svg = render(parse(dsl), 'eventmodel', 'svg', 'dark');
   const range = (id) => /data-lines="(\d+)-(\d+)"/.exec(svg.slice(svg.indexOf(`data-id="${id}"`), svg.indexOf('>', svg.indexOf(`data-id="${id}"`) + 40) + 60));
-  for (const [id, head] of [['cmd:postTweet', 'user -> postTweet'], ['view:TweetDetails', 'view TweetDetails'], ['pol:notification-worker', 'tweet-liked']]) {
+  for (const [id, head] of [['cmd:postTweet', 'user -> postTweet'], ['view:TweetDetails', 'readmodel TweetDetails'], ['pol:notification-worker', 'tweet-liked']]) {
     const m = range(id);
     assert.ok(m, `${id} has no data-lines`);
     assert.ok(lines[m[1] - 1].includes(head), `${id} starts at line ${m[1]}: ${lines[m[1] - 1]}`);

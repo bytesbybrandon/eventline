@@ -99,3 +99,50 @@ test('commands, views and policies know where their block ends, without the comm
   assert.deepEqual([m.views[0].line, m.views[0].endLine], [1, 3]);
   assert.deepEqual([m.commands[0].line, m.commands[0].endLine], [6, 10]);
 });
+
+test('readmodel is the keyword for a read model, and view still works', () => {
+  const a = parse('readmodel Cart(cartId) = [item-added*(cartId)] => { items: count(item-added*(cartId)) }');
+  const b = parse('view Cart(cartId) = [item-added*(cartId)] => { items: count(item-added*(cartId)) }');
+  assert.deepEqual(a.views.map(({ line, endLine, ...v }) => v), b.views.map(({ line, endLine, ...v }) => v));
+  const mixed = parse('view A(id) = [x-happened*(id)] => { n: count(x-happened*(id)) }\nreadmodel B(id) = [x-happened*(id)] => { n: count(x-happened*(id)) }');
+  assert.deepEqual(mixed.views.map((v) => v.name), ['A', 'B']);
+});
+test('an actor called readmodel or from still issues commands', () => {
+  assert.equal(parse('readmodel -> refresh(id)\n  --[default]--> [x-refreshed { id }]').commands[0].actor, 'readmodel');
+  assert.equal(parse('from -> send(id)\n  --[default]--> [x-sent { id }]').commands[0].actor, 'from');
+});
+test('a policy can start from read models alone', () => {
+  const m = parse('from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)');
+  assert.deepEqual(m.policies[0].trigger, { event: null, schedule: null, readModels: true, fields: [] });
+  assert.deepEqual(m.policies[0].from.map((f) => f.name), ['OrdersToShip']);
+  assert.equal(m.policies[0].rules[0].worker, 'fulfilment-worker');
+  const g = parse('from [OrdersToShip] --[ready]--> fulfilment-worker -> shipOrder(cartId)');
+  assert.equal(g.policies[0].rules[0].guard, 'ready');
+});
+test('event and timer triggers say they do not start from read models', () => {
+  assert.equal(parse('x-happened { id } -> w -> go(id)').policies[0].trigger.readModels, false);
+  assert.equal(parse('every 5 minutes -> w -> go()').policies[0].trigger.readModels, false);
+});
+test('from without a list is an error that shows both automation forms', () => {
+  assert.throws(() => parse('from OrdersToShip -> w -> go()'), /from \[/);
+  assert.throws(() => parse('nonsense'), /readmodel/);
+});
+test('an event called readmodel still starts a policy, as on main', () => {
+  for (const src of ['readmodel from [X] -> w -> go(id)', 'readmodel { id } -> w -> go(id)', 'readmodel --[g]--> w -> go(id)', 'readmodel @note("x") -> w -> go(id)']) {
+    const p = parse(src).policies[0];
+    assert.equal(p.trigger.event, 'readmodel', src);
+    assert.equal(p.rules[0].worker, 'w', src);
+  }
+  assert.deepEqual(parse('readmodel from [X] -> w -> go(id)').policies[0].from.map((f) => f.name), ['X']);
+});
+test('from with an empty list is an error', () => {
+  assert.throws(() => parse('from [] -> w -> go(id)'), /at least one/);
+});
+test('an event called from still starts a policy, as on main', () => {
+  for (const src of ['from { id } -> w -> go(id)', 'from --[g]--> w -> go(id)', 'from @note("x") -> w -> go(id)', 'from from [X] -> w -> go(id)']) {
+    const p = parse(src).policies[0];
+    assert.equal(p.trigger.event, 'from', src);
+    assert.equal(p.trigger.readModels, false, src);
+    assert.equal(p.rules[0].worker, 'w', src);
+  }
+});
