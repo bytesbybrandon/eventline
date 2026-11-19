@@ -104,6 +104,12 @@ test('update changes name and practice without bumping the revision, and save ke
   assert.equal(store.save(m.id, 'system B {\n}', m.rev).model.name, 'Mine');
 });
 
+test('update with practice null removes the field, making an ordinary model', () => {
+  const m = store.create({ text: 'a', practice: { status: 'running' } }).model;
+  const u = store.update(m.id, { practice: null });
+  assert.ok(u.ok); assert.equal('practice' in u.model, false); assert.equal('practice' in store.get(m.id), false);
+});
+
 test('duplicate makes a separate model with the same text', () => {
   const m = store.create({ text: 'a', practice: { status: 'running' } }).model;
   const d = store.duplicate(m.id).model;

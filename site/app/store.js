@@ -72,6 +72,7 @@
       var m = get(id);
       if (!m) return { ok: false, reason: 'deleted' };
       var next = Object.assign({}, m, change, { updatedAt: deps.now() });
+      if (next.practice == null) delete next.practice; // an abandoned attempt becomes an ordinary model
       return write(MODEL + id, next) ? { ok: true, model: next } : FAIL;
     }
     function textChange(m, text) {

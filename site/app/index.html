@@ -28,6 +28,13 @@
 
 <div class="ap-banners" id="ap-banners"></div>
 
+<details class="ap-prompt" id="ap-prompt" hidden>
+  <summary id="ap-prompt-title">Prompt</summary>
+  <div class="ap-prompt__body" id="ap-prompt-body"></div>
+</details>
+
+<section class="ap-practice" id="ap-practice" aria-label="Practice"></section>
+
 <main class="ap-main">
   <div class="pg__grid" id="pg" data-state="idle">
     <div class="pg__ed">
@@ -91,6 +98,18 @@
 
 <input type="file" id="ap-file" accept=".dsl" multiple hidden>
 <div class="ap-notices" id="ap-notices" role="status" aria-live="polite"></div>
+<p class="sc-sr" id="ap-say" aria-live="polite"></p>
+
+<dialog class="ap-dialog" id="ap-confirm" aria-labelledby="ap-confirm-title" aria-describedby="ap-confirm-text">
+  <form method="dialog">
+    <h2 id="ap-confirm-title"></h2>
+    <p id="ap-confirm-text"></p>
+    <div class="ap-dialog__acts">
+      <button class="btn btn--quiet" value="cancel" autofocus>Cancel</button>
+      <button class="btn btn--go" value="ok" id="ap-confirm-ok"></button>
+    </div>
+  </form>
+</dialog>
 
 <dialog class="ap-dialog" id="ap-delete" aria-labelledby="ap-delete-title">
   <form method="dialog">
@@ -121,6 +140,8 @@
 <script src="zip.js"></script>
 <script src="complete.js"></script>
 <script src="editor.js"></script>
+<script src="practice.js"></script>
+<script src="practice-ui.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

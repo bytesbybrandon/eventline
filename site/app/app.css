@@ -1,6 +1,12 @@
 /* The workspace shell. The editor and board keep their styles from playground.css. */
 
-.ap { height: 100dvh; margin: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; background: var(--sc-canvas); color: var(--sc-ink); overflow: hidden; }
+.ap { height: 100dvh; margin: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); background: var(--sc-canvas); color: var(--sc-ink); overflow: hidden; }
+/* Fixed rows, so the prompt panel showing or hiding never moves the footer into the main row. */
+.ap-top { grid-row: 1; }
+.ap-banners { grid-row: 2; }
+.ap-prompt { grid-row: 3; }
+.ap-main, .ap-practice { grid-row: 4; grid-column: 1; }
+.ap-foot { grid-row: 5; }
 .ap button:focus-visible, .ap a:focus-visible, .ap summary:focus-visible, .ap input:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
 
 .ap-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-2) var(--sc-3); padding: var(--sc-2) var(--sc-4); border-bottom: 1px solid var(--sc-hairline); background: #0f1630; }
@@ -53,7 +59,51 @@
 .ap-field { display: grid; gap: var(--sc-1); font-size: var(--sc-t-sm); }
 .ap-field input { min-height: 40px; padding: 0 var(--sc-3); background: var(--sc-canvas); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: 6px; font: inherit; }
 
+/* -------------------------------------------------------------- practice -- */
+.ap .ap-pr__link:focus-visible, .ap textarea:focus-visible, .ap input[type="checkbox"]:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+.ap-timer { font-family: var(--sc-font-mono); font-size: var(--sc-t-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-timer[data-over] { color: var(--sc-accent); font-weight: 700; }
+.ap-prompt { border-bottom: 1px solid var(--sc-hairline); padding: var(--sc-2) var(--sc-4); font-size: var(--sc-t-sm); }
+.ap-prompt summary { cursor: pointer; font-weight: 600; min-height: 24px; }
+.ap-prompt__body { max-height: 30dvh; overflow: auto; padding-top: var(--sc-2); }
+
+/* The workspace stays laid out under the practice screen, so the board can still measure while it is hidden. */
+.ap-practice { display: none; min-height: 0; overflow: auto; padding: var(--sc-4); }
+.ap[data-mode="practice"] .ap-practice { display: block; }
+.ap[data-mode="practice"] .ap-main { visibility: hidden; }
+.ap[data-mode="practice"] .ap-foot, .ap[data-mode="practice"] .ap-layout { display: none; }
+.ap-practice > * { max-width: 96rem; margin-inline: auto; }
+.ap-practice h1 { margin: 0; font-family: var(--sc-font-display); font-size: var(--sc-t-xl, 1.6rem); }
+.ap-practice h1:focus { outline: none; }
+.ap-practice h2 { margin: 0 0 var(--sc-2); font-size: var(--sc-t-md, 1.05rem); }
+.ap-pr__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sc-2) var(--sc-4); margin-bottom: var(--sc-3); }
+.ap-pr__acts { display: flex; flex-wrap: wrap; gap: var(--sc-2); }
+.ap-pr__note, .ap-pr__meta { margin: 0 0 var(--sc-3); color: var(--sc-ink-soft); font-size: var(--sc-t-sm); }
+.ap-pr__meta { font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); }
+.ap-pr__text { max-width: 70ch; margin: 0 0 var(--sc-3); line-height: 1.6; }
+.ap-pr__reqs { max-width: 70ch; margin: 0 0 var(--sc-4); padding-left: 1.2em; display: grid; gap: var(--sc-1); line-height: 1.5; }
+.ap-pr__box { padding: var(--sc-3) var(--sc-4); border: 1px solid var(--sc-hairline-strong); border-radius: var(--r); background: var(--sc-surface); min-width: 0; }
+.ap-pr__prompts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sc-3); grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); }
+.ap-pr__past { list-style: none; margin: var(--sc-3) 0 0; padding: var(--sc-2) 0 0; border-top: 1px solid var(--sc-hairline); display: grid; gap: 2px; }
+.ap-pr__link { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: 32px; padding: var(--sc-1) var(--sc-2); border-radius: 6px; cursor: pointer; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); }
+.ap-pr__link:hover { background: color-mix(in oklab, var(--sc-ink) 10%, transparent); }
+.ap-pr__kinds { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: var(--sc-2); }
+.ap-pr__boards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sc-3); margin-bottom: var(--sc-3); }
+.ap-pr__board { background: #0a0e1a; }
+.ap-pr__boards[data-board="light"] .ap-pr__board { background: #ffffff; color: #0a0e1a; }
+.ap-pr__boards[data-board="light"] .ap-pr__board .pg__trace, .ap-pr__boards[data-board="light"] .ap-pr__board .ap-pr__note { color: #3a4560; }
+.ap-pr__draw .pg__board { height: min(60dvh, 34rem); }
+.ap-pr__draw .pg__trace { margin-top: var(--sc-2); }
+.ap-pr__cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr)); gap: var(--sc-3); }
+.ap-pr__checks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sc-2); }
+.ap-pr__checks label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sc-2); align-items: start; line-height: 1.5; cursor: pointer; }
+.ap-pr__checks input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--sc-accent); }
+.ap-pr__notes { box-sizing: border-box; width: 100%; padding: var(--sc-2) var(--sc-3); background: var(--sc-canvas); color: var(--sc-ink); border: 1px solid var(--sc-hairline-strong); border-radius: 6px; font: inherit; resize: vertical; }
+.ap-pr__findings { margin: 0; padding-left: 1.2em; display: grid; gap: var(--sc-1); font-size: var(--sc-t-sm); color: var(--sc-ink-soft); overflow-wrap: anywhere; }
+.ap-pr__ref { margin: 0; max-height: 24rem; overflow: auto; font-family: var(--sc-font-mono); font-size: var(--sc-t-xs); line-height: 1.6; tab-size: 2; }
+
 @media (max-width: 899.98px) {
+  .ap-pr__boards { grid-template-columns: minmax(0, 1fr); }
   .ap-layout [data-layout="split"] { display: none; }
   .ap .pg__grid { grid-template-columns: minmax(0, 1fr); }
   .ap-foot { grid-template-columns: minmax(0, 1fr); }

@@ -377,12 +377,36 @@
     if (notice) showNotice(notice);
   });
 
+  /* ------------------------------------------------------------ app hooks -- */
+  const app = window.EventlineApp = {
+    store,
+    session,
+    get playground() { return playground; }, // null until startup mounts it
+    showNotice,
+    sync,
+    canLeave,
+    openModel(id) { playDraft = null; return session.openModel(id); },
+    setMode(mode) {
+      document.body.dataset.mode = mode;
+      if (playground && mode === 'workspace') playground.setView({}); // the board refits once it shows again
+    },
+    setLocked(on) {
+      locked = !!on;
+      closeMenu();
+      $('#ap-models').disabled = locked;
+    },
+    topbarSlot: $('#ap-slot'),
+  };
+
   /* -------------------------------------------------------------- startup -- */
   const address = parseAddress(location.hash, decodePlayText);
   const firstVisit = !store.meta().visited;
   store.setMeta({ visited: true });
-  const startNotice = address.type === 'none' ? undefined : openAddress(address);
-  const startSmall = address.type === 'none' && firstVisit;
+  const resumed = window.EventlinePracticeUI.resumeActive(); // an active attempt overrides the blank draft and any link
+  const ignored = resumed && address.type !== 'none' && !(address.type === 'model' && address.id === session.state.id);
+  const startNotice = ignored ? 'Links cannot be opened during a practice attempt.'
+    : resumed || address.type === 'none' ? undefined : openAddress(address);
+  const startSmall = !resumed && address.type === 'none' && firstVisit;
 
   playground = window.EventlinePlayground.mount(document.body, {
     base: '../',
@@ -397,24 +421,11 @@
   if (startSmall) session.openDraft(playground.getText());
   shown = session.state;
   playground.setReadOnly(shown.readOnly);
-  if (address.view) playground.setView(address.view);
+  if (address.view && !ignored) playground.setView(address.view);
   if (shown.id) store.setMeta({ lastOpenedId: shown.id });
   paintTheme();
   paintLayout();
   paint(session.state);
   if (startNotice) showNotice(startNotice);
-
-  window.EventlineApp = {
-    store,
-    session,
-    playground,
-    showNotice,
-    setMode(mode) { document.body.dataset.mode = mode; },
-    setLocked(on) {
-      locked = !!on;
-      closeMenu();
-      $('#ap-models').disabled = locked;
-    },
-    topbarSlot: $('#ap-slot'),
-  };
+  window.EventlinePracticeUI.init(app);
 })();
