@@ -41,19 +41,22 @@
       var m = readJson(MODEL + id);
       return m && typeof m === 'object' && m.id === id && typeof m.text === 'string' ? m : null;
     }
+    // The index is a hint: model keys missing from it (interrupted create, racing tab) are recovered.
     function ids() {
       var idx = readJson(INDEX);
-      if (Array.isArray(idx)) return idx;
-      var found = [];
+      var list = Array.isArray(idx) ? idx : [];
+      var orphans = [];
       try {
         for (var i = 0; i < storage.length; i++) {
           var k = storage.key(i);
-          if (k && k.indexOf(MODEL) === 0) found.push(k.slice(MODEL.length));
+          var id = k && k.indexOf(MODEL) === 0 ? k.slice(MODEL.length) : null;
+          if (id && list.indexOf(id) < 0) orphans.push(id);
         }
-      } catch (e) { return []; }
-      found.sort(); // UUIDv7 ids sort by creation time
-      write(INDEX, found);
-      return found;
+      } catch (e) { return list; }
+      if (!orphans.length && Array.isArray(idx)) return list;
+      list = list.concat(orphans.sort()); // UUIDv7 ids sort by creation time
+      write(INDEX, list);
+      return list;
     }
     // Model entry first, index second: an interrupted write leaves a model the rebuild can find.
     function insert(m) {

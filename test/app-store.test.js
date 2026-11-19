@@ -142,3 +142,16 @@ test('an unreadable index is rebuilt from the model entries', () => {
   assert.deepEqual(store.list().map((m) => m.id), [a.id]);
   assert.deepEqual(JSON.parse(storage.getItem(K + 'index')), [a.id]);
 });
+
+test('a model missing from a valid index is recovered, and removed models stay removed', () => {
+  const a = store.create({ text: 'a' }).model; const b = store.create({ text: 'b' }).model;
+  storage.setItem(K + 'index', JSON.stringify([a.id]));
+  assert.deepEqual(store.list().map((m) => m.id).sort(), [a.id, b.id].sort());
+  assert.deepEqual(JSON.parse(storage.getItem(K + 'index')), [a.id, b.id]);
+  storage.setItem(K + 'index', '[]');
+  assert.equal(store.list().length, 2);
+  const r = store.remove(a.id);
+  assert.deepEqual(store.list().map((m) => m.id), [b.id]);
+  assert.equal(r.restore().ok, true);
+  assert.equal(store.list().length, 2);
+});
