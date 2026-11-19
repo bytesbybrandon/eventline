@@ -286,3 +286,20 @@ test('a declared field list is the known payload of a fact a command checks with
   assert.ok(ids('event order-paid { orderId }\n' + cmd, 'eventmodeling').includes('unsourced-event-field'));
   assert.ok(ids('event order-paid\n' + cmd, 'eventmodeling').every((r) => r !== 'unsourced-event-field'));
 });
+test('event-contract-mismatch separates the extra and the missing fields with a semicolon', () => {
+  const t = 'event item-added { cartId, sku }\nuser -> add(cartId, colour)\n  --[default]--> [item-added { cartId, colour }]';
+  const hit = found(t, 'eventmodeling').find((i) => i.rule === 'event-contract-mismatch');
+  assert.match(hit.message, /which the declaration lacks; does not carry "sku"/);
+});
+test('messages about a named policy call it policy Name', () => {
+  const msgs = (t, p = 'eventmodeling') => found(t, p).map((i) => i.message).join('\n');
+  const named = 'policy NotifyLiker = tweet-liked { tweetId } -> w -> notify(tweetId)\n';
+  const all = [
+    msgs('policy ShipOrders = from [Missing] -> w -> ship(id)\n', 'core'),
+    msgs(named, 'core'),
+    msgs('policy NotifyLiker = tweet-liked { tweetId } -> [noted { userId }]\n'),
+    msgs(named.replace('} ->', '} @hotspot("Q", kind=nope) ->')),
+    msgs(named.replace('} ->', '} @accept(rule="many-events") ->')),
+  ];
+  for (const m of all) { assert.match(m, /[Pp]olicy (ShipOrders|NotifyLiker)\b/); assert.doesNotMatch(m, /"(ShipOrders|NotifyLiker)"/); }
+});
