@@ -34,3 +34,11 @@ test('the homepage links to the app and the sitemap lists it', () => {
   assert.ok(read('site/sitemap.xml').includes('/eventline/app/'));
   for (const f of ['docs-site/src/components/Header.astro', 'docs-site/src/components/Hub.astro']) assert.ok(read(f).includes('/eventline/app/'), f);
 });
+
+test('board links keep only the addresses the link-url check allows', () => {
+  const sandbox = { window: {}, requestAnimationFrame() {} };
+  require('node:vm').runInNewContext(read('site/playground.js'), sandbox);
+  const { safeHref } = sandbox.window.EventlinePlayground;
+  for (const bad of ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', '\u0001\tjavascript:x', 'data:text/html,x', 'vbscript:x', '']) assert.equal(safeHref(bad), false, bad);
+  for (const ok of ['https://x', 'http://x', ' HTTPS://x', '/eventline/', './a.svg', '../a.svg', '#d=context', '#d=context&n=Cart']) assert.equal(safeHref(ok), true, ok);
+});

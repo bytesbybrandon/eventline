@@ -19,6 +19,11 @@
     dec(s) { return new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (ch) => ch.charCodeAt(0))); },
   };
 
+  /* The rule lib/diagram/links.js checks link-url by: http(s), a path or a fragment. A model can still carry
+     javascript: and the library only warns, so the board drops any other address. Browsers skip leading spaces
+     and control characters, so this does too. */
+  const safeHref = (href) => /^[\u0000- ]*(https?:|\/|\.\.?\/|#)/i.test(href);
+
   /* ------------------------------------------------- inline boards and tracing -- */
   /* Boards come from eventline as SVG. Inline copies get unique ids so two boards can share a page. */
   let boardSeq = 0;
@@ -297,6 +302,7 @@
       const svg = inlineSvg(svgText);
       svg.removeAttribute('width'); svg.removeAttribute('height');
       for (const a of $$('a', svg)) {
+        for (const at of ['href', 'xlink:href']) if (a.hasAttribute(at) && !safeHref(a.getAttribute(at))) a.removeAttribute(at);
         if (a.classList.contains('lnk')) a.setAttribute('tabindex', '-1');
         else a.setAttribute('aria-label', (a.querySelector('title') || {}).textContent || 'Open');
         if (!(a.getAttribute('href') || '').startsWith('#')) { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener'); }
@@ -746,5 +752,5 @@
     };
   }
 
-  window.EventlinePlayground = { mount, drawStatic, inlineSvg, traceBoard, copyText, b64, REQUIRED_IDS };
+  window.EventlinePlayground = { mount, drawStatic, inlineSvg, traceBoard, copyText, b64, safeHref, REQUIRED_IDS };
 })();
