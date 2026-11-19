@@ -133,3 +133,11 @@ test('docs grammar and code-shape check know an event declaration', async () => 
   assert.equal(decl.exec('event -> go(id)'), null);
   assert.equal(decl.exec('event { id } -> w -> go(id)'), null);
 });
+
+test('the docs cover short guards, named policies and declared events', () => {
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const lang = read('docs/LANGUAGE.md');
+  assert.match(lang, /-\[[^\]]+\]->/); assert.match(lang, /^policy [A-Z]\w* = /m); assert.match(lang, /^event [a-z]+-[a-z-]+ \{/m);
+  assert.match(lang, /## Named policies/); assert.match(lang, /## Predefined events/);
+  const g = read('docs/GLOSSARY.md'); assert.match(g, /### Named policy/); assert.match(g, /### Declared event/);
+});

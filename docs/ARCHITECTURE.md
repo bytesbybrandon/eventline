@@ -26,7 +26,7 @@ A short map of the code, for people changing it.
 
 A diagram draws only what the model states.
 
-- Facts nobody emits show as `(assumed)` in the command's `checks` note, not as nodes.
+- Facts nobody emits show as `(assumed)`, or `(declared)` when the model declares them, in the command's `checks` note, not as nodes.
 - The board draws two things the model does not write: an implied read model, drawn dashed, and an unnamed `automation` processor for a rule with no worker.
 - A command that a policy calls but nobody declared is drawn dashed and marked "not modeled".
 - The model does not say which container calls an outside service, so no arrow is drawn into one.
@@ -50,12 +50,17 @@ Columns come from causality, as in [EVENTLINE-AXI.md](../EVENTLINE-AXI.md#derive
 The board graph is internal and is not public API; the library API and the output keys keep the word `views`.
 
 - A policy's worker is a processor in the actor row, with the id `pol:<worker>`, so links to the other diagrams keep working.
+- A named policy (`policy NotifyLiker = ...`) is one processor with the id `policy:<Name>`, labelled with its name and listing its workers.
+  Every rule hangs off that box, and each result edge carries its rule's guard.
+  In the containers and data flow diagrams it links to each of its workers' boxes (`worker:<w>`), as `pol:<w>` does.
 - A policy rule with no worker gets an unnamed processor labelled `automation`, with the id `auto:<policy line>:<rule index>`: one per rule, with the policy's source lines and no links.
 - When an event starts a policy and no `from [...]` read model reads that event, the board draws an implied read model with the id `implied:<event>`.
   There is one per triggering event, shared by every policy that event triggers.
   It takes the source lines of those policies and has no links.
 - A policy that starts on `from [...]` has no event and no implied read model.
   Its processor sits right of the latest read model it reads.
+- A declared event (`event item-added { ... }`) is drawn only when something uses it.
+  When nothing records it and it starts a policy, its box is filled with a dashed outline and has the sub-label `declared` instead of `assumed`.
 - No edge runs from an event into a command or a processor.
   A command's `on [...]` facts are a `checks ...` note.
   Command ordering still uses them.

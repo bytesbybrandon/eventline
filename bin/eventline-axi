@@ -87,7 +87,7 @@ program
 
 program
   .command('deps <file> <entity>')
-  .description('Show dependencies for an entity (event|read model|command)')
+  .description('Show dependencies for an entity (event|read model|command|policy name)')
   .option('-f, --format <fmt>', 'Output format', 'toon')
   .action((file, entity, opts) => runSubcommand('deps', file, opts, entity));
 

@@ -28,6 +28,7 @@ function (module, exports, __r) {
  *   view Name(params) = [ event facts ] => { shape } @annotation(...) ...
  *   actor -> command(params) [on [ event facts ]] [from [ view facts ]] branch+
  *   event { payload } rule+                      (a policy)
+ *   event event-name { fields }                  (a declaration; the field list is optional)
  *
  * Comments run from // to the end of the line.
  * Errors carry a line number and the text that confused the parser.
@@ -304,11 +305,14 @@ function parseEmissions(sc) {
   return emits;
 }
 
+const atGuard = (sc) => sc.peek('--[') || sc.peek('-[');
+
 function parseGuard(sc) {
-  sc.expect('--[', '"--["');
+  const long = sc.peek('--[');
+  sc.expect(long ? '--[' : '-[', '"--[" or "-["');
   sc.i--; // reuse balanced() on the "["
   const guard = squash(sc.balanced());
-  sc.expect('-->', '"-->" after the guard');
+  if (!sc.eat(long ? '-->' : '->')) throw new ParseError(`A guard opens and closes with the same arrow: --[guard]--> or -[guard]-> (this one opened with "${long ? '--[' : '-['}")`, sc.lineAt());
   return guard;
 }
 
@@ -393,7 +397,7 @@ function parseCommand(sc, model, actor, line) {
       cmd.from.push(...parseFactList(sc.balanced(), line));
     } else break;
   }
-  while (sc.peek('--[')) {
+  while (atGuard(sc)) {
     const bline = sc.lineAt();
     const guard = parseGuard(sc);
     let emits = [];
@@ -403,7 +407,7 @@ function parseCommand(sc, model, actor, line) {
     if (rej) { sc.i += rej[0].length; reject = rej[1]; } else emits = parseEmissions(sc);
     cmd.branches.push({ guard: guard === 'default' ? null : guard, default: guard === 'default', emits, reject, line: bline });
   }
-  if (!cmd.branches.length) throw new ParseError(`Command "${name}" needs at least one --[guard]--> [events] or --[guard]--> reject CODE branch`, line);
+  if (!cmd.branches.length) throw new ParseError(`Command "${name}" needs at least one --[guard]--> [events] or --[guard]--> reject CODE branch (or the short form -[guard]->)`, line);
   cmd.endLine = sc.endLine();
   model.commands.push(cmd);
   sc.last = cmd;
@@ -417,13 +421,13 @@ function parseCommand(sc, model, actor, line) {
 function parsePolicy(sc, model, trigger, line) {
   if (trigger.event && sc.peek('{')) { trigger.payload = squash(sc.balanced()); trigger.fields = parseFields(trigger.payload); }
   const annotations = parseAnnotations(sc);
-  const policy = { trigger, annotations, notes: notesFrom(annotations), from: [], rules: [], line, endLine: 0 };
+  const policy = { name: null, trigger, annotations, notes: notesFrom(annotations), from: [], rules: [], line, endLine: 0 };
   if (sc.keywordBracket('from')) { sc.i += 4; policy.from = parseFactList(sc.balanced(), line); }
   if (trigger.readModels && !policy.from.length) throw new ParseError('An automation that starts from read models names at least one: from [ReadModel] -> worker -> command()', line);
-  while (sc.peek('--[') || sc.peek('->')) {
+  while (atGuard(sc) || sc.peek('->')) {
     const rline = sc.lineAt();
     const rule = { guard: null, worker: null, command: null, emits: [], line: rline };
-    if (sc.peek('--[')) rule.guard = parseGuard(sc);
+    if (atGuard(sc)) rule.guard = parseGuard(sc);
     else sc.expect('->');
     if (rule.guard === 'default') rule.guard = null;
     if (sc.peek('[')) {
@@ -552,6 +556,28 @@ function parseOne(sc, model, ctx) {
     if (ctx) throw new ParseError('The system block goes at the top level, outside any context', line);
     return parseSystem(sc, model);
   }
+  // policy Name = <any policy statement>; "policy" followed by anything else keeps its old meaning
+  if (word === 'policy' && /^\s*[A-Za-z_][\w-]*\s*=(?![=>])/.test(rest)) {
+    const name = sc.ident('a policy name');
+    sc.expect('=');
+    const n = model.policies.length;
+    parseOne(sc, model, ctx);
+    const p = model.policies[n];
+    if (model.policies.length !== n + 1 || p.name) throw new ParseError(`policy ${name} = needs an event, timer or from [ReadModel] trigger with a rule`, line);
+    p.name = name;
+    return;
+  }
+  // event item-added { fields } declares an event; "event" followed by anything else keeps its old meaning
+  const decl = word === 'event' && /^[ \t]+([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)[ \t]*(?=\{|\/\/|\n|$)/.exec(rest);
+  if (decl && decl[1] !== 'from') {
+    const name = decl[1];
+    sc.i += decl[0].length;
+    const fields = sc.peek('{') ? parseFields(sc.balanced()) : null;
+    const twice = model.declarations.find((d) => d.name === name);
+    if (twice) throw new ParseError(`event ${name} is declared twice (first on line ${twice.line}); an event is declared once across the model`, line);
+    model.declarations.push({ name, fields, line, context: ctx || null });
+    return;
+  }
   if (word === 'scenario' && /^\s*"/.test(rest)) return parseScenario(sc, sc.prev, line);
   if (word === 'actor' && /^\s*[A-Za-z_][\w-]*\s*\{/.test(rest)) return parseActor(sc, model);
   if (word === 'boundary' && /^\s*[A-Za-z_]/.test(rest)) return parseBoundary(sc, model);
@@ -580,7 +606,7 @@ function parseOne(sc, model, ctx) {
     if (isCommand) { sc.i += 2; return parseCommand(sc, model, word, line); }
     return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
   }
-  if (sc.peek('{') || sc.peek('--[') || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
+  if (sc.peek('{') || atGuard(sc) || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
   if (word === 'from') {
     // an automation that starts from read models; the cursor goes back onto "from" so parsePolicy reads the list
     if (!/^\s*\[/.test(rest)) throw new ParseError('An automation reads read models: write from [ReadModel] -> worker -> command(), or event from [ReadModel] -> worker -> command()', line);
@@ -588,13 +614,21 @@ function parseOne(sc, model, ctx) {
     return parsePolicy(sc, model, { event: null, schedule: null, readModels: true, fields: [] }, line);
   }
 
-  throw new ParseError(`Unexpected "${word}". A statement starts with system, context, actor, boundary, view or readmodel, "actor -> command(...)", "event { ... }", "from [ReadModel] -> worker -> command()", or "every 5 minutes"`, line);
+  throw new ParseError(`Unexpected "${word}". A statement starts with system, context, actor, boundary, view or readmodel, "actor -> command(...)", "event { ... }", "from [ReadModel] -> worker -> command()", or "every 5 minutes", "policy Name = ...", or "event name { fields }"`, line);
 }
 
 function parse(content) {
   const model = new Model();
   const sc = new Scanner(content.replace(/\r\n?/g, '\n'));
   while (!sc.eof) parseStatement(sc, model, null);
+  const taken = new Map([...model.commands, ...model.views].map((x) => [x.name, x]));
+  const seen = new Set();
+  for (const p of model.policies) {
+    if (!p.name) continue;
+    if (seen.has(p.name)) throw new ParseError(`policy ${p.name} is named twice; policy names are unique across the model`, p.line);
+    if (taken.has(p.name)) throw new ParseError(`policy ${p.name} has the name of a command or read model (line ${taken.get(p.name).line}); give the policy another name`, p.line);
+    seen.add(p.name);
+  }
   model.finalize();
   return model;
 }
@@ -619,13 +653,14 @@ class Model {
     this.views = [];
     this.commands = [];
     this.policies = [];
+    this.declarations = []; // event name { fields }, folded into events by finalize()
     this.events = new Map();
   }
 
   finalize() {
     this.events = new Map();
     const ev = (name) => {
-      if (!this.events.has(name)) this.events.set(name, { name, emittedBy: [], consumedBy: [], fields: [] });
+      if (!this.events.has(name)) this.events.set(name, { name, emittedBy: [], consumedBy: [], fields: [], declared: null });
       return this.events.get(name);
     };
     const emitted = (em, by) => {
@@ -654,6 +689,12 @@ class Model {
         for (const em of rule.emits) emitted(em, { kind: 'policy', name: who, worker: rule.worker, context: pol.context });
       }
     }
+    // A declaration with a field list is the event's known payload.
+    for (const d of this.declarations) {
+      const e = ev(d.name);
+      e.declared = { fields: d.fields && d.fields.map((f) => f.name), line: d.line, context: d.context };
+      if (d.fields) e.fields = d.fields;
+    }
   }
 
   /* 'actor' (declared), 'external' (a system.external, or a name such as
@@ -667,9 +708,9 @@ class Model {
     return 'unknown';
   }
 
-  /* Events nobody emits: facts the model assumes (a session exists, a row exists). */
+  /* Events nobody emits and nobody declares: facts the model assumes (a session exists, a row exists). */
   assumedEvents() {
-    return [...this.events.values()].filter((e) => e.emittedBy.length === 0).map((e) => e.name);
+    return [...this.events.values()].filter((e) => e.emittedBy.length === 0 && !e.declared).map((e) => e.name);
   }
 
   toJSON() {
@@ -688,6 +729,15 @@ class Model {
 
 /* How a policy's trigger reads: its event, its timer, or from [ReadModel, ...]. */
 Model.policyLabel = (p) => p.trigger.event || p.trigger.schedule || `from [${p.from.map((f) => f.name).join(', ')}]`;
+
+/* How messages and listings name a policy: policy <Name>, or its trigger when it has no name. */
+Model.policyName = (p) => (p.name ? `policy ${p.name}` : Model.policyLabel(p));
+
+/* Something records the event, checks it with on [...], folds it in a read model, or starts an automation from it. Scenarios and annotations don't count. */
+Model.isUsed = (model, name) => {
+  const e = model.events.get(name);
+  return !!e && (e.emittedBy.length > 0 || e.consumedBy.length > 0);
+};
 
 module.exports = Model;
 
@@ -708,7 +758,7 @@ function statements(model) {
   const add = (kind, name, s, slice) => list.push({ kind, name, line: s.line, endLine: s.endLine || s.line, slice: slice || null });
   for (const c of model.commands) add('command', c.name, c, sliceOf(c.annotations));
   for (const v of model.views) add('view', v.name, v, sliceOf(v.annotations));
-  for (const p of model.policies) add('policy', Model.policyLabel(p), p, sliceOf(p.annotations));
+  for (const p of model.policies) add('policy', Model.policyName(p), p, sliceOf(p.annotations));
   for (const b of model.boundaries) add('boundary', b.name, b);
   for (const c of model.contexts) add('context', c.name, c);
   for (const a of model.actors) add('actor', a.name, a);
@@ -860,6 +910,8 @@ const RULES = [
     { example: { bad: 'user -> addItem(cartId) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]', good: 'user -> addItem(cartId, sku) in Cart(cartId)\n  --[default]--> [item-added { cartId, sku }]' } }),
   R('unsourced-view-field', 'eventmodeling', 'warn', 'fields', 'A read model shows a field no event carries', 'A read model is a fold over events, so every plain field must be in the payload of an event it projects from. Computed fields are exempt.', 'Add the field to an event it reads, or compute it, as in total: count(order-placed*(id)).',
     { example: { bad: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, total }', good: 'user -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]\nreadmodel Cart(cartId) = [item-added*(cartId)] => { cartId, items: count(item-added*(cartId)) }' } }),
+  R('event-contract-mismatch', 'eventmodeling', 'warn', 'fields', 'A recording does not match its event declaration', 'An event declared with a field list has one payload. Each place that records it must carry every declared field and no plain field the declaration lacks. A computed field (name: expression) counts as carrying the declared field of that name, and computed fields the declaration lacks are allowed.', 'Change the recording to carry the declared fields, or change the declaration.', { slicerm: 'warn',
+    example: { bad: 'event item-added { cartId, sku }\nuser -> add(cartId, colour)\n  --[default]--> [item-added { cartId, colour }]', good: 'event item-added { cartId, sku }\nuser -> add(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]' } }),
   R('dependency-cycle', 'eventmodeling', 'warn', 'order', 'Commands depend on each other in a loop', 'Commands wait for events that others record. If they wait on each other in a loop, no order of work can start. A command that reads events it records itself is fine: that is how a decision checks what already happened.', 'Break the loop with an event that does not depend on the others, or mark one fact as coming from outside.'),
   R('slice-multiple-commands', 'eventmodeling', 'warn', 'slices', 'One slice holds several commands', 'A write slice has one command. A command can record several events. Two commands are two slices.', 'Give each command its own @slice name.'),
   R('slice-multiple-views', 'eventmodeling', 'info', 'slices', 'One slice defines several read models', 'A slice owns one query. Several read models in one slice invite several queries where one shaped for the reader would do. Reading read models that other slices define is always fine.', 'Fold them into one read model shaped for how it is read, or give each its own @slice.', { slicerm: 'warn' }),
@@ -869,6 +921,8 @@ const RULES = [
   R('translation-no-dedupe', 'eventmodeling', 'info', 'fields', 'An outside fact has no deduplication key', 'A command issued by an outside system is a fact someone else recorded. It can be delivered twice, so the model says which field tells a repeat from a new one. @dedupe names it, and @correlate names the field that ties the fact to something here. Both count as supplying that field to the events and read models that carry it.', 'Add @dedupe(eventId) to the command, read model or policy that consumes the fact.',
     { example: { bad: 'system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId)\n  --[default]--> [parcel-scanned { parcelId }]', good: 'system S { external: carrier (translator) }\ncarrier -> scanReceived(parcelId) @dedupe(scanId)\n  --[default]--> [parcel-scanned { parcelId, scanId }]' } }),
   R('many-events', 'eventmodeling', 'info', 'hints', 'A happy path records several events', 'Right when they are one fact told in parts. If they are two steps, a policy can take the second.', 'Keep them if they are one fact, otherwise split the second into a policy.'),
+  R('event-declared-unused', 'eventmodeling', 'info', 'hints', 'A declared event nothing uses', 'event name { fields } writes an event down before anything records it. Nothing records this one, checks it with on [...], folds it in a read model or starts an automation from it yet.', 'Record it from a command or policy, read it, or remove the declaration.',
+    { example: { bad: 'event item-added { cartId, sku }\nuser -> openCart(cartId)\n  --[default]--> [cart-opened { cartId }]', good: 'event item-added { cartId, sku }\nuser -> addItem(cartId, sku)\n  --[default]--> [item-added { cartId, sku }]' } }),
   R('view-many-sources', 'eventmodeling', 'info', 'hints', 'Four or more events feed one read model', 'Combining streams is fine, but each event ties the read model to the command that records it, so fewer is easier to change.', 'Check that every source is needed.'),
 
   // ---- slicerm: stricter, for tools where a slice is a unit of delivery ----
@@ -969,7 +1023,7 @@ function check(model) {
   }
 
   for (const pol of model.policies) {
-    const who = pol.trigger.readModels ? Model.policyLabel(pol) : `on "${Model.policyLabel(pol)}"`;
+    const who = pol.name ? pol.name : pol.trigger.readModels ? Model.policyLabel(pol) : `on "${Model.policyLabel(pol)}"`;
     for (const f of pol.from) {
       if (!viewNames.has(f.name)) add('warn', 'from-facts', `Policy ${who} reads "${f.name}" in from [...], but no such read model is declared`, pol.line);
     }
@@ -1007,7 +1061,7 @@ function (module, exports, __r) {
  * Links between the diagrams of one model.
  *
  * Each diagram names its boxes its own way, but they share a vocabulary: cmd:Name, view:Name,
- * worker:Name (pol:Name on the board), actor:slug. So a box can lead to the same thing seen from
+ * worker:Name (pol:Name on the board, or policy:Name for a named policy), actor:slug. So a box can lead to the same thing seen from
  * another level: the system context opens the containers, a container opens its data flow or its
  * place on the event model board, a shard opens the boundary it holds.
  *
@@ -1044,9 +1098,18 @@ function inventory(model) {
 }
 
 /* What each box leads to by default: [diagram, boxId?] pairs, most useful first. */
+/* The board box a worker is drawn in: its named policy's, else its own. */
+const boardBoxes = (model, w) => {
+  const named = model.policies.filter((p) => p.name && p.rules.some((r) => r.worker === w)).map((p) => `policy:${p.name}`);
+  const own = model.policies.some((p) => !p.name && p.rules.some((r) => r.worker === w));
+  return own || !named.length ? [...named, `pol:${w}`] : named;
+};
+const workersOf = (p) => [...new Set(p.rules.map((r) => r.worker).filter(Boolean))];
+
 function derive(model, inv, kind, id) {
   const r = [];
   const worker = (prefix) => id.slice(prefix.length);
+  const onBoard = () => boardBoxes(model, worker('worker:')).map((b) => ['eventmodel', b]);
   switch (kind) {
     case 'context':
       r.push(['containers', id]);
@@ -1056,14 +1119,14 @@ function derive(model, inv, kind, id) {
       else if (id === 'api') r.push(['eventmodel']);
       else if (id === 'store') r.push(['dataflow', 'log']);
       else if (id.startsWith('view:')) r.push(['dataflow', id], ['eventmodel', id]);
-      else if (id.startsWith('worker:')) r.push(['dataflow', id], ['eventmodel', `pol:${worker('worker:')}`]);
+      else if (id.startsWith('worker:')) r.push(['dataflow', id], ...onBoard());
       break;
     case 'dataflow':
       if (id === 'log') r.push(['containers', 'store']);
       else if (/^(actor|ext):/.test(id)) r.push(['context', id]);
       else if (id.startsWith('cmd:')) r.push(['eventmodel', id]);
       else if (id.startsWith('view:')) r.push(['eventmodel', id], ['containers', id]);
-      else if (id.startsWith('worker:')) r.push(['eventmodel', `pol:${worker('worker:')}`], ['containers', id]);
+      else if (id.startsWith('worker:')) r.push(...onBoard(), ['containers', id]);
       break;
     case 'deployment': {
       if (id.startsWith('region:')) { r.push(['containers', 'sys']); break; }
@@ -1088,6 +1151,10 @@ function derive(model, inv, kind, id) {
       if (id.startsWith('cmd:')) r.push(['dataflow', id]);
       else if (id.startsWith('view:')) r.push(['containers', id], ['dataflow', id]);
       else if (id.startsWith('pol:')) r.push(['containers', `worker:${id.slice(4)}`]);
+      else if (id.startsWith('policy:')) {
+        const ws = workersOf(model.policies.find((p) => p.name === id.slice(7))).map((w) => `worker:${w}`);
+        r.push(...ws.map((w) => ['containers', w]), ...ws.map((w) => ['dataflow', w]));
+      }
       else if (id.startsWith('evt:')) r.push(['containers', 'store']);
       else if (id.startsWith('bnd:') && model.system && model.system.regions.length) r.push(['deployment', `${slug(model.system.regions[0])}:shard:${id.slice(4)}`]);
       else if (nodeKind === 'actor') r.push(['context', `actor:${slug(label)}`]);
@@ -1111,9 +1178,9 @@ function elements(model, inv) {
     out.push({ what: `read model ${v.name}`, line: v.line, ranges: [[v.line, v.endLine]], links: linksOf(v.annotations), boxes: { eventmodel: [`view:${v.name}`], containers: [`view:${v.name}`], dataflow: [`view:${v.name}`], deployment: ids('deployment', (id) => id.endsWith(`:view:${v.name}`)) } });
   }
   for (const p of model.policies) {
-    const names = [...new Set(p.rules.map((r) => r.worker).filter(Boolean))];
-    out.push({ what: `policy ${Model.policyLabel(p)}`, line: p.line, ranges: [[p.line, p.endLine]], links: linksOf(p.annotations), boxes: {
-      eventmodel: names.map((w) => `pol:${w}`), containers: names.map((w) => `worker:${w}`), dataflow: names.map((w) => `worker:${w}`),
+    const names = workersOf(p);
+    out.push({ what: `policy ${p.name || Model.policyLabel(p)}`, line: p.line, ranges: [[p.line, p.endLine]], links: linksOf(p.annotations), boxes: {
+      eventmodel: p.name ? [`policy:${p.name}`] : names.map((w) => `pol:${w}`), containers: names.map((w) => `worker:${w}`), dataflow: names.map((w) => `worker:${w}`),
       deployment: names.flatMap((w) => ids('deployment', (id) => id.endsWith(`:worker:${w}`))),
     } });
   }
@@ -1209,7 +1276,7 @@ function (module, exports, __r) {
  * Event Modeling board, derived from a model.
  *
  * Three rows, top to bottom, as on a classic Event Modeling board:
- *   ACTOR                 actors, timers, and processors (workers and unnamed automations)
+ *   ACTOR                 actors, timers, and processors (workers, named policies and unnamed automations)
  *   COMMAND · READ MODEL  commands and read models, sharing the timeline
  *   EVENT                 events
  * Time runs left to right. The model has no explicit timeline, so order comes from
@@ -1330,6 +1397,7 @@ function buildBoard(model) {
   };
 
   const assumed = (name) => !(model.events.get(name) || { emittedBy: [] }).emittedBy.length;
+  const declaredEv = (name) => assumed(name) && !!(model.events.get(name) || {}).declared; // used, declared, nothing records it
   const viewLabel = (name) => { const v = model.views.find((x) => x.name === name); return v ? `${name}(${v.params.join(', ')})` : name; };
 
   const cmds = orderCommands(model, commandGroups(model));
@@ -1339,7 +1407,7 @@ function buildBoard(model) {
     const kind = model.actorKind(cmd.actor);
     const declared = model.actors.find((a) => a.name.toLowerCase() === cmd.actor.toLowerCase());
     const actor = put(`actor:${cmd.name}`, 'actor', declared ? declared.name : cmd.actor, col, { kind: kind === 'external' ? 'external' : 'actor', ranges: cmd.ranges.map(([from]) => [from, from]) });
-    const checks = [...new Set(cmd.on.map((f) => `${f.name}${f.wildcard ? '*' : ''}${assumed(f.name) ? ' (assumed)' : ''}`))];
+    const checks = [...new Set(cmd.on.map((f) => `${f.name}${f.wildcard ? '*' : ''}${assumed(f.name) ? (declaredEv(f.name) ? ' (declared)' : ' (assumed)') : ''}`))];
     const rejects = [...new Set(cmd.branches.map((b) => b.reject).filter(Boolean))];
     const planned = !!cmd.annotations.planned;
     const c = put(`cmd:${cmd.name}`, 'command', `${cmd.name}(${cmd.params.join(', ')})`, col, {
@@ -1406,7 +1474,7 @@ function buildBoard(model) {
       bump(gate.col);
     } else if (pol.trigger.event) {
       const eid = `evt:${pol.trigger.event}`;
-      if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
+      if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, declaredEv(pol.trigger.event) ? { kind: 'event', declared: true, sub: 'declared' } : { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
       const fed = reads.find((r, k) => !needsImpliedReadModel(model, { ...pol, from: [pol.from[k]] }));
       if (fed) gate = fed.node;
       else {
@@ -1421,29 +1489,33 @@ function buildBoard(model) {
     if (!siblings.has(sibKey)) siblings.set(sibKey, []);
     const placed = siblings.get(sibKey); // earlier processors on this trigger and their results
     pol.rules.forEach((rule, i) => {
-      const wid = rule.worker ? `pol:${rule.worker}` : `auto:${pol.line}:${i}`;
+      const wid = pol.name ? `policy:${pol.name}` : rule.worker ? `pol:${rule.worker}` : `auto:${pol.line}:${i}`;
       const after = Math.max(-1, ...[gate, ...reads.map((r) => r.node), ...placed.map((id) => nodes.get(id))].filter(Boolean).map((n) => n.col)); // live: inserts shift columns
       if (!nodes.has(wid)) placed.push(wid);
-      const w = nodes.get(wid) || put(wid, 'actor', rule.worker || 'automation', next('actor', after), { kind: 'policy', sub: planned ? 'planned' : rule.worker ? 'automation' : 'unnamed processor', slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
-      (w.ranges = w.ranges || []).push(...ranges);
+      const sub = planned ? 'planned' : pol.name ? [...new Set(pol.rules.map((r) => r.worker || 'automation'))].join(', ') : rule.worker ? 'automation' : 'unnamed processor';
+      const w = nodes.get(wid) || put(wid, 'actor', pol.name || rule.worker || 'automation', next('actor', after), { kind: 'policy', sub, slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
+      if (!pol.name || i === 0) (w.ranges = w.ranges || []).push(...ranges); // a named policy's box stands for its lines once
       bump(w.col);
-      const guard = clip(rule.guard || '', 24);
+      // one box for every rule of a named policy: each rule's guard labels its own result, and results keep source order
+      const ruleGuard = clip(rule.guard || '', 24);
+      const guard = pol.name ? '' : ruleGuard;
+      const resultAfter = pol.name ? Math.max(w.col, ...placed.map((id) => nodes.get(id).col)) : w.col;
       for (const r of reads) addEdge(r.node.id, w.id, 'reads', [r.label, r.node === gate ? guard : ''].filter(Boolean).join(', '));
       if (gate && !reads.some((r) => r.node === gate)) addEdge(gate.id, w.id, gate.kind === 'timer' ? 'triggers' : 'reads', guard);
       const members = [...(pol.trigger.event ? [`evt:${pol.trigger.event}`] : []), ...(gate ? [gate.id] : []), w.id];
       if (rule.command) {
         const cid = `cmd:${rule.command.name}`;
-        if (!nodes.has(cid)) { const col = next('command', w.col); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); placed.push(cid); }
-        addEdge(w.id, cid, 'invokes', clip(rule.command.args, 24));
+        if (!nodes.has(cid)) { const col = next('command', resultAfter); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); placed.push(cid); }
+        addEdge(w.id, cid, 'invokes', pol.name ? ruleGuard : clip(rule.command.args, 24));
         members.push(cid);
       }
       for (const em of rule.emits) {
         const id = `evt:${em.event}`;
-        if (!nodes.has(id)) { const col = next('event', w.col); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); placed.push(id); }
-        addEdge(w.id, id, 'emits');
+        if (!nodes.has(id)) { const col = next('event', resultAfter); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); placed.push(id); }
+        addEdge(w.id, id, 'emits', pol.name ? ruleGuard : '');
         members.push(id);
       }
-      slices.push({ type: 'automation', name: rule.worker || Model.policyLabel(pol), nodes: [...new Set(members)] });
+      slices.push({ type: 'automation', name: pol.name || rule.worker || Model.policyLabel(pol), nodes: [...new Set(members)] });
     });
   }
 
@@ -1873,10 +1945,11 @@ function unsourcedEventFields(model) {
   const out = [];
   const fieldsOf = eventFields(model);
   const shape = new Map(model.views.map((v) => [v.name, v.shape.map((f) => f.name)]));
-  const known = (event) => [...(fieldsOf.get(event) || [])];
+  const declaredFields = (event) => { const e = model.events.get(event); return e && e.declared && e.declared.fields; };
+  const known = (event) => declaredFields(event) || [...(fieldsOf.get(event) || [])];
 
   /* A fact nothing records, or a read model nobody declares, may supply anything, so what it supplies is unknown. */
-  const unknownSource = (facts) => facts.some((f) => (model.events.has(f.name) ? model.events.get(f.name).emittedBy.length === 0 : !shape.has(f.name)));
+  const unknownSource = (facts) => facts.some((f) => (model.events.has(f.name) ? !declaredFields(f.name) && model.events.get(f.name).emittedBy.length === 0 : !shape.has(f.name)));
 
   for (const cmd of model.commands) {
     if (unknownSource([...cmd.on, ...cmd.from])) continue;
@@ -1891,7 +1964,7 @@ function unsourcedEventFields(model) {
     }
   }
   for (const pol of model.policies) {
-    const who = pol.trigger.readModels ? Model.policyLabel(pol) : `on "${Model.policyLabel(pol)}"`;
+    const who = pol.name ? pol.name : pol.trigger.readModels ? Model.policyLabel(pol) : `on "${Model.policyLabel(pol)}"`;
     if (unknownSource(pol.from)) continue;
     const supplied = new Set([...(pol.trigger.fields || []).map((f) => f.name), ...keys(pol.annotations)]);
     for (const f of pol.from) { names(f.args).forEach((n) => supplied.add(n)); if (f.alias) supplied.add(f.alias); (shape.get(f.name) || []).forEach((n) => supplied.add(n)); }
@@ -1906,16 +1979,37 @@ function unsourcedEventFields(model) {
   return out;
 }
 
+/* Every recording of a declared event is held to the declaration, at its own line. */
+function eventContract(model) {
+  const out = [];
+  const check = (e, line) => {
+    const decl = model.events.has(e.event) && model.events.get(e.event).declared;
+    if (!decl || !decl.fields || e.payload === undefined) return;
+    const have = new Set(e.fields.map((f) => f.name));
+    const extra = e.fields.filter((f) => carried(f) && !decl.fields.includes(f.name)).map((f) => f.name);
+    const lacking = decl.fields.filter((n) => !have.has(n));
+    if (extra.length || lacking.length) {
+      const parts = [extra.length && `carries ${quote(extra)}, which the declaration lacks`, lacking.length && `does not carry ${quote(lacking)}, which the declaration has`].filter(Boolean);
+      out.push(issue('event-contract-mismatch', `Event "${e.event}" is recorded here and ${parts.join('; ')}. Make the recording and the declaration (line ${decl.line}) agree`, line));
+    }
+  };
+  for (const c of model.commands) for (const b of c.branches) for (const e of b.emits) check(e, b.line);
+  for (const p of model.policies) for (const r of p.rules) for (const e of r.emits) check(e, r.line);
+  return out;
+}
+
 function unsourcedViewFields(model) {
   const out = [];
   const fieldsOf = eventFields(model);
   for (const view of model.views) {
     if (!view.sources.length) continue;
     const events = view.sources.map((s) => model.events.get(s.name));
-    // A source nothing records is an assumed fact: its payload is unknown, so there is nothing to check against.
-    if (events.some((e) => !e || e.emittedBy.length === 0)) continue;
+    const declared = (e) => e && e.declared && e.declared.fields;
+    // A source nothing records and nothing declares with fields is an assumed fact: its payload is unknown, so there is nothing to check against.
+    if (events.some((e) => !declared(e) && (!e || e.emittedBy.length === 0))) continue;
     const have = new Set([...view.params.map(bare), ...view.sources.flatMap((s) => names(s.args)), ...keys(view.annotations)]);
-    for (const s of view.sources) (fieldsOf.get(s.name) || []).forEach((n) => have.add(n));
+    // A declaration with fields is the event's known payload.
+    for (const s of view.sources) (declared(model.events.get(s.name)) || fieldsOf.get(s.name) || []).forEach((n) => have.add(n));
     const missing = view.shape.filter((f) => carried(f) && !have.has(f.name)).map((f) => f.name);
     if (missing.length) out.push(issue('unsourced-view-field', `Read model "${view.name}" shows ${quote(missing)}, which no event it projects from carries. Add ${missing.length === 1 ? 'it' : 'them'} to an event, or compute ${missing.length === 1 ? 'it' : 'them'} (name: expression)`, view.line));
   }
@@ -1954,7 +2048,7 @@ function dependencyCycles(model) {
   const node = (key, label, line) => { if (!nodes.has(key)) { nodes.set(key, { label, line }); edges.set(key, new Set()); } };
   const edge = (from, to) => { if (edges.has(from) && edges.has(to) && from !== to) edges.get(from).add(to); };
   for (const c of model.commands) node(`c:${c.name}`, `command "${c.name}"`, c.line);
-  model.policies.forEach((p, i) => node(`p:${i}`, p.trigger.readModels ? `policy ${Model.policyLabel(p)}` : `policy on "${Model.policyLabel(p)}"`, p.line));
+  model.policies.forEach((p, i) => node(`p:${i}`, p.name ? Model.policyName(p) : p.trigger.readModels ? `policy ${Model.policyLabel(p)}` : `policy on "${Model.policyLabel(p)}"`, p.line));
   const emitters = (event) => ((model.events.get(event) || {}).emittedBy || []).flatMap((e) => {
     if (e.kind === 'command') return [`c:${e.name}`];
     return model.policies.flatMap((p, i) => (Model.policyLabel(p) === e.name ? [`p:${i}`] : []));
@@ -2032,6 +2126,9 @@ function hints(model) {
   for (const v of model.views) {
     if (v.sources.length >= 4) out.push(issue('view-many-sources', `${v.sources.length} events feed read model "${v.name}". Combining streams is fine, but each event ties the read model to the command that records it`, v.line));
   }
+  for (const e of model.events.values()) {
+    if (e.declared && !Model.isUsed(model, e.name)) out.push(issue('event-declared-unused', `Event "${e.name}" is declared, and nothing records it, checks it with on [...], folds it in a read model or starts an automation from it`, e.declared.line));
+  }
   return out;
 }
 
@@ -2043,6 +2140,7 @@ const text = (h) => (h && typeof h === 'object' ? (h._ && h._[0]) || '' : typeof
 function carriers(model) {
   return [...model.commands, ...model.views, ...model.policies, ...model.boundaries].filter((x) => x.annotations);
 }
+const whom = (c) => (c.trigger ? (c.name ? Model.policyName(c) : `"${Model.policyLabel(c)}"`) : `"${c.name}"`);
 function hotspotIssues(model, open) {
   const out = [];
   for (const c of carriers(model)) {
@@ -2050,7 +2148,7 @@ function hotspotIssues(model, open) {
       const q = text(h).trim();
       const o = h && typeof h === 'object' ? h : {};
       const bad = !q ? 'has no question' : o.kind && !KINDS.includes(o.kind) ? `has kind "${o.kind}", which is not one of ${KINDS.join(', ')}` : o.category && !CATEGORIES.includes(o.category) ? `has category "${o.category}", which is not one of ${CATEGORIES.join(', ')}` : o.status && !['open', 'resolved'].includes(o.status) ? `has status "${o.status}", which is not open or resolved` : o.kind === 'request' && !o.concerns ? 'is a request, which says what must change with concerns="..."' : o.kind !== 'request' && o.concerns ? 'has concerns, which only a request has' : null;
-      if (bad) out.push(issue('hotspot-invalid', `A @hotspot on "${c.name || Model.policyLabel(c)}" ${bad}`, c.line));
+      if (bad) out.push(issue('hotspot-invalid', `A @hotspot on ${whom(c)} ${bad}`, c.line));
       else if (open && (o.status || 'open') === 'open') out.push(issue('hotspot-open', `Open ${o.kind || 'question'}: ${q}`, c.line));
     }
   }
@@ -2061,9 +2159,9 @@ function acceptIssues(model, known) {
   for (const c of carriers(model)) {
     for (const a of asList(c.annotations.accept)) {
       const o = a && typeof a === 'object' ? a : {};
-      const who = c.name || Model.policyLabel(c);
-      if (!o.rule || !known.has(o.rule)) out.push(issue('accept-invalid', `An @accept on "${who}" needs rule="..." naming a rule in the catalogue${o.rule ? `, and "${o.rule}" is not one` : ''}`, c.line));
-      else if (!String(o.reason || '').trim()) out.push(issue('accept-invalid', `The @accept of ${o.rule} on "${who}" needs a reason="..."`, c.line));
+      const who = whom(c);
+      if (!o.rule || !known.has(o.rule)) out.push(issue('accept-invalid', `An @accept on ${who} needs rule="..." naming a rule in the catalogue${o.rule ? `, and "${o.rule}" is not one` : ''}`, c.line));
+      else if (!String(o.reason || '').trim()) out.push(issue('accept-invalid', `The @accept of ${o.rule} on ${who} needs a reason="..."`, c.line));
     }
   }
   return out;
@@ -2119,7 +2217,7 @@ const automationReadsEvent = (model) => model.policies.filter((p) => needsImplie
 
 module.exports = {
   scheduleIssues, scenarioStepIssues, hotspotIssues, acceptIssues,
-  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...dedupeCoverage(model), ...automationReadsEvent(model), ...hints(model)],
+  eventmodelingIssues: (model) => [...unsourcedEventFields(model), ...unsourcedViewFields(model), ...eventContract(model), ...dependencyCycles(model), ...sliceShapes(model), ...scenarioCoverage(model), ...dedupeCoverage(model), ...automationReadsEvent(model), ...hints(model)],
   slicermIssues: (model) => [...rejectionCoverage(model), ...routeDuplicates(model)],
   sliceOf,
 };
@@ -2209,7 +2307,7 @@ function nodeSize(n, minW = 96) {
 /* One shape per kind. Shape and outline carry the meaning, colour only reinforces it. */
 function shape(n, g, t) {
   const { x, y, w, h } = g;
-  const dashed = n.declared === false || n.assumed || n.planned || n.implied ? ' stroke-dasharray="5 3"' : '';
+  const dashed = n.declared === false || (n.kind === 'event' && n.declared) || n.assumed || n.planned || n.implied ? ' stroke-dasharray="5 3"' : '';
   const onAccent = n.kind === 'system' || (n.kind === 'event' && !n.assumed);
   const label = `<text x="${n1(x + w / 2)}" y="${n1(y + (n.sub ? h / 2 - 4 : h / 2 + 4))}" text-anchor="middle" font-family="${MONO}" font-size="12" font-weight="${n.kind === 'event' ? 600 : 500}" fill="${onAccent ? t.accentInk : t.ink}">${esc(n.label)}</text>`;
   const sub = n.sub ? `<text x="${n1(x + w / 2)}" y="${n1(y + h / 2 + 12)}" text-anchor="middle" font-family="${SANS}" font-size="10" fill="${onAccent ? t.accentInk : t.soft}">${esc(n.sub)}</text>` : '';
@@ -2399,10 +2497,11 @@ function renderBoard(board, opts = {}) {
   const ly = ty + 26;
   const legend = [
     ['command', 'command'], ['event', 'event'], ['view', 'read model'], ['implied', 'implied read model'], ['policy', 'processor'], ['assumed', 'assumed event (nothing records it)'],
+    ...(board.nodes.some((n) => n.kind === 'event' && n.declared) ? [['declared', 'declared event (declared, not recorded yet)']] : []),
   ];
   let lx = M;
   for (const [kind, text] of legend) {
-    const n = kind === 'assumed' ? { kind: 'event', assumed: true, label: '' } : kind === 'implied' ? { kind: 'view', implied: true, label: '' } : { kind, label: '' };
+    const n = kind === 'assumed' ? { kind: 'event', assumed: true, label: '' } : kind === 'implied' ? { kind: 'view', implied: true, label: '' } : kind === 'declared' ? { kind: 'event', declared: true, label: '' } : { kind, label: '' };
     inner += shape(n, { x: lx, y: ly - 9, w: 26, h: 16 }, t);
     inner += `<text x="${lx + 34}" y="${ly + 3}" font-family="${SANS}" font-size="11" fill="${t.soft}">${esc(text)}</text>`;
     lx += 34 + textW(text, 11) * 0.88 + 26;
