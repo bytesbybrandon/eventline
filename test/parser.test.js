@@ -229,3 +229,8 @@ test('isUsed: recorded, checked with on, folded, or starting an automation; not 
   assert.deepEqual(['a-done', 'b-done', 'c-done', 'd-done', 'e-done', 'f-done'].map((n) => Model.isUsed(m, n)), [true, true, true, true, false, false]);
   assert.equal(Model.isUsed(m, 'nope'), false);
 });
+
+test('error messages mention the short guard, named policies and event declarations', () => {
+  assert.throws(() => parse('user -> go() on [a-b]\n'), (e) => /-\[guard\]->/.test(e.message));
+  assert.throws(() => parse('banana split\n'), (e) => /policy Name = \.\.\./.test(e.message) && /event name \{ fields \}/.test(e.message));
+});
