@@ -29,3 +29,20 @@ test('a missing file or unknown diagram fails with a message and a non-zero exit
 test('validate exits non-zero only when there is an error', () => {
   assert.equal(run('validate', file).status, 0);
 });
+
+test('a policy that starts from a read model is listed, traced and checked without crashing', () => {
+  const src = 'from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)\n';
+  const tmp = path.join(require('node:os').tmpdir(), `eventline-readmodel-${process.pid}.dsl`);
+  require('node:fs').writeFileSync(tmp, src);
+  try {
+    for (const args of [['policies', tmp], ['deps', tmp, 'fulfilment-worker'], ['parse', tmp], [tmp], ['validate', tmp]]) {
+      const r = run(...args);
+      assert.equal(r.status, 0, `${args[0]}: ${r.stderr}`);
+    }
+    assert.match(run('policies', tmp).stdout, /from \[OrdersToShip\]/);
+    assert.match(run('parse', tmp).stdout, /from \[OrdersToShip\]/);
+    assert.match(run('deps', tmp, 'fulfilment-worker').stdout, /view:OrdersToShip/);
+    const { parse, check } = require('../lib');
+    assert.doesNotThrow(() => check(parse(src), { profile: 'slicerm' }));
+  } finally { require('node:fs').rmSync(tmp, { force: true }); }
+});
