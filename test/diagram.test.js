@@ -258,3 +258,8 @@ test('board svg: a long checks note wraps and keeps (assumed) with its fact', ()
   const board = buildBoard(load('twitter-pure.dsl'));
   assert.ok(board.nodes.some((n) => n.checks && n.checks.length > 1));
 });
+test('board svg: the description pluralises its counts', () => {
+  const desc = (t) => render(parse(t), 'eventmodel', 'svg', 'dark').match(/<desc[^>]*>([^<]*)/)[1];
+  assert.match(desc('A -> go(id)\n--[default]--> [done]'), /1 command, 1 event, 0 read models, 0 processors; 2 links, 0 consistency boundaries/);
+  assert.match(desc(fs.readFileSync(path.join(__dirname, '..', 'examples', 'twitter-pure.dsl'), 'utf8')), /2 processors/);
+});

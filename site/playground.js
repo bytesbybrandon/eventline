@@ -363,14 +363,17 @@
       moreBtn.hidden = allIssues.length <= limit;
       moreBtn.textContent = showAll ? 'Show fewer' : 'Show all ' + allIssues.length;
     }
+    /* The smaller line range wins; on a tie the processor beats the implied read model that shares its lines. */
+    const closer = (el, len, size) => len < size || (len === size && el.dataset.kind === 'policy');
     /* A finding on the first line of a statement is about all of it. Its box, if the diagram has one, lights up too. */
     function focusIssue(it) {
       const ranges = [[it.line, it.endLine || it.line]];
       const subject = it.subject;
-      let id = null;
+      let id = null; let size = Infinity;
       if (pgBoard && subject) {
         for (const [nid, el] of pgBoard.tracer.nodes) {
-          if (el.dataset.lines && rangesOf(el).some(([from, to]) => subject.line >= from && subject.line <= to) && el.dataset.kind !== 'actor') { id = nid; break; }
+          if (!el.dataset.lines || el.dataset.kind === 'actor') continue;
+          for (const [from, to] of rangesOf(el)) if (subject.line >= from && subject.line <= to && closer(el, to - from, size)) { id = nid; size = to - from; }
         }
       }
       if (pgBoard) pgBoard.tracer.setBase(id);
@@ -515,7 +518,7 @@
       let best = null; let size = Infinity;
       for (const [id, el] of pgBoard.tracer.nodes) {
         if (!el.dataset.lines || el.dataset.kind === 'actor' || el.dataset.kind === 'external') continue;
-        for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && to - from < size || (to - from === size && el.dataset.kind === 'policy')) { best = id; size = to - from; }
+        for (const [from, to] of rangesOf(el)) if (line >= from && line <= to && closer(el, to - from, size)) { best = id; size = to - from; }
       }
       return best;
     }
