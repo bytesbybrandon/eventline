@@ -253,9 +253,9 @@
     playhead.setAttribute('aria-valuenow', String(lane.scrub ? n : total));
     playhead.setAttribute('aria-valuetext', lane.scrub ? `as of event ${n} of ${total}` : 'live');
     if (lane.scrub) {
-      heroStatus.textContent = `Replaying the first ${n} of ${total} events. The views are folded from just those. Newer events are still arriving, dimmed on the right.`;
+      heroStatus.textContent = `Replaying the first ${n} of ${total} events. The read models are folded from just those. Newer events are still arriving, dimmed on the right.`;
     } else if (heroStatus.textContent.startsWith('Replaying')) {
-      heroStatus.textContent = 'Back at now. The views are folded from every event.';
+      heroStatus.textContent = 'Back at now. The read models are folded from every event.';
     }
   }
   const minAt = () => {
@@ -462,7 +462,7 @@
   // command, runs it exactly once the first time the reader reaches it
   const STEPS = [
     { at: 0.03, blocks: ['sys', 'actors', 'bounds'], note: 'Declare the system: who acts, and the boundaries that scope decisions.' },
-    { at: 0.12, blocks: ['v1', 'v2', 'v3'], note: 'Views are folds over events. They start empty.', run: () => {
+    { at: 0.12, blocks: ['v1', 'v2', 'v3'], note: 'Read models are folds over events. They start empty.', run: () => {
       append(P, 'user-authenticated', { userId: 'u1' });
       append(P, 'user-created', { userId: 'u2' });
     } },

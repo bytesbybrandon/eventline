@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eventline · Design systems as events</title>
-<meta name="description" content="A text notation for Event Modeling and Dynamic Consistency Boundaries (DCB): describe a system design as commands, events and views, then check and draw it.">
+<meta name="description" content="A text notation for Event Modeling and Dynamic Consistency Boundaries (DCB): describe a system as commands, events and read models, then check and draw it.">
 <link rel="canonical" href="https://bytesbybrandon.github.io/eventline/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="eventline">
 <meta property="og:title" content="eventline · Design systems as events">
-<meta property="og:description" content="Every system is a series of events. Describe yours with commands, events, and views.">
+<meta property="og:description" content="Every system is a series of events. Describe yours with commands, events, and read models.">
 <meta property="og:url" content="https://bytesbybrandon.github.io/eventline/">
 <meta property="og:image" content="https://bytesbybrandon.github.io/eventline/og.png">
 <meta property="og:image:width" content="1200">
@@ -53,7 +53,7 @@
     <div class="pf-hero__top">
       <div class="pf-hero__copy sc-stack">
         <h1 id="spark-h" class="sc-display sc-display--xl" elementtiming="hero">Design systems the way they happen.</h1>
-        <p class="sc-lede">Describe any system as commands, events and views. Fire one, then drag the timeline back: state is only ever a fold of what already happened.</p>
+        <p class="sc-lede">Describe any system as commands, events and read models. Fire one, then drag the timeline back: state is only ever a fold of what already happened.</p>
         <div class="pf-actions">
           <a class="cta" href="#play">Write your own</a>
           <button type="button" class="pf-copy" id="hero-copy" aria-label="Copy the command npx -y eventline-axi"><code>npx -y eventline-axi</code><span id="hero-copy-s">Copy</span></button>
@@ -79,7 +79,7 @@
     <div class="pf-river" role="group" aria-labelledby="river-h">
       <div class="pf-river__head">
         <p id="river-h" class="sc-label">Event stream, sample traffic plus yours</p>
-        <dl class="pf-views" id="views" aria-label="Views folded from the stream, as of the playhead">
+        <dl class="pf-views" id="views" aria-label="Read models folded from the stream, as of the playhead">
           <div><dt>UserTimeline</dt><dd id="v-tweets">0 tweets</dd></div>
           <div><dt>Likes</dt><dd id="v-likes">0</dd></div>
           <div><dt>Follows</dt><dd id="v-follows">0</dd></div>
@@ -93,7 +93,7 @@
       <div class="pf-lane__view" id="lane-view">
         <div class="pf-lane__future" aria-hidden="true"></div>
         <div class="pf-lane__track" id="lane-track" aria-hidden="true"></div>
-        <div class="pf-play" id="playhead" role="slider" tabindex="0" aria-label="Playhead. Drag the timeline, or use the arrow keys, to see the views as of an earlier event." aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="live">
+        <div class="pf-play" id="playhead" role="slider" tabindex="0" aria-label="Playhead. Drag the timeline, or use the arrow keys, to see the read models as of an earlier event." aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="live">
           <span class="pf-play__tag" id="play-tag">now</span>
         </div>
         <p class="pf-lane__cue" id="lane-cue" aria-hidden="true">Drag to travel back in time</p>
@@ -126,7 +126,7 @@
           <li><span class="lens-node lens-node--ev">user-authenticated</span><code>{&nbsp;userId&nbsp;}</code></li>
           <li><span class="lens-node lens-node--ev">request-logged</span><code>{&nbsp;userId, resourceId&nbsp;}</code></li>
           <li><span class="lens-node lens-node--ev">rate-limit-reached</span><code>{&nbsp;userId, retryAfter:&nbsp;60s&nbsp;}</code></li>
-          <li><span class="lens-node lens-node--view">UserQuota(userId)</span><span class="pf-lens__note">A view folded from the events before it.</span></li>
+          <li><span class="lens-node lens-node--view">UserQuota(userId)</span><span class="pf-lens__note">A read model folded from the events before it.</span></li>
         </ol>
         <p class="sc-label pf-lens__cap">Written as events</p>
       </div>
@@ -143,7 +143,7 @@
           <p class="sc-body">eventline maps one to one onto the four slice patterns of Event Modeling. Nobody drew this board, and it is not a picture: point at a box and the board traces its lineage. <code>eventline-axi diagram eventmodel</code> derived it from the 75 lines you are about to read.</p>
         </div>
         <figure class="pf-board__fig">
-          <img src="assets/eventmodel.svg" width="1665" height="726" alt="Event Modeling board derived from twitter-pure.dsl. Five commands each have their actor above and their events beneath, grouped into three consistency boundaries: UserTimeline, UserFollows and TweetFeed. The views UserTimeline, TweetDetails and UserProfile sit right of the events that feed them. The trending-analyzer and notification-worker policies sit in the lane below.">
+          <img src="assets/eventmodel.svg" width="3103" height="510" alt="Event Modeling board derived from twitter-pure.dsl, in three rows: actors and processors on top, commands and read models in the middle, events at the bottom. Five commands each have their actor above and their events beneath, grouped into three consistency boundaries: UserTimeline, UserFollows and TweetFeed. The read models UserTimeline, TweetDetails and UserProfile sit right of the events that feed them. The trending-analyzer and notification-worker processors sit in the top row, each reading an implied read model of the event that starts it, and notification-worker sends sendLikeNotification.">
         </figure>
       </div>
       <p class="pf-trace" id="trace" role="status" aria-live="polite">Point at any box to trace what feeds it and what reads it.</p>
@@ -160,9 +160,9 @@
           <div class="blk" data-blk="sys"><span class="ln"><span class="t-kw">system</span> TwitterAPI {</span><span class="ln">  <span class="t-kw">external</span>: stripe (payments), sentry (monitoring), cloudfront (cdn)</span><span class="ln">  <span class="t-kw">slo</span>: 99.95% uptime, p99 &lt; 100ms</span><span class="ln">  <span class="t-kw">region</span>: us-primary, eu-secondary, ap-southeast</span><span class="ln">  <span class="t-kw">data-classification</span>: public, pii</span><span class="ln">}</span></div>
           <div class="blk" data-blk="actors"><span class="ln"><span class="t-kw">actor</span> User { <span class="t-kw">auth</span>: session, <span class="t-kw">tier</span>: free|pro|enterprise }</span><span class="ln"><span class="t-kw">actor</span> Admin { <span class="t-kw">auth</span>: oauth, mfa: required }</span><span class="ln"><span class="t-kw">actor</span> Visitor { <span class="t-kw">auth</span>: none }</span></div>
           <div class="blk" data-blk="bounds"><span class="ln"><span class="t-kw">boundary</span> TweetFeed(tweetId) <span class="t-an">@partition</span>(shardKey=<span class="t-str">"tweetId"</span>)</span><span class="ln"><span class="t-kw">boundary</span> UserTimeline(userId) <span class="t-an">@partition</span>(shardKey=<span class="t-str">"userId"</span>)</span><span class="ln"><span class="t-kw">boundary</span> UserFollows(userId) <span class="t-an">@partition</span>(shardKey=<span class="t-str">"userId"</span>)</span></div>
-          <div class="blk" data-blk="v1"><span class="ln"><span class="t-kw">view</span> UserTimeline(userId) = [</span><span class="ln">  <span class="t-ev">user-followed*</span>(userId, targetUserId),</span><span class="ln">  <span class="t-ev">tweet-created*</span>(targetUserId),</span><span class="ln">  <span class="t-ev">tweet-retweeted*</span>(targetUserId)</span><span class="ln">] =&gt; {</span><span class="ln">  tweetId, userId, content, media, createdAt,</span><span class="ln">  likes: count(<span class="t-ev">tweet-liked*</span>(tweetId)),</span><span class="ln">  retweets: count(<span class="t-ev">tweet-retweeted*</span>(tweetId))</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"timeline:{userId}"</span>, ttl=5m)</span></div>
-          <div class="blk" data-blk="v2"><span class="ln"><span class="t-kw">view</span> TweetDetails(tweetId) = [<span class="t-ev">tweet-created</span>(tweetId)] =&gt; {</span><span class="ln">  content, media, createdAt, likes, retweets</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"tweet:{tweetId}"</span>, ttl=1h)</span></div>
-          <div class="blk" data-blk="v3"><span class="ln"><span class="t-kw">view</span> UserProfile(userId) = [<span class="t-ev">user-created</span>(userId), <span class="t-ev">user-updated*</span>(userId)] =&gt; {</span><span class="ln">  name, handle, bio, followers, following</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"profile:{userId}"</span>, ttl=24h)</span></div>
+          <div class="blk" data-blk="v1"><span class="ln"><span class="t-kw">readmodel</span> UserTimeline(userId) = [</span><span class="ln">  <span class="t-ev">user-followed*</span>(userId, targetUserId),</span><span class="ln">  <span class="t-ev">tweet-created*</span>(targetUserId),</span><span class="ln">  <span class="t-ev">tweet-retweeted*</span>(targetUserId)</span><span class="ln">] =&gt; {</span><span class="ln">  tweetId, userId, content, media, createdAt,</span><span class="ln">  likes: count(<span class="t-ev">tweet-liked*</span>(tweetId)),</span><span class="ln">  retweets: count(<span class="t-ev">tweet-retweeted*</span>(tweetId))</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"timeline:{userId}"</span>, ttl=5m)</span></div>
+          <div class="blk" data-blk="v2"><span class="ln"><span class="t-kw">readmodel</span> TweetDetails(tweetId) = [<span class="t-ev">tweet-created</span>(tweetId)] =&gt; {</span><span class="ln">  content, media, createdAt, likes, retweets</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"tweet:{tweetId}"</span>, ttl=1h)</span></div>
+          <div class="blk" data-blk="v3"><span class="ln"><span class="t-kw">readmodel</span> UserProfile(userId) = [<span class="t-ev">user-created</span>(userId), <span class="t-ev">user-updated*</span>(userId)] =&gt; {</span><span class="ln">  name, handle, bio, followers, following</span><span class="ln">} <span class="t-an">@bergcache</span>(key=<span class="t-str">"profile:{userId}"</span>, ttl=24h)</span></div>
           <div class="blk" data-blk="postTweet"><span class="ln">user -&gt; <span class="t-cmd">postTweet</span>(content, media?) <span class="t-kw">in</span> UserTimeline(userId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId)]</span><span class="ln">  --[content.length &gt; 280]--&gt; [<span class="t-ev">tweet-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-created</span> { userId, content, media, createdAt: clock.wall() }</span><span class="ln">  ]</span></div>
           <div class="blk" data-blk="followUser"><span class="ln">user -&gt; <span class="t-cmd">followUser</span>(targetUserId) <span class="t-kw">in</span> UserFollows(userId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">user-exists</span>(targetUserId)]</span><span class="ln">  --[alreadyFollowing]--&gt; [<span class="t-ev">follow-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">user-followed</span> { userId, targetUserId, followedAt: clock.wall() }</span><span class="ln">  ]</span></div>
           <div class="blk" data-blk="likeTweet"><span class="ln">user -&gt; <span class="t-cmd">likeTweet</span>(tweetId) <span class="t-kw">in</span> TweetFeed(tweetId)</span><span class="ln"><span class="t-kw">on</span> [<span class="t-ev">user-authenticated</span>(userId), <span class="t-ev">tweet-exists</span>(tweetId)]</span><span class="ln">  --[alreadyLiked]--&gt; [<span class="t-ev">like-rejected</span>]</span><span class="ln">  --[default]--&gt; [</span><span class="ln">    <span class="t-ev">tweet-liked</span> { userId, tweetId, likedAt: clock.wall() }</span><span class="ln">  ]</span></div>
@@ -175,7 +175,7 @@
       </div>
       <div class="pf-proof__final">
         <p class="sc-display sc-display--lg" id="final-h">Every system is a series of events.</p>
-        <p class="sc-lede">Commands decide. Events remember. Views answer.</p>
+        <p class="sc-lede">Commands decide. Events remember. Read models answer.</p>
       </div>
 
       <div class="pf-proof__out">
@@ -183,7 +183,7 @@
           <span class="sc-label">Event stream</span>
           <button type="button" class="btn btn--quiet" id="proof-fire" disabled>Fire a command</button>
         </div>
-        <dl class="pf-views pf-views--proof" aria-label="Views folded from the stream">
+        <dl class="pf-views pf-views--proof" aria-label="Read models folded from the stream">
           <div><dt>UserTimeline(u1)</dt><dd id="pv-timeline">empty</dd></div>
           <div><dt>TweetDetails(t1)</dt><dd id="pv-tweet">not created</dd></div>
           <div><dt>UserProfile(u2)</dt><dd id="pv-profile">0 followers</dd></div>
@@ -280,7 +280,11 @@
         </details>
         <details name="faq">
           <summary>Do I need to know Event Modeling first?</summary>
-          <p>No. If you do, the mapping is direct: state change, state view, automation, and translation slices each have a line shape in eventline. If you do not, start with a command, the events it can produce, and a view that reads them.</p>
+          <p>No. If you do, the mapping is direct: state change, state view, automation, and translation slices each have a line shape in eventline. If you do not, start with a command, the events it can produce, and a read model that reads them.</p>
+        </details>
+        <details name="faq">
+          <summary>Is a read model a screen?</summary>
+          <p>No. A read model is data folded from events: what a screen shows, what a query returns, or a projection no screen shows. A screen is where someone sees it or starts a command. eventline writes it as <code>@trigger(type=ui, name="CartScreen")</code> on a command or read model.</p>
         </details>
         <details name="faq">
           <summary>How is this related to event storming?</summary>
@@ -292,15 +296,15 @@
         </details>
         <details name="faq">
           <summary>Can I use it in a system design interview?</summary>
-          <p>That is what it was written for. Introduce it as a quick event model: write the commands, events, boundaries, and views before you draw infrastructure boxes. Interviewers get a precise picture of state changes, invariants, and concurrency in a few lines.</p>
+          <p>That is what it was written for. Introduce it as a quick event model: write the commands, events, boundaries, and read models before you draw infrastructure boxes. Interviewers get a precise picture of state changes, invariants, and concurrency in a few lines.</p>
         </details>
         <details name="faq">
           <summary>Do I need Kafka or event sourcing infrastructure?</summary>
-          <p>No. eventline describes behavior, not infrastructure. Views name their cache or partition key as annotations, and you decide what stores the events.</p>
+          <p>No. eventline describes behavior, not infrastructure. Read models name their cache or partition key as annotations, and you decide what stores the events.</p>
         </details>
         <details name="faq">
           <summary>What does the eventline-axi CLI do?</summary>
-          <p>It parses a <code>.dsl</code> file and lists its actors, commands, events, views, boundaries, and policies. It traces dependencies, validates a model against the checklist, and exports the dependency graph as toon, JSON, or plain text.</p>
+          <p>It parses a <code>.dsl</code> file and lists its actors, commands, events, read models, boundaries, and policies. It traces dependencies, validates a model against the checklist, and exports the dependency graph as toon, JSON, or plain text.</p>
         </details>
       </div>
     </div>
@@ -347,7 +351,7 @@ system:
     <h2 id="log-h">Event log</h2>
     <button class="btn btn--quiet" autofocus>Close</button>
   </form>
-  <p class="pf-log__note">Scrolling into a scene and every command you fire is appended here. The highlighted link in the top bar is a view folded from this log.</p>
+  <p class="pf-log__note">Scrolling into a scene and every command you fire is appended here. The highlighted link in the top bar is a read model folded from this log.</p>
   <ol class="pf-log__list" id="log-list"></ol>
 </dialog>
 

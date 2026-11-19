@@ -64,7 +64,8 @@
       const node = nodes.get(id);
       readout.replaceChildren();
       const strong = document.createElement('b'); strong.textContent = node.dataset.label;
-      readout.append(strong, ` is ${/^[aeiou]/.test(node.dataset.kind) ? 'an' : 'a'} ${node.dataset.kind}.`);
+      const kind = node.dataset.kind === 'view' ? 'read model' : node.dataset.kind; // data-kind is library output and keeps its name
+      readout.append(strong, ` is ${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind}.`);
       if (by.length) readout.append(` Fed by ${by.join(', ')}.`);
       if (to.length) readout.append(` Read by ${to.join(', ')}.`);
       if (!by.length && !to.length) readout.append(' Nothing links to it in this model.');

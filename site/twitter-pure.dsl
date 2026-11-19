@@ -13,7 +13,7 @@ boundary TweetFeed(tweetId) @partition(shardKey="tweetId")
 boundary UserTimeline(userId) @partition(shardKey="userId")
 boundary UserFollows(userId) @partition(shardKey="userId")
 
-view UserTimeline(userId) = [
+readmodel UserTimeline(userId) = [
   user-followed*(userId, targetUserId),
   tweet-created*(targetUserId),
   tweet-retweeted*(targetUserId)
@@ -23,11 +23,11 @@ view UserTimeline(userId) = [
   retweets: count(tweet-retweeted*(tweetId))
 } @bergcache(key="timeline:{userId}", ttl=5m)
 
-view TweetDetails(tweetId) = [tweet-created(tweetId)] => {
+readmodel TweetDetails(tweetId) = [tweet-created(tweetId)] => {
   content, media, createdAt, likes, retweets
 } @bergcache(key="tweet:{tweetId}", ttl=1h)
 
-view UserProfile(userId) = [user-created(userId), user-updated*(userId)] => {
+readmodel UserProfile(userId) = [user-created(userId), user-updated*(userId)] => {
   name, handle, bio, followers, following
 } @bergcache(key="profile:{userId}", ttl=24h)
 

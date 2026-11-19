@@ -51,3 +51,9 @@ test('click-to-source prefers the processor when it shares lines with an implied
 test('the highlighter knows readmodel', () => {
   assert.match(read('site/playground.js'), /\|readmodel\|/);
 });
+
+test('the homepage explains read models and screens, and never mentions a policy lane', () => {
+  assert.match(html, /Is a read model a screen\?/);
+  assert.doesNotMatch(html, /lane below|policy lane/i);
+  assert.doesNotMatch(read('examples/twitter-pure.dsl'), /^view /m);
+});
