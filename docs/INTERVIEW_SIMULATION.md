@@ -94,7 +94,7 @@ from [
 
 > "Ah, I see the edge case. The second request would see count=N (because the first one was logged), so it gets rejected. So the limit is `<`, not `<=`. That's correct — they get exactly N requests per window, then get rejected on N+1."
 >
-> And for `UserTierCache`: that's not an event. It's a view - a cached projection from tier assignment events. I keep it in `from [...]` because it is a read-model lookup, not causal history."
+> And for `UserTierCache`: that's not an event. It's a read model - a cached projection from tier assignment events. I keep it in `from [...]` because it is a read-model lookup, not causal history."
 
 ### Interviewer
 
@@ -203,7 +203,7 @@ from [
 
 ---
 
-## Step 3: Views & Caching (Latency Budget → Storage)
+## Step 3: Read models & Caching (Latency Budget → Storage)
 
 ### Interviewer
 
@@ -262,14 +262,14 @@ from [
 
 ### Interviewer
 
-> "How would you structure the view to avoid this?"
+> "How would you structure the read model to avoid this?"
 
 ### Interviewee
 
 > *(rewrites)*
 >
 > ```text
-> view UserQuotaWindow(userId, minute) = [
+> readmodel UserQuotaWindow(userId, minute) = [
 >   tier-assigned*(userId, tier),
 >   request-logged*(userId, minute)
 > ] => {
@@ -285,7 +285,7 @@ from [
 >
 > "Each (user, minute) pair gets its own cache entry. Entries expire after 60s (one window duration). So 10:00's entry expires at 10:01:00, and 10:01's entry is fresh.
 >
-> This view is what we read in the `from [...]` clause of the command. It's derived from events, not an event itself."
+> This read model is what we read in the `from [...]` clause of the command. It's derived from events, not an event itself."
 
 ### Interviewer
 
@@ -295,7 +295,7 @@ from [
 
 > "Each entry is ~200 bytes. 50k RPS × 60s = 3M requests per window. If each request adds a new (userId, minute) entry...
 >
-> Actually, no. Multiple requests from the same user in the same minute reuse the same view entry. So unique (userId, minute) pairs = unique users × # of windows we keep.
+> Actually, no. Multiple requests from the same user in the same minute reuse the same read model entry. So unique (userId, minute) pairs = unique users × # of windows we keep.
 >
 > 10k concurrent users × (maybe 2-3 windows in flight, since requests span windows) = ~30k entries.
 > 30k × 200 bytes = 6MB. Very manageable."
@@ -315,7 +315,7 @@ from [
 ### Interviewee
 
 > ```text
-> view UserQuotaWindow(userId, currentMinute) = [
+> readmodel UserQuotaWindow(userId, currentMinute) = [
 >   tier-assigned*(userId, tier),
 >   request-logged*(userId, currentMinute)
 > ] => {
@@ -489,7 +489,7 @@ from [
 
 // 3. VIEWS & CACHING (Step 3: Latency Budget → Storage)
 
-view UserQuotaWindow(userId, currentMinute) = [
+readmodel UserQuotaWindow(userId, currentMinute) = [
   tier-assigned*(userId, tier),
   request-logged*(userId, currentMinute)
 ] => {
@@ -509,7 +509,7 @@ view UserQuotaWindow(userId, currentMinute) = [
   @cost(memory="~6MB/region", readRpsPeak=50000)
   @ops(owner="edge-runtime", dashboard="quota-window-overview")
 
-view UserTierCache(userId) = [
+readmodel UserTierCache(userId) = [
   tier-assigned(userId, tier)
 ] => {
   tier,
@@ -575,9 +575,9 @@ request-logged { userId }
 
 ---
 
-## Syntax Refinement: Events vs Views (on vs from)
+## Syntax Refinement: Events vs Read models (on vs from)
 
-During this walkthrough, the team identified a critical ambiguity: **the original syntax mixed events and views in a single `on [...]` clause without declaring which was which.**
+During this walkthrough, the team identified a critical ambiguity: **the original syntax mixed events and read models in a single `on [...]` clause without declaring which was which.**
 
 ### The Problem
 
@@ -585,7 +585,7 @@ During this walkthrough, the team identified a critical ambiguity: **the origina
 // Old (ambiguous):
 user -> makeRequest(resourceId) on [
   user-authenticated(userId),  ← is this an event or a projection?
-  user-tier(userId, tier),     ← definitely a view, but syntax hides it
+  user-tier(userId, tier),     ← definitely a read model, but syntax hides it
   request-logged*(userId, min) ← event with temporal window
 ]
 ```
@@ -608,26 +608,26 @@ on [
   request-logged*(userId, minute)   ← temporal event streams
 ]
 from [
-  UserTierCache(userId) as tier     ← only views/projections
+  UserTierCache(userId) as tier     ← only read models/projections
 ]
 ```
 
 **Semantics:**
 
 - `on [...]`: events only. Causal history, must-have-happened facts, event windows.
-- `from [...]`: views only. Read-model lookups, projections, cached values with stated freshness.
+- `from [...]`: read models only. Read-model lookups, projections, cached values with stated freshness.
 
 **Why this matters:**
 
-- A reader instantly knows which data is authoritative (events) vs optimized (views).
+- A reader instantly knows which data is authoritative (events) vs optimized (read models).
 - Runtime can attach different consistency contracts: `on` = "event-consistent within boundary", `from` = "projection with X staleness".
 - Candidates naturally think this way in interviews: "what events must have happened?" then "what current state do I need?"
 
 **Impact on the DSL:**
 
 - All command examples in this simulation have been updated to use explicit `on/from`.
-- Linters can now validate: events in `on`, views in `from`, no mixing.
-- Freshness policies can be declared on view references if needed: `from [ UserTierCache(userId) @fresh<60s> as tier ]`.
+- Linters can now validate: events in `on`, read models in `from`, no mixing.
+- Freshness policies can be declared on read model references if needed: `from [ UserTierCache(userId) @fresh<60s> as tier ]`.
 
 ## Event Naming Rule
 
@@ -648,9 +648,9 @@ Examples:
 
 ### Status Snapshot
 
-- Resolved: mixed event/view preconditions by separating `on [...]` and `from [...]`.
+- Resolved: mixed event/read model preconditions by separating `on [...]` and `from [...]`.
 - Resolved: event naming consistency using `{aggregate}[-fragments]*-{verb}`.
-- Resolved: removed view-as-source drift from quota projection examples.
+- Resolved: removed read model-as-source drift from quota projection examples.
 - Resolved: confidence metadata on fallback writes (`@confidence(level=...)`).
 - Resolved: anomaly scoring references explicit model scoring (`scoreBy("quota-anomaly-v2", ...)`).
 - Resolved: derived fields moved out of primary request event payload.
@@ -664,9 +664,9 @@ Examples:
 - **Step 0 (Actors & System Context):** Naming actors and external dependencies upfront forced auth, permissions, and failure-mode questions that would have been missed otherwise.
 - **Step 1 (Commands):** Easy to express the core logic. The `--[guard]-->` format made branch decisions clear.
 - **Step 2 (Boundaries):** Partitioning strategy was obvious once scale math came up. The DSL forced the question "what's your shard key?"
-- **Step 3 (Caching):** Separating reads (views) from writes (commands) made storage strategy explicit. The `@bergcache` annotation tied latency SLA to storage choice.
+- **Step 3 (Caching):** Separating reads (read models) from writes (commands) made storage strategy explicit. The `@bergcache` annotation tied latency SLA to storage choice.
 - **Step 4 (Policies):** Failover and abuse detection were naturally policy-shaped (event-driven reactions).
-- **on vs from separation:** Mixing events and views was the single biggest source of confusion. Splitting them eliminated all ambiguity in command preconditions.
+- **on vs from separation:** Mixing events and read models was the single biggest source of confusion. Splitting them eliminated all ambiguity in command preconditions.
 
 ### Resolved Awkwardness
 
@@ -689,7 +689,7 @@ Examples:
 If you're using this DSL in a real interview, flag these spots:
 
 1. **After Step 0:** "Did I name all actors? What external services does this depend on? What's the blast radius if each one fails?"
-2. **After Step 1:** "Which preconditions are event facts (`on`) versus view facts (`from`), and what freshness do your view reads require?"
+2. **After Step 1:** "Which preconditions are event facts (`on`) versus read model facts (`from`), and what freshness do your read model reads require?"
 3. **After Step 2:** "If a shard goes down, how do you detect it? How fast can you failover?" (This naturally leads to policies in Step 4.)
 4. **After Step 3:** "At 50k RPS, your cache gets ~3M events per minute. How do you evict? What's your LRU/TTL strategy?" (Pushes on memory management.)
 5. **After Step 4:** "You have a fallback to stale quota. Quantify the risk: how many users will over-quota during a failover? How long until you detect it?" (Ties policies back to SLA.)

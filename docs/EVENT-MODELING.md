@@ -37,6 +37,38 @@ They storm to find the events and the questions, and then they model to settle t
 If you have run an event storm and asked "now what do we build from this?", Event Modeling is the usual next step.
 The [eventline language](./LANGUAGE.md) writes an Event Modeling board as text.
 
+## How eventline draws the board
+
+`eventline-axi diagram eventmodel` draws the board with three rows, read left to right in time:
+
+| Row | What sits there |
+| :--- | :--- |
+| `ACTOR` | Actors, screens and other triggers, timers, and processors (automations and translations) |
+| `COMMAND · READ MODEL` | Commands and read models, side by side in time |
+| `EVENT` | Events |
+
+- An event never feeds an automation or a command directly on the board.
+  An automation reads through a read model, so the board draws one between the event and the processor when the model does not name one.
+  That read model is dashed and labelled `implied read model`.
+- A command's `on [...]` facts are written on the command as a `checks ...` note, such as `checks item-added*`, and not as arrows.
+  A fact nothing in the model records reads `checks cart-opened (assumed)`.
+- The dashed arrow means "read model read".
+
+### Words for the same thing
+
+Event Modeling, SliceRM and eventline do not always use the same word.
+This table maps them.
+
+| Classic Event Modeling | SliceRM | eventline |
+| :--- | :--- | :--- |
+| Read model | View model, query | `readmodel` (`view` is the short form) |
+| Screen | Wireframe, trigger | `@trigger(type=ui)` |
+| Automation | Processor | Policy and worker |
+| Translation | Translator | Translation, with the translator declared in `system` |
+
+Many practitioners say "view" for a screen, which is why eventline says read model for the data and screen for where it is shown.
+See [Read models and screens](./LANGUAGE.md#read-models-and-screens).
+
 ## DCB: how big a decision is
 
 A system that records events still has to decide which events a command may rely on, and what must not change while it decides.
@@ -56,7 +88,7 @@ See [the glossary entry on boundaries](./GLOSSARY.md#boundary-dynamic-consistenc
 | Idea | What it gives you | In eventline |
 | :--- | :--- | :--- |
 | Event storming | A shared view of the domain | The events and commands you find become the first lines of a model |
-| Event Modeling | A blueprint you can build from | Commands, events, views and policies, drawn as a board by `eventline-axi diagram eventmodel` |
+| Event Modeling | A blueprint you can build from | Commands, events, read models and policies, drawn as a board by `eventline-axi diagram eventmodel` |
 | DCB | A decision scoped by a key | `in Boundary(key)` on a command, bracketed on the board and checked by `validate` |
 | System design | A design you can explain and defend | The same model, plus context, containers, data flow and deployment diagrams derived from it |
 

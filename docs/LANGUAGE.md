@@ -41,7 +41,7 @@ Use `--[default]-->` for the final happy-path branch.
 ```text
 Actor -> Command(Args) in Boundary(key)
 on [Given Events(filter)]
-from [Given Views(key) as alias]
+from [Given ReadModels(key) as alias]
 --[Guard1]--> [Events1]
 --[default]--> [HappyPathEvents]
 ```
@@ -91,19 +91,20 @@ from [UserTierCache(userId) as tier]
 
 ---
 
-### Primitive 2: Views (Read Models / Projections)
+### Primitive 2: Read models (Views / Projections)
 
-A deterministic view projected from domain events.
+A deterministic read model projected from domain events.
 Annotated with storage engine, partition key, and cache TTL.
+`view` is the short form of `readmodel` and means the same.
 
 ```text
-view ViewName(Key) = [Source Events(Key)] => { State Shape } @StorageAnnotation
+readmodel ReadModelName(Key) = [Source Events(Key)] => { State Shape } @StorageAnnotation
 ```
 
 **Example:**
 
 ```text
-view UserQuota(userId) = [user-authenticated(userId), request-logged*(userId)] => {
+readmodel UserQuota(userId) = [user-authenticated(userId), request-logged*(userId)] => {
   tier,
   remainingRequests,
   resetsIn
@@ -137,6 +138,24 @@ event-name { payload } --[scoreBy("model-v1", key) > 0.8]--> [next-event]
 rate-limit-reached { userId }
 --[violationsLastHour > 50]--> waf-bot -> applyTemporaryBan(userId, duration=15m)
 ```
+
+**Reading through a read model.**
+A policy can read a read model before it acts, and there are two ways to write that:
+
+```text
+order-placed from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)
+from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)
+```
+
+- The first form starts on the event and then reads the read model.
+  The event is the wake-up and the read model is what the worker looks at.
+- The second form starts on the read model alone, meaning "whenever these read models change".
+  Guards and every rule shape work as for other policies, such as `from [OrdersToShip] --[guard]--> worker -> command()`.
+- The shorthand `order-placed { cartId } -> fulfilment-worker -> shipOrder(cartId)` is still legal.
+  It means "read through a read model that folds this event", and the board draws that implied read model.
+- The stricter profiles expect a read model.
+  `eventmodeling` reports the shorthand at info and `slicerm` at warn (rule `automation-reads-event`).
+  Either of the two forms above satisfies it.
 
 ---
 
@@ -173,8 +192,8 @@ This DSL completely covers all four canonical slice patterns from Event Modeling
 
 | Event Modeling Pattern       | Color Code                                        | DSL Representation                                | Architectural Role                                |
 | :--------------------------- | :------------------------------------------------ | :------------------------------------------------ | :------------------------------------------------ |
-| **State Change Slice** | Blue$\rightarrow$ Orange                        | `Actor -> Command() on [Events*] from [Views*] -> [Events]` | Authoritative write path & invariant enforcement  |
-| **State View Slice**   | Orange$\rightarrow$ Green                       | `view ViewName = [Events*] => { State } @cache` | Query optimization, caching, and read projections |
+| **State Change Slice** | Blue$\rightarrow$ Orange                        | `Actor -> Command() on [Events*] from [ReadModels*] -> [Events]` | Authoritative write path & invariant enforcement  |
+| **State View Slice**   | Orange$\rightarrow$ Green                       | `readmodel ReadModelName = [Events*] => { State } @cache` | Query optimization, caching, and read projections |
 | **Automation Slice**   | Orange$\rightarrow$ Purple $\rightarrow$ Blue | `event --[Guard]--> worker -> Command()`        | Background sagas, event-driven workflows          |
 | **Translation Slice**  | External$\leftrightarrow$ Domain                | `webhook -> adapter -> Command() -> [Event]`    | Inbound webhook ingest & outbound API push        |
 
@@ -186,7 +205,7 @@ This DSL completely covers all four canonical slice patterns from Event Modeling
 [System Context] --> Step 0: Actors & External Dependencies
 [Functional Reqs]  -->  Step 1: Commands & Events (Event Model)
 [Scale Math / QPS] -->  Step 2: Tag Boundaries (DCB Partitioning)
-[Latency Budgets]  -->  Step 3: Views & Storage Annotations (Hot Caches)
+[Latency Budgets]  -->  Step 3: Read Models & Storage Annotations (Hot Caches)
 [Availability SLA] -->  Step 4: Policies & Sagas (Async Offloading)
 ```
 
@@ -210,12 +229,12 @@ Use this quick pass before you call a model complete.
 
 1. Event naming: every event matches `{aggregate}[-fragments]*-{verb}`.
 2. Command inputs: `on [...]` includes only event facts.
-3. Read dependencies: `from [...]` includes only view facts.
+3. Read dependencies: `from [...]` includes only read model facts.
 4. Freshness: each critical `from [...]` read has explicit freshness/consistency intent.
 5. Confidence: fallback or stale-driven outputs encode confidence metadata (`@confidence(...)`).
 6. Model guards: scored decisions reference explicit model/version (`scoreBy("model", ...)`).
 7. Guards: all branches use `--[guard]-->` and include `--[default]-->` when needed.
-8. Projection sources: views are projected from events, not from other views.
+8. Projection sources: read models are projected from events, not from other read models.
 9. Boundary clarity: each hot-path command states its partition key and consistency boundary with `in BoundaryName(key)`.
 10. Policy coverage: failure/abuse/failover reactions are expressed as policies.
 11. Time semantics: window terms (`currentMinute`, `clock.wall()`, `window.end(...)`) are defined.
@@ -233,7 +252,7 @@ command = actor "->" verb "(" params ")"
           [ "in" boundary_name "(" key ")" ]
           [ annotations ]
           [ "on" "[" event_facts "]" ]
-          [ "from" "[" view_facts "]" ]
+          [ "from" "[" read_model_facts "]" ]
           branch+
 
 params = param { "," param }
@@ -244,7 +263,7 @@ branch = "--[" guard "]-->" ( "[" emitted_events "]" | "reject" CODE )
 event_fact = event_name "(" params ")"
            | event_name "*" "(" params ")"
 
-view_fact = view_name "(" params ")"
+read_model_fact = read_model_name "(" params ")"
           [ freshness ]
           [ "as" alias ]
 
@@ -276,12 +295,12 @@ time_expr = "clock.wall()"
 Normative rules:
 
 1. `on [...]` MUST contain only event facts.
-2. `from [...]` MUST contain only view facts.
+2. `from [...]` MUST contain only read model facts.
 3. Event names MUST match `{aggregate}[-fragments]*-{verb}`.
 4. `@confidence(...)` MUST be attached to an event emission, not a command.
 5. `@time(...)` SHOULD be declared on a boundary when a windowed guard exists.
 6. If a fallback path uses stale reads, emitted events SHOULD include `@confidence(...)`.
-7. `@cost(...)` and `@ops(...)` MAY appear on boundaries, views, and policies.
+7. `@cost(...)` and `@ops(...)` MAY appear on boundaries, read models, and policies.
 
 ---
 
@@ -341,7 +360,7 @@ cron "0 * * * *"
 ```
 
 A policy can start on a schedule instead of an event, with `every N seconds|minutes|hours|days` or `cron "..."`.
-Any policy can read views first with `from [...]`, using the same facts and freshness as a command.
+Any policy can read read models first with `from [...]`, using the same facts and freshness as a command.
 
 ### Triggers
 
@@ -356,23 +375,23 @@ translation-engine -> submitTranslation(text: text)
   --[default]--> [translation-submitted]
 ```
 
-`@trigger(...)` says what an actor uses to reach a command, or where a view is read.
+`@trigger(...)` says what an actor uses to reach a command, or where a read model is read.
 The actor is the one who uses it, and the trigger is the thing used.
 
 | Key | Meaning |
 | :--- | :--- |
 | `type` | `ui`, `endpoint`, `cli` or `agent` |
 | `name` | The screen, API, command line tool or agent, such as `AuditingScreen` |
-| `part` | Optional. The part of it: a button, a toggled view, a permission-filtered view |
+| `part` | Optional. The part of it: a button, a toggled read model, a permission-filtered read model |
 | `route` | Optional, `ui` and `endpoint` only. `METHOD /path` that this use calls |
 
-A command or view can have several `@trigger` annotations.
+A command or read model can have several `@trigger` annotations.
 Two commands can use the same screen with different parts and routes, because a route belongs to the use and not to the screen.
 A job that starts on a schedule is not a trigger.
 Write it as a timer policy.
 
 `eventline-axi triggers <file>` lists every trigger, its part and route, who uses it and what it reaches.
-The board writes the trigger on the arrow from the actor to the command, and under a view that is read through one.
+The board writes the trigger on the arrow from the actor to the command, and under a read model that is read through one.
 `validate` warns about an unknown `type`, a missing `name`, a route that is not `METHOD /path`, and a route on a `cli` or `agent` trigger.
 It adds an info note for a command with no trigger once any other command has one.
 
@@ -382,12 +401,12 @@ It adds an info note for a command with no trigger once any other command has on
 user -> postTweet(content: text) @note("the retry is safe because the id is a client token") @planned
 ```
 
-`@note("...")` attaches free text to a command, view, policy or boundary.
+`@note("...")` attaches free text to a command, read model, policy or boundary.
 Use it for what the notation does not model, such as which screen or endpoint starts a command.
 Notes can repeat, and diagrams show them as tooltips.
-Other useful annotations on commands, views and policies are `@planned` for decided but not built, `@slice("name")` and `@story("...")` for tools that track slices, and `@state(...)` for state-backed work.
+Other useful annotations on commands, read models and policies are `@planned` for decided but not built, `@slice("name")` and `@story("...")` for tools that track slices, and `@state(...)` for state-backed work.
 A slice has one command, which can record several events, and one read model it defines.
-A slice may read any number of views that other slices define.
+A slice may read any number of read models that other slices define.
 `validate --profile eventmodeling` hints when one `@slice` name holds several read models, and warns when it holds several commands; the [rules reference](./RULES.md) explains each.
 
 ### Types
@@ -414,16 +433,16 @@ carrier -> acceptShipment(shipmentId: id) @source(system="Carrier", version="v2"
 The actor is the translator, declared in `system { external: carrier (translator) }`.
 `validate` warns when `system` is missing.
 
-### Reading a view
+### Reading a read model
 
 ```text
-view OpenInvoices(accountId: id) = [invoice-opened*(accountId)] => { invoiceId: id } @query(returns=list, spec="the open invoices of an account")
-view Totals(accountId: id) = [invoice-opened*(accountId)] => { sum: number } @projection
+readmodel OpenInvoices(accountId: id) = [invoice-opened*(accountId)] => { invoiceId: id } @query(returns=list, spec="the open invoices of an account")
+readmodel Totals(accountId: id) = [invoice-opened*(accountId)] => { sum: number } @projection
 ```
 
-`@query(returns, spec)` says how a view is read: `returns` is `one`, `list` or `page`, and `spec` is a line of plain words.
-`@projection` marks a view that other parts of the model read and no screen ever shows.
-`validate` warns when a `@projection` view has a `@trigger`, or a `@query` has another `returns` value.
+`@query(returns, spec)` says how a read model is read: `returns` is `one`, `list` or `page`, and `spec` is a line of plain words.
+`@projection` marks a read model that other parts of the model read and no screen ever shows.
+`validate` warns when a `@projection` read model has a `@trigger`, or a `@query` has another `returns` value.
 
 A read that can find nothing the first time, such as a duplicate check before the first record, is marked `from [Existing(id) @optional]`.
 `@optional` only belongs in `from`, never in `on`.
@@ -440,11 +459,11 @@ auditor -> failAudit(auditId: id)
   }
 ```
 
-A `scenario "name" { ... }` block goes right after the command or view it checks, and there can be several.
+A `scenario "name" { ... }` block goes right after the command or read model it checks, and there can be several.
 It is for acceptance criteria and test material, written as Gherkin or in any other plain lines.
 The body is kept exactly as written, apart from removing the common indentation, so brackets, quotes, colons and `#` are safe.
 It ends at a line that holds only `}`.
-A scenario outside a command or view, or one after a context block closes, is an error.
+A scenario outside a command or read model, or one after a context block closes, is an error.
 
 #### Scenarios as steps
 
@@ -469,19 +488,19 @@ user -> pay(id) in Account(id)
   Mixing the two in one scenario is an error.
 - `validate` warns when a step scenario lacks `when` or `then`, runs a different command, names an event nobody records or reads, or expects an event or rejection the command does not have.
 - A rejection covered by a `then reject CODE` step needs no word match in prose for `--profile slicerm`.
-- Views and policies take prose scenarios for now.
+- Read models and policies take prose scenarios for now.
 
 `eventline-axi scenarios <file>` lists each scenario, what it checks and how many lines it has.
-`validate` warns about an empty scenario or a repeated name under the same command or view.
+`validate` warns about an empty scenario or a repeated name under the same command or read model.
 
 ### Linking diagrams
 
 `eventline-axi diagram --links` turns a box into a link to the same thing in another diagram.
 The links are derived: the system context opens the containers, a container opens its data flow and its place on the board, a shard opens the boundary it holds, and each of those opens the way back up.
-`@link` on a command, view, policy or boundary replaces the derived links of that element, in every diagram where it appears:
+`@link` on a command, read model, policy or boundary replaces the derived links of that element, in every diagram where it appears:
 
 ```eventline
-view Orders(orderId) = [order-placed*(orderId)] => { status: text }
+readmodel Orders(orderId) = [order-placed*(orderId)] => { status: text }
   @link(to="containers", node="view:Orders", label="Where Orders is stored")
   @link(url="https://wiki.example.com/runbooks/orders")
 ```
@@ -495,14 +514,14 @@ view Orders(orderId) = [order-placed*(orderId)] => { status: text }
 ### Outside facts: deduplication and correlation keys
 
 A command an outside system issues is a fact someone else recorded, and it can arrive twice.
-`@dedupe(scanId)` on the command, view or policy that consumes it names the field that tells a repeat from a new one.
+`@dedupe(scanId)` on the command, read model or policy that consumes it names the field that tells a repeat from a new one.
 `@correlate(parcelRef)` names the field that ties the fact to something in your system.
-Both can list several names, and both count as supplying those fields to the events and views that carry them.
+Both can list several names, and both count as supplying those fields to the events and read models that carry them.
 `validate --profile eventmodeling` hints at an outside command that has neither.
 
 ### Accepting a finding, and open questions
 
-`@accept(rule="many-events", reason="One fact told in two parts")` on a command, view, policy or boundary says the team knows a rule reports something there, and why.
+`@accept(rule="many-events", reason="One fact told in two parts")` on a command, read model, policy or boundary says the team knows a rule reports something there, and why.
 The finding stays in the list with its reason, and its severity does not change.
 `validate` warns about an `@accept` with no reason or an unknown rule, and notes one that accepts nothing.
 
@@ -526,5 +545,32 @@ These are plain attributes or annotations that tools can rely on.
   `validate` does not check them yet.
 - `language: 1.2` in the `system` block records which version of the language wrote the file.
   A tool can refuse a file that names a newer one than it knows.
-- `@description("...")` on a command or view holds free text.
+- `@description("...")` on a command or read model holds free text.
   Events have no place for one.
+
+---
+
+## Read models and screens
+
+"View" means a screen to many Event Modeling practitioners, so eventline says plainly which is which.
+
+- A **read model** is data folded from events: what a screen shows, what a query returns, or a projection that no screen shows (`@projection`).
+  It is written with `readmodel` and drawn in the middle row of the board.
+- A **screen** is where a person sees a read model or starts a command.
+  eventline writes it as `@trigger(type=ui, name="CartScreen", part="Checkout button")` on a command or a read model.
+  The board shows it on the arrow from the actor, for a command, or as `read in CartScreen`, for a read model.
+- The same split holds for the other trigger types.
+  An endpoint, a command line tool or an agent is where something is read or started, and never a read model itself.
+
+```eventline
+readmodel CartSummary(cartId: id) = [item-added*(cartId)] => { items: list[text], total: number }
+  @trigger(type=ui, name="CartScreen", part="Cart summary")
+
+customer -> checkout(cartId: id)
+  @trigger(type=ui, name="CartScreen", part="Checkout button")
+  from [CartSummary(cartId)]
+  --[default]--> [order-placed]
+```
+
+The customer reads `CartSummary` in `CartScreen`, then starts `checkout` from the same screen.
+`CartSummary` is the read model and `CartScreen` is the screen.

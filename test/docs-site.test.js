@@ -99,3 +99,12 @@ test('docs grammar and code-shape check know readmodel and from [', async () => 
   assert.ok(looksLikeEventline('from [A] -> worker -> go()'));
   assert.match(fs.readFileSync(path.join(root, 'docs-site', 'src', 'code', 'eventline.tmLanguage.json'), 'utf8'), /readmodel/);
 });
+
+test('the docs explain read models, screens and both automation forms', () => {
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const lang = read('docs/LANGUAGE.md');
+  assert.match(lang, /## Read models and screens/); assert.match(lang, /^readmodel /m);
+  assert.match(lang, /from \[[A-Za-z]+\] -> /); assert.match(lang, /[a-z]+-[a-z]+ from \[/);
+  assert.match(read('docs/GLOSSARY.md'), /### Read model[\s\S]*### Screen/);
+  assert.match(read('docs/EVENT-MODELING.md'), /\| *SliceRM *\|/);
+});

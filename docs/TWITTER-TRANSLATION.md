@@ -9,7 +9,7 @@ This document shows how each DSL primitive maps to real infrastructure component
 1. **Actors → Edge / Clients**: Who is calling the system
 2. **Commands → API Endpoints / Services**: What they can do
 3. **Boundaries → Data Stores / Partitions**: Where state lives
-4. **Views → Caches / Read Models**: How we serve reads
+4. **Read models → Caches**: How we serve reads
 5. **Policies → Async Workers / Message Queues**: What happens in the background
 
 `eventline-axi diagrams <file>` draws these views from a model. This page explains what each one means and why it has the shape it has.
@@ -159,12 +159,12 @@ boundary UserTimeline(userId)
 
 ---
 
-## 4. Views → Caches / Read Models
+## 4. Read models → Caches
 
 ### DSL
 
 ```text
-view UserTimeline(userId) = [
+readmodel UserTimeline(userId) = [
   user-followed*(userId, targetUserId),
   tweet-created*(targetUserId),
   tweet-retweeted*(targetUserId)
@@ -211,7 +211,7 @@ view UserTimeline(userId) = [
 
 ### Interview Talking Points
 
-> "The UserTimeline view is the hot path. 500k RPS reads means I need a distributed cache. I'll use Redis with `timeline:{userId}` keys, 5-minute TTL. The projection worker materializes the timeline from events: it follows the user's follow graph, pulls recent tweets from followed users, and caches the result. On cache miss, the worker rebuilds from events."
+> "The UserTimeline read model is the hot path. 500k RPS reads means I need a distributed cache. I'll use Redis with `timeline:{userId}` keys, 5-minute TTL. The projection worker materializes the timeline from events: it follows the user's follow graph, pulls recent tweets from followed users, and caches the result. On cache miss, the worker rebuilds from events."
 
 ---
 
@@ -296,10 +296,10 @@ boundary TweetFeed(tweetId) @partition(shardKey="tweetId")
 boundary UserTimeline(userId) @partition(shardKey="userId")
 boundary UserFollows(userId) @partition(shardKey="userId")
 
-// Views
-view UserTimeline(userId) @bergcache(key="timeline:{userId}", ttl=5m)
-view TweetDetails(tweetId) @bergcache(key="tweet:{tweetId}", ttl=1h)
-view UserProfile(userId) @bergcache(key="profile:{userId}", ttl=24h)
+// Read models
+readmodel UserTimeline(userId) @bergcache(key="timeline:{userId}", ttl=5m)
+readmodel TweetDetails(tweetId) @bergcache(key="tweet:{tweetId}", ttl=1h)
+readmodel UserProfile(userId) @bergcache(key="profile:{userId}", ttl=24h)
 
 // Policies
 tweet-created -> trending-analyzer -> calculateTrending()
@@ -383,7 +383,7 @@ tweet-liked -> notification-worker -> sendLikeNotification()
 | `system ... slo: p99 < 100ms` | CDN + Load Balancer | CloudFront, ALB |
 | `user -> postTweet()` | API Endpoint / Service | REST/GraphQL, Tweet Service |
 | `boundary TweetFeed(tweetId)` | Database Partition | Cassandra, DynamoDB |
-| `view UserTimeline(userId) @bergcache` | Distributed Cache | Redis Cluster |
+| `readmodel UserTimeline(userId) @bergcache` | Distributed Cache | Redis Cluster |
 | `policy tweet-created -> trending-analyzer` | Async Worker + Message Queue | Kafka consumer, worker service |
 | `on [user-authenticated(userId)]` | Auth Middleware | OAuth, JWT validation |
 
@@ -395,7 +395,7 @@ tweet-liked -> notification-worker -> sendLikeNotification()
 
 2. **Boundaries dictate data stores.** `@partition(shardKey="tweetId")` + `@cost(readRpsPeak=100000)` immediately suggests Cassandra over PostgreSQL.
 
-3. **Views are caches.** Every `@bergcache` annotation is a Redis (or similar) cache. The TTL and memory estimates tell you the cache strategy.
+3. **Read models are caches.** Every `@bergcache` annotation is a Redis (or similar) cache. The TTL and memory estimates tell you the cache strategy.
 
 4. **Policies are async.** Every `event -> worker -> command()` is a Kafka consumer group or similar async processor. This keeps the write path fast.
 
@@ -405,7 +405,7 @@ tweet-liked -> notification-worker -> sendLikeNotification()
 
 ## Exercises
 
-1. Add a `user -> blockUser(targetUserId)` command. What new boundary/view/policy does this require?
+1. Add a `user -> blockUser(targetUserId)` command. What new boundary/read model/policy does this require?
 2. Add media upload support. How does `postTweet` change? What storage does media imply?
-3. Add DMs (direct messages). How is this different from public tweets in terms of boundaries and views?
-4. Add search. Where does search fit in the event model? Is it a view, a policy, or something else?
+3. Add DMs (direct messages). How is this different from public tweets in terms of boundaries and read models?
+4. Add search. Where does search fit in the event model? Is it a read model, a policy, or something else?

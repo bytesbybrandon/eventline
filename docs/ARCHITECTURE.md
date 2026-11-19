@@ -26,7 +26,8 @@ A short map of the code, for people changing it.
 
 A diagram draws only what the model states.
 
-- Facts nobody emits show as a note under the command, not as nodes.
+- Facts nobody emits show as `(assumed)` in the command's `checks` note, not as nodes.
+- The one thing the board draws that the model does not write is an implied read model, and it is drawn dashed.
 - A command that a policy calls but nobody declared is drawn dashed and marked "not modeled".
 - The model does not say which container calls an outside service, so no arrow is drawn into one.
 - The deployment view stops with a message when the system has no `region:`, instead of guessing.
@@ -42,6 +43,23 @@ Every rule is listed once in `lib/rules/catalogue.js`, with its profile, severit
 Tests fail if a rule reports an id that is not in the catalogue, if a catalogue example does not behave as it says, or if the page is stale.
 The playground shows the findings as marks beside the lines, badges on the boxes and a list; the profile is part of the shared address as `&p=`.
 
+## The board
+
+The event model board has three rows: `ACTOR` (actors, screens and other triggers, timers, and processors), `COMMAND · READ MODEL`, and `EVENT`.
+Columns come from causality, as in [EVENTLINE-AXI.md](../EVENTLINE-AXI.md#derived-diagrams).
+The board graph is internal and is not public API; the library API and the output keys keep the word `views`.
+
+- A policy's worker is a processor in the actor row, with the id `pol:<worker>`, so links to the other diagrams keep working.
+- A policy rule with no worker gets an unnamed processor labelled `automation`, with the id `auto:<policy line>:<rule index>`: one per rule, with the policy's source lines and no links.
+- When an event starts a policy and no `from [...]` read model reads that event, the board draws an implied read model with the id `implied:<event>`.
+  There is one per triggering event, shared by every policy that event triggers.
+  It takes the source lines of those policies and has no links.
+- A policy that starts on `from [...]` has no event and no implied read model.
+  Its processor sits right of the latest read model it reads.
+- No edge runs from an event into a command or a processor.
+  A command's `on [...]` facts are a `checks ...` note.
+  Command ordering still uses them.
+
 ## The site
 
 Links between diagrams are in `lib/diagram/links.js`: one place that knows how the six diagrams name the same box, with `@link` annotations overriding what it derives.
@@ -56,7 +74,7 @@ node scripts/build-site.js
 
 The playground on the landing page runs `site/eventline.js`, which is `lib/index.js` bundled for the browser, so it uses the same parser, checks and board renderer as the CLI.
 The board SVG tags every node and edge with `data-id`, `data-from` and `data-to`, which the page uses to light a box's lineage.
-Command, view and policy nodes also carry `data-lines`, the source lines the parser recorded (`line` to `endLine`), so a click on a box finds its text in the playground editor and the caret finds its box.
+Command, read model and policy nodes also carry `data-lines`, the source lines the parser recorded (`line` to `endLine`), so a click on a box finds its text in the playground editor and the caret finds its box.
 `test/site.test.js` fails when the page's counts, DSL listing, board, bundle or example copies drift from `examples/`.
 A model can be shared as `/eventline/#play=<base64url of the text>`; the docs link to the app with the same hash, `/eventline/app/#play=...`.
 The link can also name a diagram and a box, `&d=containers&n=view%3AOrders`, and turn on links between diagrams, `&links=1`.
@@ -87,7 +105,7 @@ The homepage playground's "Open in the app" link and the docs' playground links 
 The Markdown in `docs/`, `EVENTLINE-AXI.md` and `CONTRIBUTING.md` stays the source.
 `docs-site/scripts/sync-docs.mjs` turns it into Starlight pages when the site builds:
 it takes the title from the first heading, turns links between docs into site routes, tags code blocks that hold eventline source so they are highlighted, and renders the diagrams derived from `examples/billing.dsl`.
-A block that parses as a model with a command, view or policy also gets an Open in playground link.
+A block that parses as a model with a command, read model or policy also gets an Open in playground link.
 Nothing it writes is committed.
 The build fails on a broken link between pages.
 `.github/workflows/pages.yml` builds the docs next to the landing page and deploys both as one Pages artifact.

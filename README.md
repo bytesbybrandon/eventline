@@ -1,7 +1,7 @@
 # eventline
 
 Every system is a series of events.
-eventline is a small notation for describing one: commands, events, views and policies, built on [Event Modeling](https://eventmodeling.org) and Dynamic Consistency Boundaries.
+eventline is a small notation for describing one: commands, events, read models and policies, built on [Event Modeling](https://eventmodeling.org) and Dynamic Consistency Boundaries.
 `eventline-axi` reads a model, checks it and draws it.
 
 Live site and demos: https://bytesbybrandon.github.io/eventline/
@@ -48,7 +48,7 @@ npx -y eventline-axi twitter-pure.dsl
 
 | Goal | Command |
 | :--- | :--- |
-| See what is in it | `eventline-axi commands|events|views|policies <file>` |
+| See what is in it | `eventline-axi commands|events|readmodels|policies <file>` |
 | Find mistakes | `eventline-axi validate <file>` |
 | Check it against the Event Modeling guidelines | `eventline-axi validate <file> --profile eventmodeling` |
 | See what depends on what | `eventline-axi deps <file> <name>` |
