@@ -423,7 +423,7 @@ A read model fed by one says `from cart-abandoned (declared)`.
 
 A field list is the event's contract.
 It is the event's known payload, together with any field a recording computes: `unsourced-view-field` checks the read models that fold the event against it, and `unsourced-event-field` takes it as what an `on [...]` fact carries.
-With `--profile eventmodeling` or `slicerm`, `event-contract-mismatch` checks each command branch and policy rule that records the event, at its own line.
+With `--profile eventmodeling` or `slicerm`, and as info with `workshop`, `event-contract-mismatch` checks each command branch and policy rule that records the event, at its own line.
 It warns about a plain field the declaration lacks and a declared field the recording does not carry.
 
 A computed field, such as `addedAt: clock.wall()` above, supplies the declared field of the same name.
