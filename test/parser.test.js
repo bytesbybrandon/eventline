@@ -183,7 +183,8 @@ test('policy names are unique and never clash with commands, read models or even
   assert.throws(() => parse('policy A = x-y { id } -> w -> go(id)\npolicy A = x-z { id } -> w -> go(id)'), /policy A/);
   clash('user -> Ship(id)\n  --[default]--> [x-done { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as a command on line 1; give the policy another name');
   clash('readmodel Ship(id) = [x-done*(id)] => { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as a read model on line 1; give the policy another name');
-  clash('user -> go(id)\n  --[default]--> [Ship { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event; give the policy another name');
+  clash('user -> go(id)\n  --[default]--> [Ship { id }]\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event on line 2; give the policy another name');
+  clash('readmodel V(id) = [Ship*(id)] => { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event on line 1; give the policy another name');
   clash('event Ship { id }\n\npolicy Ship = x-done { id } -> w -> go(id)', 'Policy "Ship" has the same name as an event declared on line 1; give the policy another name');
 });
 
