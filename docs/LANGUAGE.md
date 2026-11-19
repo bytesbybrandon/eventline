@@ -143,19 +143,21 @@ rate-limit-reached { userId }
 A policy can read a read model before it acts, and there are two ways to write that:
 
 ```text
+readmodel OrdersToShip(cartId) = [order-placed*(cartId)] => { cartId }
 order-placed from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)
 from [OrdersToShip] -> fulfilment-worker -> shipOrder(cartId)
 ```
 
 - The first form starts on the event and then reads the read model.
   The event is the wake-up and the read model is what the worker looks at.
+  The read model must be fed by that event, as `OrdersToShip` is fed by `order-placed`.
 - The second form starts on the read model alone, meaning "whenever these read models change".
   Guards and every rule shape work as for other policies, such as `from [OrdersToShip] --[guard]--> worker -> command()`.
 - The shorthand `order-placed { cartId } -> fulfilment-worker -> shipOrder(cartId)` is still legal.
   It means "read through a read model that folds this event", and the board draws that implied read model.
 - The stricter profiles expect a read model.
   `eventmodeling` reports the shorthand at info and `slicerm` at warn (rule `automation-reads-event`).
-  Either of the two forms above satisfies it.
+  The second form satisfies it, and so does the first when the read model it reads is fed by the trigger event.
 
 ---
 

@@ -60,7 +60,7 @@ For the rename, three options were considered: rename only the words people read
 
 | Row label | What sits there |
 |---|---|
-| `ACTOR` | actors, screens and other triggers, timers, and processors (automations and translations) |
+| `ACTOR` | actors, timers and processors; a screen or other trigger names the actor's arrow |
 | `COMMAND · READ MODEL` | commands and read models, interleaved left to right in time |
 | `EVENT` | events |
 

@@ -27,7 +27,7 @@ A short map of the code, for people changing it.
 A diagram draws only what the model states.
 
 - Facts nobody emits show as `(assumed)` in the command's `checks` note, not as nodes.
-- The one thing the board draws that the model does not write is an implied read model, and it is drawn dashed.
+- The board draws two things the model does not write: an implied read model, drawn dashed, and an unnamed `automation` processor for a rule with no worker.
 - A command that a policy calls but nobody declared is drawn dashed and marked "not modeled".
 - The model does not say which container calls an outside service, so no arrow is drawn into one.
 - The deployment view stops with a message when the system has no `region:`, instead of guessing.
@@ -45,7 +45,7 @@ The playground shows the findings as marks beside the lines, badges on the boxes
 
 ## The board
 
-The event model board has three rows: `ACTOR` (actors, screens and other triggers, timers, and processors), `COMMAND · READ MODEL`, and `EVENT`.
+The event model board has three rows: `ACTOR` (actors, timers and processors; a screen or other trigger names the actor's arrow), `COMMAND · READ MODEL`, and `EVENT`.
 Columns come from causality, as in [EVENTLINE-AXI.md](../EVENTLINE-AXI.md#derived-diagrams).
 The board graph is internal and is not public API; the library API and the output keys keep the word `views`.
 

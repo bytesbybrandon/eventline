@@ -89,7 +89,7 @@ Links in an SVG work when it is opened directly or inlined in a page, not inside
 
 Order on the board comes from causality, because a model has no clock.
 A command sits after the commands whose events or read models it reads.
-A read model sits right of the events that feed it, and a processor right of the read model it reads.
+A read model sits right of the events that feed it, and a processor right of the read model it reads, or of the timer that starts it.
 When a policy starts on an event with no read model, the board draws an implied read model between them.
 
 The diagrams only draw what the model says.

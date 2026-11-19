@@ -43,7 +43,7 @@ The [eventline language](./LANGUAGE.md) writes an Event Modeling board as text.
 
 | Row | What sits there |
 | :--- | :--- |
-| `ACTOR` | Actors, screens and other triggers, timers, and processors (automations and translations) |
+| `ACTOR` | Actors, timers and processors; a screen or other trigger names the actor's arrow |
 | `COMMAND · READ MODEL` | Commands and read models, side by side in time |
 | `EVENT` | Events |
 
@@ -61,9 +61,9 @@ This table maps them.
 
 | Classic Event Modeling | SliceRM | eventline |
 | :--- | :--- | :--- |
-| Read model | View model, query | `readmodel` (`view` is the short form) |
-| Screen | Wireframe, trigger | `@trigger(type=ui)` |
-| Automation | Processor | Policy and worker |
+| Read model | Read model, labelled "Query" in DCB mode and "View model" in classic mode | `readmodel` (`view` is the short form) |
+| Screen | Trigger, the generic element for a screen, endpoint, CLI or agent | `@trigger(type=ui)` |
+| Automation | Automation | The board draws a processor; the text writes a policy with a worker |
 | Translation | Translator | Translation, with the translator declared in `system` |
 
 Many practitioners say "view" for a screen, which is why eventline says read model for the data and screen for where it is shown.
