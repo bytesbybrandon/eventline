@@ -26,7 +26,9 @@
       .replace(/\.dsl$/i, '')
       .replace(/^[.\s]+|[.\s]+$/g, '')
       .slice(0, 100);
-    return (base || 'untitled') + '.dsl';
+    base = base || 'untitled';
+    if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i.test(base)) base += '_';
+    return base + '.dsl';
   }
 
   // Case-insensitive unique names; -2, -3 ... go before .dsl.

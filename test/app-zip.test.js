@@ -50,3 +50,8 @@ test('names that already end in .dsl are not doubled, and suffixes cannot collid
   assert.equal(new Set(names.map((n) => n.toLowerCase())).size, 3);
   assert.ok(!names.some((n) => /\.dsl\.dsl$/.test(n)));
 });
+
+test('Windows reserved device names get a suffix and stay unique', () => {
+  const names = exportFiles(['CON', 'con', 'nul', 'COM1', 'lpt9', 'console'].map((name) => ({ name, text: '' }))).map((f) => f.name);
+  assert.deepEqual(names, ['CON_.dsl', 'con_-2.dsl', 'nul_.dsl', 'COM1_.dsl', 'lpt9_.dsl', 'console.dsl']);
+});
