@@ -62,6 +62,17 @@
     const h = host.querySelector('h1');
     if (h) { h.tabIndex = -1; h.focus(); }
   }
+  /**
+   * Leaves practice and shows the workspace.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(1) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 1 measured; target <= 12
+   * - Branch Coverage: 0% measured (no test loads this file); target >= 80%
+   * - CRAP Score: 2.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function toWorkspace() {
     flushNotes();
     $('#ap-practice').replaceChildren(); // nothing from a review stays in the page on a shared screen
@@ -358,6 +369,17 @@
   }
 
   /* ------------------------------------------------------------- lifecycle -- */
+  /**
+   * Resumes an unfinished practice attempt on load.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(K·M) where K = storage keys, M = models (store.activeAttempt) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 2 measured; target <= 12
+   * - Branch Coverage: 0% measured (no test loads this file); target >= 80%
+   * - CRAP Score: 6.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function resumeActive() {
     const { store, session } = window.EventlineApp;
     const model = store.activeAttempt();
@@ -369,6 +391,17 @@
     return true;
   }
 
+  /**
+   * Wires the practice screens into the app.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(1) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 2 measured; target <= 12
+   * - Branch Coverage: 0% measured (no test loads this file); target >= 80%
+   * - CRAP Score: 6.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function init(a) {
     app = a;
     app.setMode('workspace');

@@ -69,14 +69,26 @@ Every rule already needs a test (see [CONTRIBUTING.md](./CONTRIBUTING.md)); a ne
 
 ## Annotation format
 
-A new or changed function on a P0 or P1 path carries one doc line:
+Every exported function and every hot-path function carries a budget block in its doc comment.
+A function you add or change gets one too; trivial accessors, generated code and test helpers are exempt.
 
 ```js
 /**
  * Events each command in the boundary emits.
- * @perf P0 · O(c) c = commands · CRAP ≤ 10 (CC 3, branch cov ≥ 90%)
+ *
+ * # Performance & Risk Budget
+ * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+ * - Complexity: O(c) where c = commands (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 3 measured; target <= 8
+ * - Branch Coverage: 95% measured; target >= 90%
+ * - CRAP Score: 3.0 measured; threshold <= 10
+ * - Caching: none
  */
 ```
+
+Keep targets apart from measurements: write "measured" only for a value a tool produced, and give the target beside it.
+CC comes from ESLint's `complexity` rule and branch coverage from c8 over `npm test`; a value no tool produced is a target.
+`scripts/build-site.js` strips these blocks from `site/eventline.js`, so they never grow the bundle.
 
 ## Red flags in review
 

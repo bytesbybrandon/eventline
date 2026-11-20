@@ -6,6 +6,17 @@
   var COPY = ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'tabSize', 'paddingTop', 'paddingLeft', 'paddingRight', 'paddingBottom'];
   var uid = 0;
 
+  /**
+   * Attaches autocomplete and editing help to a textarea.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(1) to attach; each key is O(L + N log N) through suggest and the editing functions, L = line length, N = names (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 1 measured; target <= 8
+   * - Branch Coverage: 0% measured (no test loads this file); target >= 90%
+   * - CRAP Score: 2.0 measured; threshold <= 10
+   * - Caching: none
+   */
   function attach(textarea, getModel) {
     var complete = root.EventlineComplete;
     var editing = root.EventlineEditing;

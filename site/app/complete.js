@@ -23,6 +23,17 @@
     snip('event', 'event event-name { id }', 6),
   ];
 
+  /**
+   * Names worth suggesting from a parsed model.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(e + c + v + b + a) where e = events, c = commands, v = read models, b = boundaries, a = actors (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 3 measured; target <= 8
+   * - Branch Coverage: 83% measured; target >= 90%
+   * - CRAP Score: 3.0 measured; threshold <= 10
+   * - Caching: none
+   */
   function namesFrom(model) {
     if (!model) return [];
     var seen = {};
@@ -41,6 +52,17 @@
 
   function byLabel(a, b) { return a.label < b.label ? -1 : a.label > b.label ? 1 : 0; }
 
+  /**
+   * Autocomplete suggestions at the caret.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(L + N log N) where L = length of the caret line, N = names (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 9 measured; target <= 8, over budget
+   * - Branch Coverage: 93% measured; target >= 90%
+   * - CRAP Score: 9.0 measured; threshold <= 10
+   * - Caching: none
+   */
   function suggest(o) {
     var text = o.text, caret = o.caret;
     var lineStart = text.lastIndexOf('\n', caret - 1) + 1;

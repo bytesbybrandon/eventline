@@ -22,14 +22,47 @@ function parsed(text) {
 }
 
 /* True when the block has the shape of eventline source, whole model or fragment. Highlighting is harmless on a fragment. */
+/**
+ * Whether a code block has the shape of eventline source.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(n·S) where n = characters, S = shape patterns (8) (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 1 measured; target <= 15
+ * - Branch Coverage: 100% measured; target >= 70%
+ * - CRAP Score: 1.0 measured; threshold <= 25
+ * - Caching: none
+ */
 export function looksLikeEventline(text) {
   return SHAPES.some((re) => re.test(text));
 }
 
 /* True when the block is a model worth drawing: it parses and holds a command, view or policy. */
+/**
+ * Whether a code block parses into a model worth drawing.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(parse) = O(n) where n = characters (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 3 measured; target <= 15
+ * - Branch Coverage: 100% measured; target >= 70%
+ * - CRAP Score: 3.0 measured; threshold <= 25
+ * - Caching: none
+ */
 export function isDrawable(text) {
   const m = parsed(text);
   return !!m && m.commands.length + m.views.length + m.policies.length > 0 && text.split('\n').filter((l) => l.trim()).length >= 3;
 }
 
+/**
+ * The playground address for a code block.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(n) where n = characters (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 1 measured; target <= 15
+ * - Branch Coverage: 100% measured; target >= 70%
+ * - CRAP Score: 1.0 measured; threshold <= 25
+ * - Caching: none
+ */
 export const playgroundHref = (text) => `/eventline/app/#play=${Buffer.from(text, 'utf8').toString('base64url')}`;

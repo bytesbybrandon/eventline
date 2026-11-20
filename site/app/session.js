@@ -8,6 +8,17 @@
   var MAX_IMPORT_BYTES = 1000000;
   var PROFILES = ['workshop', 'eventmodeling', 'slicerm'];
 
+  /**
+   * Reads the address hash: a model id, a play link or nothing.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(h) where h = hash length (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 10 measured; target <= 12
+   * - Branch Coverage: 100% measured; target >= 80%
+   * - CRAP Score: 10.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function parseAddress(hash, decode) {
     var parts = String(hash).slice(1).split('&');
     var head = parts[0];
@@ -31,12 +42,34 @@
   }
 
   // Base64url to text, refusing invalid UTF-8. Line ends become \n, as a textarea holds them, so an untouched link is not an edit.
+  /**
+   * Base64url play text to a string, refusing invalid UTF-8.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(h) where h = encoded length (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 1 measured; target <= 12
+   * - Branch Coverage: 100% measured; target >= 80%
+   * - CRAP Score: 1.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function decodePlayText(value) {
     var bin = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
     var bytes = Uint8Array.from(bin, function (c) { return c.charCodeAt(0); });
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/\r\n?/g, '\n');
   }
 
+  /**
+   * Accepts or refuses an imported file.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(z) where z = file bytes (at most 1 MB) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 6 measured; target <= 12
+   * - Branch Coverage: 100% measured; target >= 80%
+   * - CRAP Score: 6.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function acceptImport(name, bytes) {
     if (bytes.length === 0) return { ok: false, reason: 'empty' };
     if (bytes.length > MAX_IMPORT_BYTES) return { ok: false, reason: 'too-large' };
@@ -53,6 +86,17 @@
     return !!(model.practice && model.practice.status === 'finished');
   }
 
+  /**
+   * The editing session: one model, autosave and cross-tab conflicts.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(1) to create; edit and save are O(t + K·M) where t = text length, K = storage keys, M = indexed models (store.ids) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 1 measured; target <= 12
+   * - Branch Coverage: 100% measured; target >= 80%
+   * - CRAP Score: 1.0 measured; threshold <= 15
+   * - Caching: none
+   */
   function createSession(deps) {
     var store = deps.store;
     var state = { id: null, name: deps.modelName(''), text: '', status: 'draft', theirs: null, readOnly: false };
