@@ -31,6 +31,9 @@ jobs:
             docs-site/package-lock.json
       - run: npm ci
       - run: npm test
+      - name: No function in lib/ above CC 30
+        # ESLint 9's complexity rule through npx, so there is no dependency; PERFORMANCE-STANDARDS.md sets CC 30 as the hard ceiling.
+        run: node scripts/measure.js lib --max-cc 30 --no-coverage
       - run: npm ci
         working-directory: docs-site
       - run: npm run build

@@ -50,6 +50,7 @@ class Scanner {
     this.s = src;
     this.i = 0;
     this.lineOffset = lineOffset;
+    this.declared = new Map(); // event declarations by name, so a repeat is found without a scan
     this.starts = [0];
     for (let k = 0; k < src.length; k++) if (src.charCodeAt(k) === 10) this.starts.push(k + 1);
   }
@@ -543,77 +544,104 @@ function parseStatement(sc, model, ctx) {
   if (ctx) for (const k of Object.keys(before)) for (let i = before[k]; i < model[k].length; i++) model[k][i].context = ctx;
 }
 
+/* An event-triggered policy: the word is the event. */
+const eventPolicy = (sc, model, word, line) => parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
+
+/* policy Name = <any policy statement>: parse the statement, then name the one policy it made. */
+function parseNamedPolicy(sc, model, ctx, line) {
+  const name = sc.ident('a policy name');
+  sc.expect('=');
+  const n = model.policies.length;
+  parseOne(sc, model, ctx);
+  const p = model.policies[n];
+  if (model.policies.length !== n + 1 || p.name) throw new ParseError(`policy ${name} = needs an event, timer or from [ReadModel] trigger with a rule`, line);
+  p.name = name;
+}
+
+/* event item-added { fields }: declared once across the model. */
+function parseEventDeclaration(sc, model, ctx, line, decl) {
+  const name = decl[1];
+  sc.i += decl[0].length;
+  const fields = sc.peek('{') ? parseFields(sc.balanced()) : null;
+  const twice = sc.declared.get(name);
+  if (twice) throw new ParseError(`event ${name} is declared twice (first on line ${twice.line}); an event is declared once across the model`, line);
+  const d = { name, fields, line, context: ctx || null };
+  sc.declared.set(name, d);
+  model.declarations.push(d);
+}
+
+/* actor -> command(...) or event -> worker -> ...: a name followed by ( makes it a command. */
+function parseArrow(sc, model, word, line) {
+  const save = sc.i;
+  sc.i += 2;
+  sc.ident('a command or worker name');
+  const isCommand = sc.s[sc.i] === '(' || /^\s*\(/.test(sc.s.slice(sc.i));
+  sc.i = save;
+  if (!isCommand) return eventPolicy(sc, model, word, line);
+  sc.i += 2;
+  return parseCommand(sc, model, word, line);
+}
+
+/* from [ReadModel] -> worker -> command(): the cursor goes back onto "from" so parsePolicy reads the list. */
+function parseFromAutomation(sc, model, rest, line) {
+  if (!/^\s*\[/.test(rest)) throw new ParseError('An automation reads read models: write from [ReadModel] -> worker -> command(), or event from [ReadModel] -> worker -> command()', line);
+  sc.i = sc.s.lastIndexOf('from', sc.i);
+  return parsePolicy(sc, model, { event: null, schedule: null, readModels: true, fields: [] }, line);
+}
+
+/* A timer starts a policy: every 5 minutes, or cron "0 * * * *". */
+const timer = (sc, model, line, m, schedule) => {
+  sc.i += m[0].length;
+  return parsePolicy(sc, model, { event: null, schedule, readModels: false, fields: [] }, line);
+};
+
+/* After a word, the policy forms that start on an event: { fields }, a guard, an annotation or from [...]. */
+const startsEventPolicy = (sc) => sc.peek('{') || atGuard(sc) || sc.peek('@') || sc.keywordBracket('from');
+
+/* A block keyword is followed by a name; "context", "system" and "boundary" alone stay ordinary words. */
+const NAMED = /^\s*[A-Za-z_]/;
+
+/*
+ * Every statement form, tried in this order; the first whose match returns something wins.
+ * The order is behavior: "event name {" before "event -> worker", "readmodel from [" before a read model, and so on.
+ * match(word, rest, sc) may return a regex match, which parse receives as m.
+ */
+const FORMS = [
+  { match: (w, rest) => w === 'context' && NAMED.test(rest), parse: (sc, model, ctx, line) => {
+    if (ctx) throw new ParseError('A context cannot contain another context', line);
+    return parseContext(sc, model);
+  } },
+  { match: (w, rest) => w === 'system' && NAMED.test(rest), parse: (sc, model, ctx, line) => {
+    if (ctx) throw new ParseError('The system block goes at the top level, outside any context', line);
+    return parseSystem(sc, model);
+  } },
+  // "policy" followed by anything but "Name =" keeps its old meaning
+  { match: (w, rest) => w === 'policy' && /^\s*[A-Za-z_][\w-]*\s*=(?![=>])/.test(rest), parse: (sc, model, ctx, line) => parseNamedPolicy(sc, model, ctx, line) },
+  // "event" followed by anything but a declaration keeps its old meaning
+  { match: (w, rest) => {
+    const decl = w === 'event' && /^[ \t]+([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)[ \t]*(?=\{|\/\/|\n|$)/.exec(rest);
+    return decl && decl[1] !== 'from' ? decl : null;
+  }, parse: (sc, model, ctx, line, m) => parseEventDeclaration(sc, model, ctx, line, m) },
+  { match: (w, rest) => w === 'scenario' && /^\s*"/.test(rest), parse: (sc, model, ctx, line) => parseScenario(sc, sc.prev, line) },
+  { match: (w, rest) => w === 'actor' && /^\s*[A-Za-z_][\w-]*\s*\{/.test(rest), parse: (sc, model) => parseActor(sc, model) },
+  { match: (w, rest) => w === 'boundary' && NAMED.test(rest), parse: (sc, model) => parseBoundary(sc, model) },
+  // readmodel from [...] is a policy on an event called readmodel, as it was before readmodel became a keyword
+  { match: (w, rest) => (w === 'view' || w === 'readmodel') && NAMED.test(rest) && !(w === 'readmodel' && /^\s*from\s*\[/.test(rest)), parse: (sc, model) => parseView(sc, model) },
+  { match: (w, rest) => w === 'every' && /^\s*(\d+)\s+(seconds?|minutes?|hours?|days?)\b/.exec(rest), parse: (sc, model, ctx, line, m) => timer(sc, model, line, m, `every ${m[1]} ${m[2]}`) },
+  { match: (w, rest) => w === 'cron' && /^\s*"([^"]*)"/.exec(rest), parse: (sc, model, ctx, line, m) => timer(sc, model, line, m, `cron "${m[1]}"`) },
+  { match: (w, rest, sc) => sc.peek('->'), parse: (sc, model, ctx, line, m, word) => parseArrow(sc, model, word, line) },
+  { match: (w, rest, sc) => startsEventPolicy(sc), parse: (sc, model, ctx, line, m, word) => eventPolicy(sc, model, word, line) },
+  { match: (w) => w === 'from', parse: (sc, model, ctx, line, m, word, rest) => parseFromAutomation(sc, model, rest, line) },
+];
+
 function parseOne(sc, model, ctx) {
   const line = sc.lineAt();
   const word = sc.ident('a statement');
   const rest = sc.s.slice(sc.i);
-
-  if (word === 'context' && /^\s*[A-Za-z_]/.test(rest)) {
-    if (ctx) throw new ParseError('A context cannot contain another context', line);
-    return parseContext(sc, model);
+  for (const form of FORMS) {
+    const m = form.match(word, rest, sc);
+    if (m) return form.parse(sc, model, ctx, line, m, word, rest);
   }
-  if (word === 'system' && /^\s*[A-Za-z_]/.test(rest)) {
-    if (ctx) throw new ParseError('The system block goes at the top level, outside any context', line);
-    return parseSystem(sc, model);
-  }
-  // policy Name = <any policy statement>; "policy" followed by anything else keeps its old meaning
-  if (word === 'policy' && /^\s*[A-Za-z_][\w-]*\s*=(?![=>])/.test(rest)) {
-    const name = sc.ident('a policy name');
-    sc.expect('=');
-    const n = model.policies.length;
-    parseOne(sc, model, ctx);
-    const p = model.policies[n];
-    if (model.policies.length !== n + 1 || p.name) throw new ParseError(`policy ${name} = needs an event, timer or from [ReadModel] trigger with a rule`, line);
-    p.name = name;
-    return;
-  }
-  // event item-added { fields } declares an event; "event" followed by anything else keeps its old meaning
-  const decl = word === 'event' && /^[ \t]+([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)[ \t]*(?=\{|\/\/|\n|$)/.exec(rest);
-  if (decl && decl[1] !== 'from') {
-    const name = decl[1];
-    sc.i += decl[0].length;
-    const fields = sc.peek('{') ? parseFields(sc.balanced()) : null;
-    const twice = model.declarations.find((d) => d.name === name);
-    if (twice) throw new ParseError(`event ${name} is declared twice (first on line ${twice.line}); an event is declared once across the model`, line);
-    model.declarations.push({ name, fields, line, context: ctx || null });
-    return;
-  }
-  if (word === 'scenario' && /^\s*"/.test(rest)) return parseScenario(sc, sc.prev, line);
-  if (word === 'actor' && /^\s*[A-Za-z_][\w-]*\s*\{/.test(rest)) return parseActor(sc, model);
-  if (word === 'boundary' && /^\s*[A-Za-z_]/.test(rest)) return parseBoundary(sc, model);
-  // readmodel from [...] is a policy on an event called readmodel, as it was before readmodel became a keyword
-  if ((word === 'view' || word === 'readmodel') && /^\s*[A-Za-z_]/.test(rest) && !(word === 'readmodel' && /^\s*from\s*\[/.test(rest))) return parseView(sc, model);
-
-  // a timer starts a policy: every 5 minutes, or cron "0 * * * *"
-  const every = word === 'every' && /^\s*(\d+)\s+(seconds?|minutes?|hours?|days?)\b/.exec(rest);
-  if (every) {
-    sc.i += every[0].length;
-    return parsePolicy(sc, model, { event: null, schedule: `every ${every[1]} ${every[2]}`, readModels: false, fields: [] }, line);
-  }
-  const cron = word === 'cron' && /^\s*"([^"]*)"/.exec(rest);
-  if (cron) {
-    sc.i += cron[0].length;
-    return parsePolicy(sc, model, { event: null, schedule: `cron "${cron[1]}"`, readModels: false, fields: [] }, line);
-  }
-
-  // actor -> command(...)   or   event -> worker -> ...
-  if (sc.peek('->')) {
-    const save = sc.i;
-    sc.i += 2;
-    sc.ident('a command or worker name');
-    const isCommand = sc.s[sc.i] === '(' || /^\s*\(/.test(sc.s.slice(sc.i));
-    sc.i = save;
-    if (isCommand) { sc.i += 2; return parseCommand(sc, model, word, line); }
-    return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
-  }
-  if (sc.peek('{') || atGuard(sc) || sc.peek('@') || sc.keywordBracket('from')) return parsePolicy(sc, model, { event: word, readModels: false, fields: [] }, line);
-  if (word === 'from') {
-    // an automation that starts from read models; the cursor goes back onto "from" so parsePolicy reads the list
-    if (!/^\s*\[/.test(rest)) throw new ParseError('An automation reads read models: write from [ReadModel] -> worker -> command(), or event from [ReadModel] -> worker -> command()', line);
-    sc.i = sc.s.lastIndexOf('from', sc.i);
-    return parsePolicy(sc, model, { event: null, schedule: null, readModels: true, fields: [] }, line);
-  }
-
   throw new ParseError(`Unexpected "${word}". A statement starts with system, context, actor, boundary, view or readmodel, "actor -> command(...)", "event { ... }", "from [ReadModel] -> worker -> command()", "every 5 minutes", "policy Name = ...", or "event name { fields }"`, line);
 }
 
@@ -1499,186 +1527,304 @@ function orderCommands(model, cmds) {
   return cmds.map((c, i) => ({ c, i })).sort((a, b) => depth[a.i] - depth[b.i] || (bFirst.get(a.c.boundary && a.c.boundary.name) ?? a.i) - (bFirst.get(b.c.boundary && b.c.boundary.name) ?? b.i) || a.i - b.i).map((x) => x.c);
 }
 
-function buildBoard(model) {
-  const nodes = new Map();
-  const edges = [];
-  const slices = [];
-  const occupied = new Map(); // `${lane}:${col}` -> rows used
-  const colOf = new Map();
-
-  const addEdge = (from, to, kind, label = '') => {
-    if (!edges.some((e) => e.from === from && e.to === to && e.kind === kind && e.label === label)) edges.push({ from, to, kind, label });
+function grid() {
+  const g = { nodes: new Map(), edges: [], slices: [], occupied: new Map(), colOf: new Map(), end: 0 }; // occupied: `${lane}:${col}` -> rows used; end: first column past everything placed
+  const edgeKeys = new Set();
+  g.addEdge = (from, to, kind, label = '') => {
+    const key = `${from}\u0000${to}\u0000${kind}\u0000${label}`;
+    if (edgeKeys.has(key)) return;
+    edgeKeys.add(key);
+    g.edges.push({ from, to, kind, label });
   };
-  const free = (lane, from) => { let c = Math.max(0, from); while (occupied.has(`${lane}:${c}`)) c++; return c; };
-  const put = (id, lane, label, col, extra = {}) => {
-    if (nodes.has(id)) return nodes.get(id);
-    const row = occupied.get(`${lane}:${col}`) || 0;
-    occupied.set(`${lane}:${col}`, row + 1);
+  g.free = (lane, from) => { let c = Math.max(0, from); while (g.occupied.has(`${lane}:${c}`)) c++; return c; };
+  g.put = (id, lane, label, col, extra = {}) => {
+    if (g.nodes.has(id)) return g.nodes.get(id);
+    const row = g.occupied.get(`${lane}:${col}`) || 0;
+    g.occupied.set(`${lane}:${col}`, row + 1);
     const n = { id, lane, label, col, row, ...extra };
-    nodes.set(id, n);
-    colOf.set(id, col);
+    g.nodes.set(id, n);
+    g.colOf.set(id, col);
     return n;
   };
-  let end = 0; // first column past everything placed so far
-  const bump = (c) => { end = Math.max(end, c + 1); };
+  g.bump = (c) => { g.end = Math.max(g.end, c + 1); };
   /* The column right after `col` in `lane`: used as is when free there, otherwise a new
      column is inserted at that point and every later column shifts right, so time still
      reads left to right. */
-  const next = (lane, col) => {
+  g.next = (lane, col) => {
     const at = col + 1;
-    if (!occupied.has(`${lane}:${at}`)) return at;
-    for (const n of nodes.values()) if (n.col >= at) { n.col++; colOf.set(n.id, n.col); }
-    for (const k of [...occupied.keys()].filter((k) => +k.split(':')[1] >= at).sort((a, b) => b.split(':')[1] - a.split(':')[1])) {
-      const [l, c] = k.split(':'); occupied.set(`${l}:${+c + 1}`, occupied.get(k)); occupied.delete(k);
+    if (!g.occupied.has(`${lane}:${at}`)) return at;
+    for (const n of g.nodes.values()) if (n.col >= at) { n.col++; g.colOf.set(n.id, n.col); }
+    for (const k of [...g.occupied.keys()].filter((k) => +k.split(':')[1] >= at).sort((x, y) => y.split(':')[1] - x.split(':')[1])) {
+      const [l, c] = k.split(':'); g.occupied.set(`${l}:${+c + 1}`, g.occupied.get(k)); g.occupied.delete(k);
     }
-    if (at < end) end++;
+    if (at < g.end) g.end++;
     return at;
   };
+  return g;
+}
 
+/* What the phases look up about events, read models, actors and boundaries, built once. */
+function lookups(model) {
+  const views = new Map();
+  for (const v of model.views) if (!views.has(v.name)) views.set(v.name, v);
+  const actors = new Map();
+  for (const a of model.actors) if (!actors.has(a.name.toLowerCase())) actors.set(a.name.toLowerCase(), a);
+  const boundaries = new Map();
+  for (const b of model.boundaries) if (!boundaries.has(b.name)) boundaries.set(b.name, b);
   const assumed = (name) => !(model.events.get(name) || { emittedBy: [] }).emittedBy.length;
-  const declaredEv = (name) => assumed(name) && !!(model.events.get(name) || {}).declared; // used, declared, nothing records it
-  const declaredSub = (name) => { const ctx = model.events.get(name).declared.context; return ctx ? `declared · ${ctx}` : 'declared'; };
-  const viewLabel = (name) => { const v = model.views.find((x) => x.name === name); return v ? `${name}(${v.params.join(', ')})` : name; };
+  return {
+    views, actors, boundaries, assumed,
+    declaredEv: (name) => assumed(name) && !!(model.events.get(name) || {}).declared, // used, declared, nothing records it
+    declaredSub: (name) => { const ctx = model.events.get(name).declared.context; return ctx ? `declared · ${ctx}` : 'declared'; },
+    viewLabel: (name) => { const v = views.get(name); return v ? `${name}(${v.params.join(', ')})` : name; },
+  };
+}
 
-  const cmds = orderCommands(model, commandGroups(model));
+/* A command box's notes: where it translates from, the facts it checks, the codes it rejects. */
+const commandNotes = (cmd, checks, rejects) => [
+  ...(cmd.source && cmd.source.system ? [`translates from ${clip(`${cmd.source.system} ${cmd.source.version || ''}`.trim(), 30)}`] : []),
+  ...(checks.length ? [`checks ${checks.join(', ')}`] : []),
+  ...(rejects.length ? [`rejects ${clip(rejects.join(', '), 40)}`] : []),
+];
 
-  // 1. commands: one column each, actor above, emitted events beneath
+/* A checked fact as the note shows it: wildcard, and whether it is assumed or only declared. */
+const checkLabel = (h, f) => `${f.name}${f.wildcard ? '*' : ''}${h.assumed(f.name) ? (h.declaredEv(f.name) ? ' (declared)' : ' (assumed)') : ''}`;
+
+/* The arrow label from an actor to its command: the first trigger, and how many more. */
+const triggerArrow = (cmd) => (cmd.triggers.length ? clip(`${triggerLabel(cmd.triggers[0])}${cmd.triggers.length > 1 ? ` +${cmd.triggers.length - 1}` : ''}`, 32) : '');
+
+function placeCommands(model, g, h, cmds) {
   cmds.forEach((cmd, col) => {
     const kind = model.actorKind(cmd.actor);
-    const declared = model.actors.find((a) => a.name.toLowerCase() === cmd.actor.toLowerCase());
-    const actor = put(`actor:${cmd.name}`, 'actor', declared ? declared.name : cmd.actor, col, { kind: kind === 'external' ? 'external' : 'actor', ranges: cmd.ranges.map(([from]) => [from, from]) });
-    const checks = [...new Set(cmd.on.map((f) => `${f.name}${f.wildcard ? '*' : ''}${assumed(f.name) ? (declaredEv(f.name) ? ' (declared)' : ' (assumed)') : ''}`))];
+    const declared = h.actors.get(cmd.actor.toLowerCase());
+    const actor = g.put(`actor:${cmd.name}`, 'actor', declared ? declared.name : cmd.actor, col, { kind: kind === 'external' ? 'external' : 'actor', ranges: cmd.ranges.map(([from]) => [from, from]) });
+    const checks = [...new Set(cmd.on.map((f) => checkLabel(h, f)))];
     const rejects = [...new Set(cmd.branches.map((b) => b.reject).filter(Boolean))];
     const planned = !!cmd.annotations.planned;
-    const c = put(`cmd:${cmd.name}`, 'command', `${cmd.name}(${cmd.params.join(', ')})`, col, {
-      kind: 'command', sub: planned ? 'planned' : kind === 'external' ? 'translation' : 'state change', slice: kind === 'external' ? 'translation' : 'state change',
-      planned,
-      ranges: cmd.ranges,
-      notes: [
-        ...(cmd.source && cmd.source.system ? [`translates from ${clip(`${cmd.source.system} ${cmd.source.version || ''}`.trim(), 30)}`] : []),
-        ...(checks.length ? [`checks ${checks.join(', ')}`] : []),
-        ...(rejects.length ? [`rejects ${clip(rejects.join(', '), 40)}`] : []),
-      ],
-      fullNotes: cmd.notes,
-      checks,
-    });
-    addEdge(actor.id, c.id, 'triggers', cmd.triggers.length ? clip(`${triggerLabel(cmd.triggers[0])}${cmd.triggers.length > 1 ? ` +${cmd.triggers.length - 1}` : ''}`, 32) : '');
-    bump(col);
+    const slice = kind === 'external' ? 'translation' : 'state change';
+    const c = g.put(`cmd:${cmd.name}`, 'command', `${cmd.name}(${cmd.params.join(', ')})`, col, { kind: 'command', sub: planned ? 'planned' : slice, slice, planned, ranges: cmd.ranges, notes: commandNotes(cmd, checks, rejects), fullNotes: cmd.notes, checks });
+    g.addEdge(actor.id, c.id, 'triggers', triggerArrow(cmd));
+    g.bump(col);
   });
+}
 
-  cmds.forEach((cmd) => {
-    const c = nodes.get(`cmd:${cmd.name}`);
-    const members = [`actor:${cmd.name}`, c.id];
-    for (const br of cmd.branches) {
-      for (const em of br.emits) {
-        const id = `evt:${em.event}`;
-        if (!nodes.has(id)) put(id, 'event', em.event, c.col, { kind: 'event', indent: 26, sub: br.default ? '' : `if ${clip(br.guard, 30)}`, owner: c.id });
-        addEdge(c.id, id, nodes.get(id).owner === c.id ? 'tree' : 'emits', nodes.get(id).owner === c.id ? '' : br.default ? '' : clip(br.guard, 24));
-        members.push(id);
-      }
-    }
-    cmd.__members = members;
-  });
-
-  // 2. read models: in the command row, right of the latest event that feeds them
-  for (const view of model.views) {
-    const srcCols = view.sources.map((s) => colOf.get(`evt:${s.name}`)).filter((c) => c !== undefined);
-    const col = srcCols.length ? next('command', Math.max(...srcCols)) : free('command', end);
-    const planned = !!view.annotations.planned;
-    const v = put(`view:${view.name}`, 'command', viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, ranges: [[view.line, view.endLine]], fullNotes: view.notes, notes: [] });
-    const unemitted = [...new Set(view.sources.map((s) => s.name).filter(assumed))].map((n) => (declaredEv(n) ? `${n} (declared)` : n));
-    if (unemitted.length) v.notes.push(`from ${clip(unemitted.join(', '), 40)}`);
-    if (view.triggers.length) v.notes.push(`read in ${clip(view.triggers.map(triggerLabel).join(', '), 36)}`);
-    for (const s of view.sources) if (nodes.has(`evt:${s.name}`)) addEdge(`evt:${s.name}`, v.id, 'projects');
-    bump(col);
-    slices.push({ type: 'state view', name: view.name, nodes: [v.id, ...view.sources.map((s) => `evt:${s.name}`).filter((id) => nodes.has(id))] });
-  }
-  const readModel = (name) => {
-    if (!nodes.has(`view:${name}`)) { const col = free('command', end); put(`view:${name}`, 'command', viewLabel(name), col, { kind: 'view', declared: false, sub: 'not declared' }); bump(col); }
-    return nodes.get(`view:${name}`);
-  };
-  // reads: a command reads a read model (it may sit to its right: the arrow loops back)
+function hangEvents(g, cmds) {
+  const membersOf = new Map();
   for (const cmd of cmds) {
-    for (const f of cmd.from) addEdge(readModel(f.name).id, `cmd:${cmd.name}`, 'reads', [f.freshness ? `fresh ${f.freshness}` : '', f.optional ? 'may be empty' : ''].filter(Boolean).join(', '));
+    const c = g.nodes.get(`cmd:${cmd.name}`);
+    const members = [`actor:${cmd.name}`, c.id];
+    for (const br of cmd.branches) members.push(...hangBranch(g, c, br));
+    membersOf.set(cmd, members);
   }
+  return membersOf;
+}
 
-  // 3. policies: the processor sits right of what it reads, results right of the processor;
-  //    a later processor on the same trigger sits right of earlier ones, so siblings keep source order
+/* One branch's events: placed under the command that first records them, and an arrow from this command either way. */
+function hangBranch(g, c, br) {
+  return br.emits.map((em) => {
+    const id = `evt:${em.event}`;
+    if (!g.nodes.has(id)) g.put(id, 'event', em.event, c.col, { kind: 'event', indent: 26, sub: br.default ? '' : `if ${clip(br.guard, 30)}`, owner: c.id });
+    const own = g.nodes.get(id).owner === c.id;
+    g.addEdge(c.id, id, own ? 'tree' : 'emits', own || br.default ? '' : clip(br.guard, 24));
+    return id;
+  });
+}
+
+/* Notes on a read model box: facts nothing records, and where it is read. */
+function viewNotes(h, view) {
+  const notes = [];
+  const unemitted = [...new Set(view.sources.map((s) => s.name).filter(h.assumed))].map((n) => (h.declaredEv(n) ? `${n} (declared)` : n));
+  if (unemitted.length) notes.push(`from ${clip(unemitted.join(', '), 40)}`);
+  if (view.triggers.length) notes.push(`read in ${clip(view.triggers.map(triggerLabel).join(', '), 36)}`);
+  return notes;
+}
+
+function placeViews(model, g, h) {
+  for (const view of model.views) {
+    const srcCols = view.sources.map((s) => g.colOf.get(`evt:${s.name}`)).filter((c) => c !== undefined);
+    const col = srcCols.length ? g.next('command', Math.max(...srcCols)) : g.free('command', g.end);
+    const planned = !!view.annotations.planned;
+    const v = g.put(`view:${view.name}`, 'command', h.viewLabel(view.name), col, { kind: 'view', sub: planned ? 'planned' : 'state view', slice: 'state view', planned, ranges: [[view.line, view.endLine]], fullNotes: view.notes, notes: [] });
+    v.notes.push(...viewNotes(h, view));
+    for (const s of view.sources) if (g.nodes.has(`evt:${s.name}`)) g.addEdge(`evt:${s.name}`, v.id, 'projects');
+    g.bump(col);
+    g.slices.push({ type: 'state view', name: view.name, nodes: [v.id, ...view.sources.map((s) => `evt:${s.name}`).filter((id) => g.nodes.has(id))] });
+  }
+}
+
+/* The box of a read model, drawn as not declared when the model never declares it. */
+const readModel = (g, h, name) => {
+  if (!g.nodes.has(`view:${name}`)) { const col = g.free('command', g.end); g.put(`view:${name}`, 'command', h.viewLabel(name), col, { kind: 'view', declared: false, sub: 'not declared' }); g.bump(col); }
+  return g.nodes.get(`view:${name}`);
+};
+
+/* A read is the label of a from [...] fact: its freshness, and whether it may be empty. */
+const readLabel = (f) => [f.freshness ? `fresh ${f.freshness}` : '', f.optional ? 'may be empty' : ''].filter(Boolean).join(', ');
+
+/* A command reads a read model (it may sit to its right: the arrow loops back). */
+function placeReads(g, h, cmds) {
+  for (const cmd of cmds) for (const f of cmd.from) g.addEdge(readModel(g, h, f.name).id, `cmd:${cmd.name}`, 'reads', readLabel(f));
+}
+
+/* The event box a policy starts on, drawn as declared or assumed when no command records it. */
+function triggerEvent(g, h, name) {
+  const eid = `evt:${name}`;
+  if (g.nodes.has(eid)) return eid;
+  const col = g.free('event', g.end);
+  g.put(eid, 'event', name, col, h.declaredEv(name) ? { kind: 'event', declared: true, sub: h.declaredSub(name) } : { kind: 'event', assumed: true, sub: 'assumed' });
+  g.bump(col);
+  return eid;
+}
+
+function gateOf(model, g, h, pol, reads, ranges) {
+  if (pol.trigger.schedule) {
+    const id = `timer:${pol.trigger.schedule}`;
+    const timer = g.nodes.get(id) || g.put(id, 'actor', pol.trigger.schedule, g.free('actor', g.end), { kind: 'timer' });
+    g.bump(timer.col);
+    return timer;
+  }
+  if (!pol.trigger.event) return undefined;
+  const eid = triggerEvent(g, h, pol.trigger.event);
+  const fed = reads.find((r, k) => !needsImpliedReadModel(model, { ...pol, from: [pol.from[k]] }));
+  let gate = fed && fed.node;
+  if (!gate) {
+    const id = `implied:${pol.trigger.event}`;
+    gate = g.nodes.get(id) || g.put(id, 'command', pol.trigger.event, g.next('command', g.colOf.get(eid)), { kind: 'view', implied: true, sub: 'implied read model', ranges: [] });
+    gate.ranges.push(...ranges);
+    g.bump(gate.col);
+  }
+  g.addEdge(eid, gate.id, 'projects');
+  return gate;
+}
+
+/* One box for every rule of a named policy; an unnamed rule gets its worker's box, or its own. */
+const ruleBoxId = (pol, rule, i) => (pol.name ? `policy:${pol.name}` : rule.worker ? `pol:${rule.worker}` : `auto:${pol.line}:${i}`);
+
+/* What a processor box says under its name. */
+function processorSub(pol, rule) {
+  if (pol.annotations.planned) return 'planned';
+  if (pol.name) return [...new Set(pol.rules.map((r) => r.worker || 'automation'))].join(', ');
+  return rule.worker ? 'automation' : 'unnamed processor';
+}
+
+/* Who a rule's slice and box are named after. */
+const processorName = (pol, rule) => pol.name || rule.worker || 'automation';
+
+function placeProcessor(g, r) {
+  const { pol, rule, i, gate, reads, placed, ranges } = r;
+  const wid = ruleBoxId(pol, rule, i);
+  const after = Math.max(-1, ...[gate, ...reads.map((x) => x.node), ...placed.map((id) => g.nodes.get(id))].filter(Boolean).map((n) => n.col)); // live: inserts shift columns
+  if (!g.nodes.has(wid)) placed.push(wid);
+  const sub = processorSub(pol, rule);
+  const w = g.nodes.get(wid) || g.put(wid, 'actor', processorName(pol, rule), g.next('actor', after), { kind: 'policy', sub, slice: 'automation', planned: !!pol.annotations.planned, fullNotes: pol.notes, notes: [] });
+  if (!pol.name || i === 0) (w.ranges = w.ranges || []).push(...ranges); // a named policy's box stands for its lines once
+  g.bump(w.col);
+  return w;
+}
+
+/* The arrows into a processor: from each read model it reads, and from its gate when it does not read that. */
+function wireInputs(g, w, reads, gate, guard) {
+  for (const x of reads) g.addEdge(x.node.id, w.id, 'reads', [x.label, x.node === gate ? guard : ''].filter(Boolean).join(', '));
+  if (gate && !reads.some((x) => x.node === gate)) g.addEdge(gate.id, w.id, gate.kind === 'timer' ? 'triggers' : 'reads', guard);
+}
+
+/* The command a rule invokes, right of the processor; drawn as not modeled when nothing declares it. A named policy labels it with the rule's guard, else with its arguments. */
+function placeRuleCommand(g, r, w, at, ruleGuard) {
+  const { pol, rule, placed, members } = r;
+  if (!rule.command) return;
+  const label = pol.name ? ruleGuard : clip(rule.command.args, 24);
+  const cid = `cmd:${rule.command.name}`;
+  if (!g.nodes.has(cid)) { const col = g.next('command', at); g.put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); g.bump(col); placed.push(cid); }
+  g.addEdge(w.id, cid, 'invokes', label);
+  members.push(cid);
+}
+
+/* The events a rule records itself, right of the processor. */
+function placeRuleEvents(g, r, w, at, label) {
+  const { rule, placed, members } = r;
+  for (const em of rule.emits) {
+    const id = `evt:${em.event}`;
+    if (!g.nodes.has(id)) { const col = g.next('event', at); g.put(id, 'event', em.event, col, { kind: 'event' }); g.bump(col); placed.push(id); }
+    g.addEdge(w.id, id, 'emits', label);
+    members.push(id);
+  }
+}
+
+/* A rule's slice starts at its trigger event and gate. */
+const ruleMembers = (pol, gate, w) => [...(pol.trigger.event ? [`evt:${pol.trigger.event}`] : []), ...(gate ? [gate.id] : []), w.id];
+
+/* An automation slice is named after its policy, else its worker, else its trigger. */
+const sliceName = (pol, rule) => pol.name || rule.worker || Model.policyLabel(pol);
+
+function placeRule(model, g, r) {
+  const { pol, rule, gate, reads, placed } = r;
+  const w = placeProcessor(g, r);
+  const ruleGuard = clip(rule.guard || '', 24);
+  const at = pol.name ? Math.max(w.col, ...placed.map((id) => g.nodes.get(id).col)) : w.col;
+  wireInputs(g, w, reads, gate, pol.name ? '' : ruleGuard);
+  r.members = ruleMembers(pol, gate, w);
+  placeRuleCommand(g, r, w, at, ruleGuard);
+  placeRuleEvents(g, r, w, at, pol.name ? ruleGuard : '');
+  g.slices.push({ type: 'automation', name: sliceName(pol, rule), nodes: [...new Set(r.members)] });
+}
+
+function placePolicies(model, g, h) {
   const siblings = new Map();
   for (const pol of model.policies) {
     const ranges = [[pol.line, pol.endLine]];
-    const reads = pol.from.map((f) => ({ node: readModel(f.name), label: f.freshness ? `fresh ${f.freshness}` : '' }));
-    let gate; // the node that wakes the processor: a timer, or the read model its trigger event feeds
-    if (pol.trigger.schedule) {
-      gate = nodes.get(`timer:${pol.trigger.schedule}`) || put(`timer:${pol.trigger.schedule}`, 'actor', pol.trigger.schedule, free('actor', end), { kind: 'timer' });
-      bump(gate.col);
-    } else if (pol.trigger.event) {
-      const eid = `evt:${pol.trigger.event}`;
-      if (!nodes.has(eid)) { const col = free('event', end); put(eid, 'event', pol.trigger.event, col, declaredEv(pol.trigger.event) ? { kind: 'event', declared: true, sub: declaredSub(pol.trigger.event) } : { kind: 'event', assumed: true, sub: 'assumed' }); bump(col); }
-      const fed = reads.find((r, k) => !needsImpliedReadModel(model, { ...pol, from: [pol.from[k]] }));
-      if (fed) gate = fed.node;
-      else {
-        gate = nodes.get(`implied:${pol.trigger.event}`) || put(`implied:${pol.trigger.event}`, 'command', pol.trigger.event, next('command', colOf.get(eid)), { kind: 'view', implied: true, sub: 'implied read model', ranges: [] });
-        gate.ranges.push(...ranges);
-        bump(gate.col);
-      }
-      addEdge(eid, gate.id, 'projects');
-    }
-    const planned = !!pol.annotations.planned;
-    const sibKey = gate ? gate.id : reads.map((r) => r.node.id).join(',');
+    const reads = pol.from.map((f) => ({ node: readModel(g, h, f.name), label: f.freshness ? `fresh ${f.freshness}` : '' }));
+    const gate = gateOf(model, g, h, pol, reads, ranges);
+    const sibKey = gate ? gate.id : reads.map((x) => x.node.id).join(',');
     if (!siblings.has(sibKey)) siblings.set(sibKey, []);
     const placed = siblings.get(sibKey); // earlier processors on this trigger and their results
-    pol.rules.forEach((rule, i) => {
-      const wid = pol.name ? `policy:${pol.name}` : rule.worker ? `pol:${rule.worker}` : `auto:${pol.line}:${i}`;
-      const after = Math.max(-1, ...[gate, ...reads.map((r) => r.node), ...placed.map((id) => nodes.get(id))].filter(Boolean).map((n) => n.col)); // live: inserts shift columns
-      if (!nodes.has(wid)) placed.push(wid);
-      const sub = planned ? 'planned' : pol.name ? [...new Set(pol.rules.map((r) => r.worker || 'automation'))].join(', ') : rule.worker ? 'automation' : 'unnamed processor';
-      const w = nodes.get(wid) || put(wid, 'actor', pol.name || rule.worker || 'automation', next('actor', after), { kind: 'policy', sub, slice: 'automation', planned, fullNotes: pol.notes, notes: [] });
-      if (!pol.name || i === 0) (w.ranges = w.ranges || []).push(...ranges); // a named policy's box stands for its lines once
-      bump(w.col);
-      // one box for every rule of a named policy: each rule's guard labels its own result, and results keep source order
-      const ruleGuard = clip(rule.guard || '', 24);
-      const guard = pol.name ? '' : ruleGuard;
-      const resultAfter = pol.name ? Math.max(w.col, ...placed.map((id) => nodes.get(id).col)) : w.col;
-      for (const r of reads) addEdge(r.node.id, w.id, 'reads', [r.label, r.node === gate ? guard : ''].filter(Boolean).join(', '));
-      if (gate && !reads.some((r) => r.node === gate)) addEdge(gate.id, w.id, gate.kind === 'timer' ? 'triggers' : 'reads', guard);
-      const members = [...(pol.trigger.event ? [`evt:${pol.trigger.event}`] : []), ...(gate ? [gate.id] : []), w.id];
-      if (rule.command) {
-        const cid = `cmd:${rule.command.name}`;
-        if (!nodes.has(cid)) { const col = next('command', resultAfter); put(cid, 'command', `${rule.command.name}()`, col, { kind: 'command', declared: false, sub: 'not modeled' }); bump(col); placed.push(cid); }
-        addEdge(w.id, cid, 'invokes', pol.name ? ruleGuard : clip(rule.command.args, 24));
-        members.push(cid);
-      }
-      for (const em of rule.emits) {
-        const id = `evt:${em.event}`;
-        if (!nodes.has(id)) { const col = next('event', resultAfter); put(id, 'event', em.event, col, { kind: 'event' }); bump(col); placed.push(id); }
-        addEdge(w.id, id, 'emits', pol.name ? ruleGuard : '');
-        members.push(id);
-      }
-      slices.push({ type: 'automation', name: pol.name || rule.worker || Model.policyLabel(pol), nodes: [...new Set(members)] });
-    });
+    pol.rules.forEach((rule, i) => placeRule(model, g, { pol, rule, i, gate, reads, placed, ranges }));
   }
+}
 
-  for (const cmd of cmds) {
-    slices.push({ type: model.actorKind(cmd.actor) === 'external' ? 'translation' : 'state change', name: cmd.name, nodes: [...new Set(cmd.__members)] });
-  }
+/* "shard by userId" when the boundary declares a shard key. */
+const shardNote = (h, name) => {
+  const b = h.boundaries.get(name);
+  const key = b && b.annotations.partition && b.annotations.partition.shardKey;
+  return key ? `shard by ${key}` : null;
+};
 
-  const groups = [];
+/* Boundaries as groups: each command in one, with the events it owns. */
+function boundaryGroups(g, h, cmds, membersOf) {
   const byBoundary = new Map();
   for (const cmd of cmds) {
     if (!cmd.boundary) continue;
-    const g = byBoundary.get(cmd.boundary.name) || { id: `bnd:${cmd.boundary.name}`, label: `${cmd.boundary.name}(${cmd.boundary.args})`, kind: 'boundary', members: new Set() };
-    byBoundary.set(cmd.boundary.name, g);
-    g.members.add(`cmd:${cmd.name}`);
-    for (const id of cmd.__members) if (id.startsWith('evt:') && nodes.get(id).owner === `cmd:${cmd.name}`) g.members.add(id);
-    const b = model.boundaries.find((x) => x.name === cmd.boundary.name);
-    if (b && b.annotations.partition && b.annotations.partition.shardKey) g.sub = `shard by ${b.annotations.partition.shardKey}`;
+    const name = cmd.boundary.name;
+    if (!byBoundary.has(name)) byBoundary.set(name, { id: `bnd:${name}`, label: `${name}(${cmd.boundary.args})`, kind: 'boundary', members: new Set() });
+    const grp = byBoundary.get(name);
+    grp.members.add(`cmd:${cmd.name}`);
+    for (const id of membersOf.get(cmd)) if (g.nodes.get(id).owner === `cmd:${cmd.name}`) grp.members.add(id);
+    const sub = shardNote(h, name);
+    if (sub) grp.sub = sub;
   }
-  for (const g of byBoundary.values()) groups.push({ ...g, members: [...g.members] });
+  return [...byBoundary.values()].map((grp) => ({ ...grp, members: [...grp.members] }));
+}
 
-  const list = [...nodes.values()];
+function layoutBoard(model) {
+  const g = grid();
+  const h = lookups(model);
+  const cmds = orderCommands(model, commandGroups(model));
+  placeCommands(model, g, h, cmds);
+  const membersOf = hangEvents(g, cmds);
+  placeViews(model, g, h);
+  placeReads(g, h, cmds);
+  placePolicies(model, g, h);
+  for (const cmd of cmds) g.slices.push({ type: model.actorKind(cmd.actor) === 'external' ? 'translation' : 'state change', name: cmd.name, nodes: [...new Set(membersOf.get(cmd))] });
+  const list = [...g.nodes.values()];
   const cols = Math.max(...list.map((n) => n.col)) + 1;
-  return { title: model.system ? model.system.name : 'eventline model', lanes: LANES, nodes: list, edges, slices, groups, cols };
+  return { title: model.system ? model.system.name : 'eventline model', lanes: LANES, nodes: list, edges: g.edges, slices: g.slices, groups: boundaryGroups(g, h, cmds, membersOf), cols };
+}
+
+/* One board per parsed model. A model is not changed after parse, and nothing changes a board, so check and render can share it. */
+const boards = new WeakMap();
+
+function buildBoard(model) {
+  if (!boards.has(model)) boards.set(model, layoutBoard(model));
+  return boards.get(model);
 }
 
 /* The generic graph form, for the Mermaid and DOT exporters. */
