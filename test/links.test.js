@@ -105,3 +105,10 @@ test('a diagram builder bug surfaces when links need that diagram, and check ski
     BUILDERS.context = real;
   }
 });
+
+test('links: a context with only read models opens the board at its first one, and a boundary without regions opens nothing', () => {
+  const map = linkMap(parse('context Sales {\n  user -> go(id) in Thing(id)\n    -[default]-> [x-done { id }]\n}\ncontext Reports {\n  view Totals(id) = [x-done(id)] => { id }\n}\nboundary Thing(id)\n'));
+  assert.deepEqual(map.contextmap['ctx:Reports'].map((l) => l.node), ['view:Totals']);
+  assert.deepEqual(map.contextmap['ctx:Sales'].map((l) => l.node), ['cmd:go']);
+  assert.equal(map.eventmodel['bnd:Thing'], undefined);
+});

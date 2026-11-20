@@ -1113,74 +1113,100 @@ function inventory(model) {
   return out;
 }
 
-/* The board box a worker is drawn in: its named policy's, else its own. */
-const boardBoxes = (model, w) => {
-  const named = model.policies.filter((p) => p.name && p.rules.some((r) => r.worker === w)).map((p) => `policy:${p.name}`);
-  const own = model.policies.some((p) => !p.name && p.rules.some((r) => r.worker === w));
-  return own || !named.length ? [...named, `pol:${w}`] : named;
-};
 const workersOf = (p) => [...new Set(p.rules.map((r) => r.worker).filter(Boolean))];
 
-/* What each box leads to by default: [diagram, boxId?] pairs, most useful first. */
-function derive(model, inv, kind, id) {
-  const r = [];
-  const worker = (prefix) => id.slice(prefix.length);
-  const onBoard = () => boardBoxes(model, worker('worker:')).map((b) => ['eventmodel', b]);
-  switch (kind) {
-    case 'context':
-      r.push(['containers', id]);
-      break;
-    case 'containers':
-      if (id === 'sys' || /^(actor|ext):/.test(id)) r.push(['context', id]);
-      else if (id === 'api') r.push(['eventmodel']);
-      else if (id === 'store') r.push(['dataflow', 'log']);
-      else if (id.startsWith('view:')) r.push(['dataflow', id], ['eventmodel', id]);
-      else if (id.startsWith('worker:')) r.push(['dataflow', id], ...onBoard());
-      break;
-    case 'dataflow':
-      if (id === 'log') r.push(['containers', 'store']);
-      else if (/^(actor|ext):/.test(id)) r.push(['context', id]);
-      else if (id.startsWith('cmd:')) r.push(['eventmodel', id]);
-      else if (id.startsWith('view:')) r.push(['eventmodel', id], ['containers', id]);
-      else if (id.startsWith('worker:')) r.push(...onBoard(), ['containers', id]);
-      break;
-    case 'deployment': {
-      if (id.startsWith('region:')) { r.push(['containers', 'sys']); break; }
-      const m = /^[^:]+:(api|shard:.+|view:.+|worker:.+)$/.exec(id);
-      if (!m) break;
-      if (m[1] === 'api') r.push(['containers', 'api']);
-      else if (m[1].startsWith('shard:')) r.push(['eventmodel', `bnd:${m[1].slice(6)}`]);
-      else r.push(['containers', m[1]]);
-      break;
+function linkIndex(model) {
+  const named = new Map();
+  const own = new Set();
+  const policyWorkers = new Map();
+  for (const p of model.policies) {
+    const ws = workersOf(p);
+    if (p.name) policyWorkers.set(p.name, ws);
+    for (const w of ws) {
+      if (!p.name) own.add(w);
+      else named.set(w, [...(named.get(w) || []), `policy:${p.name}`]);
     }
-    case 'contextmap': {
-      const name = id.slice(4);
-      const cmd = model.commands.find((c) => c.context === name);
-      const view = model.views.find((v) => v.context === name);
-      if (cmd) r.push(['eventmodel', `cmd:${cmd.name}`]);
-      else if (view) r.push(['eventmodel', `view:${view.name}`]);
-      break;
-    }
-    case 'eventmodel': {
-      const nodeKind = inv.eventmodel.kinds.get(id);
-      const label = inv.eventmodel.labels.get(id) || '';
-      if (id.startsWith('cmd:')) r.push(['dataflow', id]);
-      else if (id.startsWith('view:')) r.push(['containers', id], ['dataflow', id]);
-      else if (id.startsWith('pol:')) r.push(['containers', `worker:${id.slice(4)}`]);
-      else if (id.startsWith('policy:')) {
-        const ws = workersOf(model.policies.find((p) => p.name === id.slice(7))).map((w) => `worker:${w}`);
-        r.push(...ws.map((w) => ['containers', w]), ...ws.map((w) => ['dataflow', w]));
-      }
-      else if (id.startsWith('evt:')) r.push(['containers', 'store']);
-      else if (id.startsWith('bnd:') && model.system && model.system.regions.length) r.push(['deployment', `${slug(model.system.regions[0])}:shard:${id.slice(4)}`]);
-      else if (nodeKind === 'actor') r.push(['context', `actor:${slug(label)}`]);
-      else if (nodeKind === 'external') r.push(['context', `ext:${slug(label)}`]);
-      break;
-    }
-    default:
   }
-  return r;
+  const first = (list) => { const m = new Map(); for (const x of list) if (!m.has(x.context)) m.set(x.context, x.name); return m; };
+  return {
+    boxesOf: (w) => { const n = named.get(w) || []; return own.has(w) || !n.length ? [...n, `pol:${w}`] : n; },
+    policyWorkers,
+    firstCommand: first(model.commands),
+    firstView: first(model.views),
+    region: model.system && model.system.regions.length ? slug(model.system.regions[0]) : null,
+  };
 }
+
+/* The board boxes a worker box leads to. */
+const toBoard = (ix, id) => ix.boxesOf(id.slice('worker:'.length)).map((b) => ['eventmodel', b]);
+
+function fromContainers(ix, inv, id) {
+  if (id === 'sys' || /^(actor|ext):/.test(id)) return [['context', id]];
+  if (id === 'api') return [['eventmodel']];
+  if (id === 'store') return [['dataflow', 'log']];
+  if (id.startsWith('view:')) return [['dataflow', id], ['eventmodel', id]];
+  if (id.startsWith('worker:')) return [['dataflow', id], ...toBoard(ix, id)];
+  return [];
+}
+
+function fromDataflow(ix, inv, id) {
+  if (id === 'log') return [['containers', 'store']];
+  if (/^(actor|ext):/.test(id)) return [['context', id]];
+  if (id.startsWith('cmd:')) return [['eventmodel', id]];
+  if (id.startsWith('view:')) return [['eventmodel', id], ['containers', id]];
+  if (id.startsWith('worker:')) return [...toBoard(ix, id), ['containers', id]];
+  return [];
+}
+
+function fromDeployment(ix, inv, id) {
+  if (id.startsWith('region:')) return [['containers', 'sys']];
+  const m = /^[^:]+:(api|shard:.+|view:.+|worker:.+)$/.exec(id);
+  if (!m) return [];
+  if (m[1] === 'api') return [['containers', 'api']];
+  if (m[1].startsWith('shard:')) return [['eventmodel', `bnd:${m[1].slice(6)}`]];
+  return [['containers', m[1]]];
+}
+
+/* A context opens the board at its first command, else its first read model. */
+const fromContextMap = (ix, inv, id) => {
+  const name = id.slice(4);
+  if (ix.firstCommand.has(name)) return [['eventmodel', `cmd:${ix.firstCommand.get(name)}`]];
+  return ix.firstView.has(name) ? [['eventmodel', `view:${ix.firstView.get(name)}`]] : [];
+};
+
+/* Board boxes by id prefix. A board boundary opens its shard in the first region; with no regions it falls through to none. */
+const BOARD_LINKS = new Map([
+  ['cmd:', (ix, id) => [['dataflow', id]]],
+  ['view:', (ix, id) => [['containers', id], ['dataflow', id]]],
+  ['pol:', (ix, id) => [['containers', `worker:${id.slice(4)}`]]],
+  ['policy:', (ix, id) => {
+    const ws = ix.policyWorkers.get(id.slice(7)).map((w) => `worker:${w}`);
+    return [...ws.map((w) => ['containers', w]), ...ws.map((w) => ['dataflow', w])];
+  }],
+  ['evt:', () => [['containers', 'store']]],
+  ['bnd:', (ix, id) => (ix.region ? [['deployment', `${ix.region}:shard:${id.slice(4)}`]] : [])],
+]);
+
+function fromEventModel(ix, inv, id) {
+  const byPrefix = BOARD_LINKS.get(id.slice(0, id.indexOf(':') + 1));
+  if (byPrefix) return byPrefix(ix, id);
+  const kind = inv.eventmodel.kinds.get(id);
+  const label = inv.eventmodel.labels.get(id) || '';
+  if (kind === 'actor') return [['context', `actor:${slug(label)}`]];
+  return kind === 'external' ? [['context', `ext:${slug(label)}`]] : [];
+}
+
+const DERIVE = {
+  context: (ix, inv, id) => [['containers', id]],
+  containers: fromContainers,
+  dataflow: fromDataflow,
+  deployment: fromDeployment,
+  contextmap: fromContextMap,
+  eventmodel: fromEventModel,
+};
+
+/* What each box leads to by default: [diagram, boxId?] pairs, most useful first. */
+const derive = (ix, inv, kind, id) => DERIVE[kind](ix, inv, id);
 
 /* The @link annotations of one element, as written. */
 const linksOf = (annotations) => [].concat((annotations && annotations.link) || []).filter((l) => l && typeof l === 'object');
@@ -1208,6 +1234,7 @@ const targetOf = (link) => ({ diagram: link.to || null, node: link.node || null,
 
 function linkMap(model) {
   const inv = inventory(model);
+  const ix = linkIndex(model);
   const map = {};
   const describe = (diagram, node) => {
     const name = NAMES[diagram];
@@ -1224,7 +1251,7 @@ function linkMap(model) {
   for (const kind of Object.keys(inv)) {
     map[kind] = {};
     for (const id of inv[kind].labels.keys()) {
-      const targets = derive(model, inv, kind, id).map(([diagram, node]) => resolve(kind, id, { diagram, node })).filter(Boolean);
+      const targets = derive(ix, inv, kind, id).map(([diagram, node]) => resolve(kind, id, { diagram, node })).filter(Boolean);
       if (targets.length) map[kind][id] = targets;
     }
   }
