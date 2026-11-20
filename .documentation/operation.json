@@ -1,8 +1,23 @@
 {
   "schemaVersion": 1,
-  "plan_hash": "cc3eec40bb498ea27b72377b1cc1b22532980199084e0db06c35280da137c6de",
-  "source_fingerprint": "0169a1509217a995b3a76b8ac663d33a520367f96648c0888fadb02e4ef1e400",
-  "checkpoint_hash": "460a3abf467dcaeba1d372457f10372f0068b9ecb420b2784c3d6dd1427f0e01",
+  "plan_hash": "3d397676d47202c26cd12f0a5ba5dddaad140055171019cca210d1862ffaa7d6",
+  "source_fingerprint": "149cde983fd8188c640b72c1918919f84acbf0d0cdd41792812097f2ac901a1f",
+  "checkpoint_hash": "aa792c026a829ab65ddf9288fd5586cad68184f25f21d7253b916c6738a8d4a2",
   "status": "verified",
-  "operations": []
+  "operations": [
+    {
+      "id": "OP-001",
+      "type": "edit",
+      "path": "EVENTLINE-AXI.md",
+      "status": "completed",
+      "output_hash": "b11c4849d27649bf88bb05c85ade6db62d9c0cc62f6bf5c12e3f3eabf6ddfc7c"
+    },
+    {
+      "id": "OP-002",
+      "type": "edit",
+      "path": "docs/GLOSSARY.md",
+      "status": "completed",
+      "output_hash": "1a7e9c8b5537f47d773281e14ae250028556779b9364f6df0a3cc016979aa661"
+    }
+  ]
 }
