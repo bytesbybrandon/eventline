@@ -41,6 +41,7 @@ It may only grow when `lib/` gains a feature, and the PR says by how much.
 | P1 | `/usr/bin/time -f %e node bin/eventline-axi validate examples/twitter-pure.dsl` | Take the slowest of three runs. |
 | P2 | `/usr/bin/time -f %e node bin/eventline-axi diagrams examples/twitter-pure.dsl -o <dir>` | Same for the two build scripts. |
 | P3 | The duration of the CI job | No local command; read it from the workflow run. |
+| CC, branch coverage and CRAP per function | `node scripts/measure.js` | Lists every function over its tier's limits, worst CRAP first; `--all` lists every function, `--json` prints JSON, and `--max-cc N` exits 1 above N. It runs ESLint 9 through `npx` and the tests with V8 coverage. |
 
 Timings are not asserted in `npm test`, because shared CI runners make them flaky.
 Run the bench before and after a change to `lib/parser.js`, `lib/rules/` or `lib/diagram/`, and put both tables in the PR.
@@ -64,7 +65,7 @@ CRAP(m) = comp(m)² × (1 − cov(m))³ + comp(m), where comp is cyclomatic comp
 | P2 (`scripts/`, `lib/folder.js`) | 15 | 70% | 25 |
 
 The hard ceiling is CRAP 30 everywhere, so any function with CC above 30 must be split.
-Coverage comes from `node --test --experimental-test-coverage "test/**/*.test.js"`.
+Measure CC, coverage and CRAP per function with `node scripts/measure.js`.
 Every rule already needs a test (see [CONTRIBUTING.md](./CONTRIBUTING.md)); a new branch in a rule needs a case in that test.
 
 ## Annotation format
@@ -87,7 +88,7 @@ A function you add or change gets one too; trivial accessors, generated code and
 ```
 
 Keep targets apart from measurements: write "measured" only for a value a tool produced, and give the target beside it.
-CC comes from ESLint's `complexity` rule and branch coverage from c8 over `npm test`; a value no tool produced is a target.
+CC comes from ESLint's `complexity` rule and branch coverage from V8 block coverage over `npm test`, counted as c8 counts it; `node scripts/measure.js` produces both, and a value no tool produced is a target.
 `scripts/build-site.js` strips these blocks from `site/eventline.js`, so they never grow the bundle.
 
 ## Red flags in review
@@ -110,7 +111,7 @@ CC comes from ESLint's `complexity` rule and branch coverage from c8 over `npm t
 | CLI `diagrams` | P2 | 2026-11-20 | 50 ms | Pass |
 | CI build job (`npm test`, docs site build) | P3 | 2026-11-20 | 29 s | Pass |
 | `site/eventline.js` | Bundle | 2026-11-20 | 161.7 kB raw, 45.3 kB gzip | Pass |
-| Per-function CC and CRAP | All | Not yet measured | Branch coverage is 94.5% overall; CC per function has not been measured | Unmeasured |
+| Per-function CC and CRAP | All | 2026-11-20 | `node scripts/measure.js`: 647 functions in `lib/` and `scripts/`, 143 over their tier's limits, 5 above CC 30 | Fail: the refactor plan is PR #45 |
 
 Ranges are three runs of `node scripts/bench.js` on Node 22 under WSL2; the CI number is the job duration on a GitHub runner.
 The `check` gap is known: a CPU profile at 25x puts most of the time in `eventsOf` and `emitsOf` in `lib/diagram/system.js`, which `check` reaches through the link rules and which filter every command once per boundary.
