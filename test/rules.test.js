@@ -82,6 +82,8 @@ test('slices: one command each, and one query each, but reading other slices vie
   assert.ok(ids(two, 'eventmodeling').includes('slice-multiple-commands'));
   const variants = 'user -> a(id) @slice("Do")\n  --[default]--> [a-done { id }]\nuser -> a(id) @slice("Do")\n  --[x]--> [a-failed { id }]\n';
   assert.ok(!ids(variants, 'eventmodeling').includes('slice-multiple-commands'), 'a command written twice is still one command');
+  assert.ok(ids(two.replace(/@slice\("Do"\)/g, '@slice(name="Do")'), 'eventmodeling').includes('slice-multiple-commands'), 'name= names the slice too');
+  assert.ok(!ids(two.replace(/@slice\("Do"\)/g, '@slice(owner="x")'), 'eventmodeling').includes('slice-multiple-commands'), 'a slice with no name groups nothing');
   const views = 'view A(id) = [e*(id)] => { id } @slice("Read")\nview B(id) = [e*(id)] => { id } @slice("Read")\nuser -> c(id)\n  --[default]--> [e { id }]\n';
   const sev = (p) => found(views, p).find((x) => x.rule === 'slice-multiple-views').severity;
   assert.equal(sev('eventmodeling'), 'info');
@@ -161,6 +163,7 @@ test('@accept needs a real rule and a reason, and one that accepts nothing is re
   assert.deepEqual(r('@accept(rule="many-events")'), ['accept-invalid']);
   assert.deepEqual(r('@accept(rule="nonsense", reason="x")'), ['accept-invalid']);
   assert.deepEqual(r('@accept(reason="x")'), ['accept-invalid']);
+  assert.match(found(withAnn('@accept'), 'eventmodeling').find((x) => x.rule === 'accept-invalid').message, /needs rule="\.\.\." naming a rule in the catalogue$/);
   assert.deepEqual(r('@accept(rule="view-many-sources", reason="x")'), ['accept-unused']);
 });
 
@@ -173,6 +176,7 @@ test('@hotspot is an open question: reported while open, quiet when resolved, an
   assert.deepEqual(r('@hotspot("Q", kind=request)'), ['hotspot-invalid']);
   assert.deepEqual(r('@hotspot("Q", kind=request, concerns="scenario")'), ['hotspot-open']);
   assert.deepEqual(r('@hotspot("Q")', 'core'), [], 'core checks only that it is well formed');
+  assert.ok(r('@hotspot').includes('hotspot-invalid'), 'a bare @hotspot has no question');
 });
 
 test('workshop runs the guidelines and reports every one of them as info', () => {

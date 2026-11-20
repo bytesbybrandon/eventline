@@ -147,3 +147,23 @@ test('a block already tagged eventline keeps its closing fence, and the blocks a
   const body = '```eventline\nuser -> go(id)\n  --[default]--> [go-done { id }]\n```\n\n### Next\n\n```eventline\nevent item-added { id }\n```\n';
   assert.equal(tagEventline(body), body);
 });
+
+test('sync writes a page per doc, the splash home, the 404 page, the fonts and the derived diagrams', async (t) => {
+  const { sync, PAGES } = await load();
+  t.mock.method(console, 'log', () => {});
+  sync();
+  const site = path.join(root, 'docs-site');
+  const out = path.join(site, 'src', 'content', 'docs');
+  const pages = fs.readdirSync(out).sort();
+  const slugs = Object.values(PAGES).filter((s) => s !== 'index');
+  assert.deepEqual(pages, ['404.md', 'index.mdx', ...slugs.map((s) => `${s}.md`)].sort());
+  const home = fs.readFileSync(path.join(out, 'index.mdx'), 'utf8');
+  assert.match(home, /^---\ntemplate: splash\ntitle: /);
+  assert.match(home, /<Hub>\n\n```eventline\nuser -> postTweet/);
+  assert.match(fs.readFileSync(path.join(out, 'examples.md'), 'utf8'), /## Derived diagrams[\s\S]*billing-contextmap-dark\.svg/);
+  assert.doesNotMatch(fs.readFileSync(path.join(out, 'language.md'), 'utf8'), /## Derived diagrams/);
+  for (const kind of ['eventmodel', 'contextmap']) for (const theme of ['light', 'dark']) {
+    assert.match(fs.readFileSync(path.join(site, 'public', 'diagrams', `billing-${kind}-${theme}.svg`), 'utf8'), /^<svg/);
+  }
+  assert.deepEqual(fs.readdirSync(path.join(site, 'public', 'fonts')).sort(), fs.readdirSync(path.join(root, 'site', 'assets', 'fonts')).sort());
+});
