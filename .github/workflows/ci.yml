@@ -51,6 +51,26 @@ jobs:
           path: disclosure
           if-no-files-found: error
 
+  accessibility:
+    name: WCAG 2.2 AA check of the published pages
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: pages-output
+          path: disclosure
+      - run: node scripts/a11y.js disclosure/pages
+
   disclosure-guard:
     needs: build
     uses: ByteQuilt/disclosure-check/.github/workflows/disclosure-guard.yml@main

@@ -119,9 +119,14 @@
       else select(base === n.dataset.id ? null : n.dataset.id);
     });
     if (opts.focusable) {
+      svg.setAttribute('role', 'group'); // an image cannot hold buttons
       for (const [nid, el] of nodes) {
         el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button');
-        el.setAttribute('aria-label', `${el.dataset.kind} ${el.dataset.label}. Press Enter to find its lines in the editor.`);
+        // The name repeats the visible text, so voice control can target what is on screen.
+        const lines = [...el.querySelectorAll('text')];
+        lines.slice(1).forEach((t) => t.before(' ')); // without it, assistive tech reads "sku)state change"
+        const shown = lines.map((t) => t.textContent).join(' ');
+        el.setAttribute('aria-label', `${el.dataset.kind} ${shown}. Press Enter to find its lines in the editor.`);
         el.addEventListener('focus', () => show(nid));
         el.addEventListener('blur', () => paint(base));
         el.addEventListener('keydown', (ev) => {
