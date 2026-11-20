@@ -111,7 +111,7 @@ CC comes from ESLint's `complexity` rule and branch coverage from V8 block cover
 | CLI `diagrams` | P2 | 2026-11-20 | 50 ms | Pass |
 | CI build job (`npm test`, docs site build) | P3 | 2026-11-20 | 29 s | Pass |
 | `site/eventline.js` | Bundle | 2026-11-20 | 161.7 kB raw, 45.3 kB gzip | Pass |
-| Per-function CC and CRAP | All | 2026-11-20 | `node scripts/measure.js`: 647 functions in `lib/` and `scripts/`, 143 over their tier's limits, 5 above CC 30 | Fail: the refactor plan is PR #45 |
+| Per-function CC and CRAP | All | 2026-11-20 | `node scripts/measure.js`: 647 functions in `lib/` and `scripts/`, 124 over their tier's limits, 5 above CC 30 | Fail: the refactor plan is PR #45 |
 
 Ranges are three runs of `node scripts/bench.js` on Node 22 under WSL2; the CI number is the job duration on a GitHub runner.
 The `check` gap is known: a CPU profile at 25x puts most of the time in `eventsOf` and `emitsOf` in `lib/diagram/system.js`, which `check` reaches through the link rules and which filter every command once per boundary.
