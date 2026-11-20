@@ -13,6 +13,17 @@ const SECTIONS = [
   ['slicerm', 'Stricter rules', 'These are for tools where a slice is one unit of delivery, such as SliceRM.\nTurn them on with `--profile slicerm`, which includes the Event Modeling rules.\nThe profile also raises a few Event Modeling rules from a hint to a warning.'],
 ];
 
+/**
+ * docs/RULES.md from the rule catalogue.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(R·P) where R = rules, P = profiles (filters the catalogue per profile) (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 6 measured; target <= 15
+ * - Branch Coverage: 100% measured; target >= 70%
+ * - CRAP Score: 6.0 measured; threshold <= 25
+ * - Caching: none
+ */
 function render() {
   const out = [];
   out.push('# Validation rules', '');

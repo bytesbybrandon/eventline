@@ -9,6 +9,17 @@
   const REQUIRED_IDS = ['pg', 'pg-text', 'pg-mirror', 'pg-board', 'pg-status', 'pg-trace', 'pg-issues', 'pg-hl', 'pg-marks', 'pg-links', 'pg-svg', 'pg-summary', 'pg-more', 'pg-fit', 'pg-zv', 'pg-zin', 'pg-zout', 'pg-share', 'pg-dsl'];
   const PROFILES = ['core', 'workshop', 'eventmodeling', 'slicerm'];
 
+  /**
+   * Copies text to the clipboard, selecting the field on failure.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(t) where t = text length (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 3 measured; target <= 12
+   * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 80%
+   * - CRAP Score: target <= 15 (not measured: needs branch coverage)
+   * - Caching: none
+   */
   async function copyText(text, field) {
     try { await navigator.clipboard.writeText(text); return true; }
     catch { if (field) field.select(); return false; }
@@ -27,6 +38,17 @@
   /* ------------------------------------------------- inline boards and tracing -- */
   /* Boards come from eventline as SVG. Inline copies get unique ids so two boards can share a page. */
   let boardSeq = 0;
+  /**
+   * Parses board SVG text into a DOM node with unique ids.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(z) where z = SVG length (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 2 measured; target <= 8
+   * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 90%
+   * - CRAP Score: target <= 10 (not measured: needs branch coverage)
+   * - Caching: none
+   */
   function inlineSvg(text) {
     const id = 'b' + (++boardSeq);
     const doc = new DOMParser().parseFromString(text.replace(/id="arr"/g, `id="${id}-arr"`).replace(/url\(#arr\)/g, `url(#${id}-arr)`).replace(/id="t"/, `id="${id}-t"`).replace(/id="d"/, `id="${id}-d"`).replace('aria-labelledby="t d"', `aria-labelledby="${id}-t ${id}-d"`), 'image/svg+xml');
@@ -34,6 +56,17 @@
     return document.importNode(doc.documentElement, true);
   }
   /* wires tracing onto a board svg; readout is the element that says what is lit */
+  /**
+   * Wires lineage tracing onto a board SVG.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(N + E) to wire; each hover is O(N² + E) where N = boxes, E = arrows (the walk uses Array.shift as a queue); budget O(N + E) per hover (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 7 measured; target <= 8
+   * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 90%
+   * - CRAP Score: target <= 10 (not measured: needs branch coverage)
+   * - Caching: none
+   */
   function traceBoard(svg, readout, idle, opts = {}) {
     const nodes = new Map($$('.nd', svg).map((n) => [n.dataset.id, n]));
     const edges = $$('.ed', svg).map((e) => ({ el: e, from: e.dataset.from, to: e.dataset.to }));
@@ -113,6 +146,17 @@
   }
 
   /* A board to read, not edit. Resolves false when the model cannot be drawn. */
+  /**
+   * Draws a static, traceable diagram into a host element.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P1 (< 300 ms)
+   * - Complexity: O(parse + render + N + E) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 5 measured; target <= 12
+   * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 80%
+   * - CRAP Score: target <= 15 (not measured: needs branch coverage)
+   * - Caching: none
+   */
   async function drawStatic(host, text, kind, theme, base = '') {
     const lib = await loadEventline(base);
     if (!lib) return false;
@@ -133,6 +177,17 @@
     } catch { return false; }
   }
 
+  /**
+   * Mounts the playground: editor, board, checks and diagram tabs.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(parse + check + render) per edit, the P0 edit loop; mounting itself is O(1) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 16 measured; target <= 8, over budget
+   * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 90%
+   * - CRAP Score: target <= 10 (not measured: needs branch coverage)
+   * - Caching: none
+   */
   function mount(root, options = {}) {
     const { base = '', address = 'none', load = 'now', onChange, onView, dslName = () => 'model.dsl' } = options;
     let theme = options.theme || 'dark';

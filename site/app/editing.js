@@ -19,6 +19,17 @@
     return { from: from, to: to, insert: insert, selStart: selStart, selEnd: selEnd === undefined ? selStart : selEnd };
   }
 
+  /**
+   * The edit for Enter: keep indent, open a block.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(L) where L = length of the caret line (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 5 measured; target <= 8
+   * - Branch Coverage: 100% measured; target >= 90%
+   * - CRAP Score: 5.0 measured; threshold <= 10
+   * - Caching: none
+   */
   function onEnter(text, s, e) {
     var ls = lineStart(text, s);
     var before = text.slice(ls, s);
@@ -32,6 +43,17 @@
     return edit(s, e, inner, s + inner.length);
   }
 
+  /**
+   * The edit for Tab and Shift+Tab over the selected lines.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(z) where z = characters in the selected lines (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 6 measured; target <= 8
+   * - Branch Coverage: 100% measured; target >= 90%
+   * - CRAP Score: 6.0 measured; threshold <= 10
+   * - Caching: none
+   */
   function onTab(text, s, e, shift) {
     if (s === e && !shift) return edit(s, e, INDENT, s + INDENT.length);
     var from = lineStart(text, s);
@@ -49,6 +71,17 @@
     return edit(from, to, insert, selStart, s === e ? selStart : Math.max(selStart, e + total));
   }
 
+  /**
+   * The edit for a typed bracket or quote.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(L + z) where L = length of the caret line, z = selection length (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 16 measured; target <= 8, over budget
+   * - Branch Coverage: 85% measured; target >= 90%
+   * - CRAP Score: 16.9 measured; threshold <= 10, over budget
+   * - Caching: none
+   */
   function onType(text, s, e, ch) {
     var ls = lineStart(text, s);
     var prefix = text.slice(ls, s);
@@ -67,6 +100,17 @@
     return edit(s, e, ch + CLOSE[ch], s + 1);
   }
 
+  /**
+   * The edit for Backspace between a bracket pair.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(L) where L = length of the caret line (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 6 measured; target <= 8
+   * - Branch Coverage: 80% measured; target >= 90%
+   * - CRAP Score: 6.3 measured; threshold <= 10
+   * - Caching: none
+   */
   function onBackspace(text, s, e) {
     if (s !== e || s === 0) return null;
     var ch = text[s - 1];
@@ -74,6 +118,17 @@
     return edit(s - 1, s + 1, '', s - 1);
   }
 
+  /**
+   * The bracket matching the one at the caret.
+   *
+   * # Performance & Risk Budget
+   * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
+   * - Complexity: O(n·L) where n = characters scanned to the partner, L = line length (isCode slices the line per bracket); budget O(n) (derived by reading the code)
+   * - Cyclomatic Complexity (CC): 11 measured; target <= 8, over budget
+   * - Branch Coverage: 96% measured; target >= 90%
+   * - CRAP Score: 11.0 measured; threshold <= 10, over budget
+   * - Caching: none
+   */
   function matchBracket(text, caret) {
     var at = [caret - 1, caret].filter(function (p) {
       return p >= 0 && p < text.length && (CLOSE[text[p]] || OPEN[text[p]]) && text[p] !== '"' && isCode(text, p);

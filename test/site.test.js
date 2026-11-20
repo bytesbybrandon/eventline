@@ -44,6 +44,12 @@ test('the browser bundle the playground loads draws the same board as the librar
   for (const name of ['rate-limiter', 'payment-webhook', 'billing', 'twitter-pure']) assert.equal(read(`site/examples/${name}.dsl`), read(`examples/${name}.dsl`), `site/examples/${name}.dsl is stale: run node scripts/build-site.js`);
 });
 
+test('the browser bundle leaves out the performance annotations that lib/ carries', () => {
+  assert.match(read('lib/diagram/system.js'), /# Performance & Risk Budget/);
+  assert.doesNotMatch(read('site/eventline.js'), /# Performance & Risk Budget/, 'run: node scripts/build-site.js');
+  assert.match(read('site/eventline.js'), /System diagrams inferred from a model/, 'ordinary comments stay');
+});
+
 test('every board node and edge carries the ids the page uses to trace lineage', () => {
   const svg = render(parse(dsl), 'eventmodel', 'svg', 'dark');
   const nodes = [...svg.matchAll(/<g class="nd" data-id="([^"]+)"/g)].map((m) => m[1]);

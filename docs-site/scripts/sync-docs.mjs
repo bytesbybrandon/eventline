@@ -40,6 +40,17 @@ export const PAGES = {
 const route = (slug) => (slug === 'index' ? `${BASE}/` : `${BASE}/${slug}/`);
 
 /* A link inside file `from` (repo-relative). Returns the link to write, or null to leave it alone. */
+/**
+ * Rewrites one Markdown link for the docs site.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(z) where z = path length, plus one file system stat for a link outside the site (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 8 measured; target <= 15
+ * - Branch Coverage: 91% measured; target >= 70%
+ * - CRAP Score: 8.0 measured; threshold <= 25
+ * - Caching: none
+ */
 export function rewriteLink(target, from) {
   if (/^([a-z][a-z0-9+.-]*:|\/\/|#|mailto:)/i.test(target)) return null;
   const [file, hash = ''] = target.split('#');
@@ -53,6 +64,17 @@ export function rewriteLink(target, from) {
 }
 
 /* Fenced blocks with no language, or "text", that hold eventline source get the eventline language. Others stay as written. */
+/**
+ * Tags fenced blocks that hold eventline source.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(n·S) where n = characters, S = shape patterns (8) (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 1 measured; target <= 15
+ * - Branch Coverage: 100% measured; target >= 70%
+ * - CRAP Score: 1.0 measured; threshold <= 25
+ * - Caching: none
+ */
 export function tagEventline(body) {
   // match every block, whatever its language, so a block's closing fence is never taken for the next one's opening
   return body.replace(/^(```)([\w-]*)\n([\s\S]*?)^```$/gm, (m, fence, lang, code) => ((!lang || lang === 'text') && looksLikeEventline(code) ? `${fence}eventline\n${code}${fence}` : m));
@@ -94,6 +116,17 @@ export const DESCRIPTIONS = {
   contributing: 'How to contribute to eventline: the workflow, the standards for examples and docs, and where everything lives in the repo.',
 };
 
+/**
+ * A page title from its first heading.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(z) where z = first line length (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 2 measured; target <= 15
+ * - Branch Coverage: 100% measured; target >= 70%
+ * - CRAP Score: 2.0 measured; threshold <= 25
+ * - Caching: none
+ */
 export const titleOf = (source, from) => {
   const h1 = /^# +(.+)\r?\n/.exec(source);
   if (!h1) throw new Error(`${from} must start with a "# Title" line`);
@@ -101,6 +134,17 @@ export const titleOf = (source, from) => {
 };
 
 /* titles maps a repo path to its page title, so a link written as [GLOSSARY.md](./GLOSSARY.md) reads as the page's name. */
+/**
+ * One repository Markdown file as a docs-site page.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(n + k) where n = characters, k = links (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 4 measured; target <= 15
+ * - Branch Coverage: 75% measured; target >= 70%
+ * - CRAP Score: 4.3 measured; threshold <= 25
+ * - Caching: none
+ */
 export function convert(source, from, titles = {}) {
   const text = source.replace(/\r\n?/g, '\n');
   const title = titleOf(text, from);
@@ -167,6 +211,17 @@ ${pair('eventmodel', 'The event model board for the billing example')}
 ${pair('contextmap', 'The context map for the billing example')}
 `;
 
+/**
+ * Writes every docs-site page, the fonts and the derived diagrams.
+ *
+ * # Performance & Risk Budget
+ * - Tier: P2 (< 2 s)
+ * - Complexity: O(D·n + render) where D = pages, n = characters per page (derived by reading the code)
+ * - Cyclomatic Complexity (CC): 5 measured; target <= 15
+ * - Branch Coverage: 0% measured; target >= 70%
+ * - CRAP Score: 30.0 measured; threshold <= 25, over budget
+ * - Caching: none
+ */
 export function sync() {
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
