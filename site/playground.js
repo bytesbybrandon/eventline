@@ -65,6 +65,7 @@
    * - Cyclomatic Complexity (CC): 7 measured; target <= 8
    * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 90%
    * - CRAP Score: target <= 10 (not measured: needs branch coverage)
+   * - Largest nested function: CC 13 measured (branch coverage not reported), `function show(id)`
    * - Caching: none
    */
   function traceBoard(svg, readout, idle, opts = {}) {
@@ -186,6 +187,7 @@
    * - Cyclomatic Complexity (CC): 16 measured; target <= 8, over budget
    * - Branch Coverage: not measured (tests run this file through node:vm, which c8 cannot see); target >= 90%
    * - CRAP Score: target <= 10 (not measured: needs branch coverage)
+   * - Largest nested function: CC 22 measured (branch coverage not reported), `function drawBoard()`
    * - Caching: none
    */
   function mount(root, options = {}) {

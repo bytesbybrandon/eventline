@@ -12,6 +12,7 @@ import { isDrawable, playgroundHref } from './eventline-source.mjs';
  * - Cyclomatic Complexity (CC): 1 measured; target <= 15
  * - Branch Coverage: 0% measured (no test loads this file); target >= 70%
  * - CRAP Score: 2.0 measured; threshold <= 25
+ * - Largest nested function: CC 3 measured (branch cov 0%, CRAP 12.0), `postprocessRenderedBlock: ({ codeBlock, renderData }) =>`
  * - Caching: none
  */
 export function openInPlayground() {
