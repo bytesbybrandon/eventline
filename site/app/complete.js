@@ -30,7 +30,7 @@
    * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
    * - Complexity: O(e + c + v + b + a) where e = events, c = commands, v = read models, b = boundaries, a = actors (derived by reading the code)
    * - Cyclomatic Complexity (CC): 3 measured; target <= 8
-   * - Branch Coverage: 83% measured; target >= 90%
+   * - Branch Coverage: 100% measured; target >= 90%
    * - CRAP Score: 3.0 measured; threshold <= 10
    * - Caching: none
    */
@@ -59,7 +59,7 @@
    * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
    * - Complexity: O(L + N log N) where L = length of the caret line, N = names (derived by reading the code)
    * - Cyclomatic Complexity (CC): 9 measured; target <= 8, over budget
-   * - Branch Coverage: 93% measured; target >= 90%
+   * - Branch Coverage: 92% measured; target >= 90%
    * - CRAP Score: 9.0 measured; threshold <= 10
    * - Caching: none
    */

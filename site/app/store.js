@@ -19,6 +19,7 @@
    * - Cyclomatic Complexity (CC): 1 measured; target <= 12
    * - Branch Coverage: 100% measured; target >= 80%
    * - CRAP Score: 1.0 measured; threshold <= 15
+   * - Largest nested function: CC 2 measured (branch cov 100%, CRAP 2.0), `var hex = function (i, n)`
    * - Caching: none
    */
   function uuidv7(nowMs, randomBytes) {
@@ -58,6 +59,7 @@
    * - Cyclomatic Complexity (CC): 1 measured; target <= 12
    * - Branch Coverage: 100% measured; target >= 80%
    * - CRAP Score: 1.0 measured; threshold <= 15
+   * - Largest nested function: CC 10 measured (branch cov 92%, CRAP 10.1), `function ids()`
    * - Caching: none; every call rereads and reparses localStorage so other tabs are seen
    */
   function createStore(storage, deps) {

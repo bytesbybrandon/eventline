@@ -125,7 +125,7 @@
    * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
    * - Complexity: O(n·L) where n = characters scanned to the partner, L = line length (isCode slices the line per bracket); budget O(n) (derived by reading the code)
    * - Cyclomatic Complexity (CC): 11 measured; target <= 8, over budget
-   * - Branch Coverage: 96% measured; target >= 90%
+   * - Branch Coverage: 94% measured; target >= 90%
    * - CRAP Score: 11.0 measured; threshold <= 10, over budget
    * - Caching: none
    */
