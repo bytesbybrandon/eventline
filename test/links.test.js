@@ -64,6 +64,8 @@ test('@link replaces the derived links of its element, in every diagram where th
   const self = linkMap(parse(MODEL.replace('to="containers", node="api"', 'to="containers", node="view:Cart"')));
   assert.ok(!self.containers['view:Cart'].some((t) => t.node === 'view:Cart'), 'a box never links to itself');
   assert.equal(self.eventmodel['view:Cart'][0].node, 'view:Cart', 'but another diagram can link to it');
+  const nowhere = linkMap(parse(MODEL.replace('@link(url="https://wiki.example.com/add-item")', '@link(to="nonsense")')));
+  assert.equal(nowhere.eventmodel['cmd:addItem'], undefined, 'an @link that resolves nowhere still replaces the derived links');
   const svg = render(parse(MODEL), 'eventmodel', 'svg', 'dark', { links: true });
   assert.match(svg, /href="https:\/\/wiki\.example\.com\/add-item"/);
 });
