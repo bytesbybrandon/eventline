@@ -41,6 +41,7 @@
    * - Cyclomatic Complexity (CC): 1 measured; target <= 12
    * - Branch Coverage: 100% measured; target >= 80%
    * - CRAP Score: 1.0 measured; threshold <= 15
+   * - Largest nested function: CC 2 measured (branch cov 100%, CRAP 2.0), `return models.map(function (m)`
    * - Caching: none
    */
   function exportFiles(models) {
@@ -62,8 +63,8 @@
    * - Tier: P1 (< 300 ms)
    * - Complexity: O(Z) where Z = total bytes (CRC32 over each file) (derived by reading the code)
    * - Cyclomatic Complexity (CC): 2 measured; target <= 12
-   * - Branch Coverage: 83% measured; target >= 80%
-   * - CRAP Score: 2.0 measured; threshold <= 15
+   * - Branch Coverage: 50% measured; target >= 80%
+   * - CRAP Score: 2.5 measured; threshold <= 15
    * - Caching: CRC table built once at load
    */
   function zip(files, date) {

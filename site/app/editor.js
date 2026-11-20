@@ -15,6 +15,7 @@
    * - Cyclomatic Complexity (CC): 1 measured; target <= 8
    * - Branch Coverage: 0% measured (no test loads this file); target >= 90%
    * - CRAP Score: 2.0 measured; threshold <= 10
+   * - Largest nested function: CC 22 measured (branch cov 0%, CRAP 506.0), `function onKey(ev)`
    * - Caching: none
    */
   function attach(textarea, getModel) {

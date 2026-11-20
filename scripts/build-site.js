@@ -14,7 +14,7 @@ const { render } = require('../lib/diagram');
 const root = path.join(__dirname, '..');
 
 // Performance annotations are for maintainers; keep them out of the browser bundle so it does not grow.
-const PERF_BLOCK = /^[ \t]*\/\*\*(?:(?!\*\/)[\s\S])*?# Performance & Risk Budget(?:(?!\*\/)[\s\S])*\*\/[ \t]*\n/gm;
+const PERF_BLOCK = /^[ \t]*\/\*\*(?:(?!\*\/)[\s\S])*?# Performance & Risk Budget(?:(?!\*\/)[\s\S])*\*\/[ \t]*\r?\n/gm;
 
 /* A dependency-free CommonJS bundler. lib/ is pure (no I/O), so a module table and a require shim are enough. */
 function bundle(entry) {

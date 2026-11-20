@@ -73,6 +73,7 @@ export function rewriteLink(target, from) {
  * - Cyclomatic Complexity (CC): 1 measured; target <= 15
  * - Branch Coverage: 100% measured; target >= 70%
  * - CRAP Score: 1.0 measured; threshold <= 25
+ * - Largest nested function: CC 4 measured (branch cov 100%, CRAP 4.0), `return body.replace(/^(```)([\w-]*)\n([\s\S]*?)^```$/gm, (m,`
  * - Caching: none
  */
 export function tagEventline(body) {
@@ -141,8 +142,8 @@ export const titleOf = (source, from) => {
  * - Tier: P2 (< 2 s)
  * - Complexity: O(n + k) where n = characters, k = links (derived by reading the code)
  * - Cyclomatic Complexity (CC): 4 measured; target <= 15
- * - Branch Coverage: 75% measured; target >= 70%
- * - CRAP Score: 4.3 measured; threshold <= 25
+ * - Branch Coverage: 67% measured; target >= 70%
+ * - CRAP Score: 4.6 measured; threshold <= 25
  * - Caching: none
  */
 export function convert(source, from, titles = {}) {

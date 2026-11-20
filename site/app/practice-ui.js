@@ -400,6 +400,7 @@
    * - Cyclomatic Complexity (CC): 2 measured; target <= 12
    * - Branch Coverage: 0% measured (no test loads this file); target >= 80%
    * - CRAP Score: 6.0 measured; threshold <= 15
+   * - Largest nested function: CC 5 measured (branch cov 0%, CRAP 30.0), `window.addEventListener('storage', (ev) =>`
    * - Caching: none
    */
   function init(a) {
