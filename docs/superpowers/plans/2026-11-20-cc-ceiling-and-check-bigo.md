@@ -353,15 +353,15 @@ Token cost is roughly 150k to 300k per PR for PRs 1 to 6 and 400k to 700k for PR
 **Owner touch-points:** approve this plan (1), answer the open questions (1, can be the same reply), merge each PR (7).
 Work waits on Brandon 8 or 9 times; batching PR 5 and PR 6 reviews cuts that to 7 or 8.
 
-## Open questions for Brandon
+## Decisions (Brandon, 2026-11-20)
 
-1. PR 2 changes `check()` so it no longer surfaces diagram builder crashes when a model has no `@link`.
-   Accept?
-2. With an `@link` to the event model board, `check` and `render` each build the board, about 275 ms at 135 kB.
-   Accept that for now, or add a per-model board cache (a `WeakMap` keyed by the model) as a follow-up PR?
-3. The per-function coverage attribution from PR #42 is not committed.
-   Commit it as `scripts/measure.js` (P2, `npx` only, no dependency) so every PR here measures the same way, or keep it out of the repo?
-4. Should a test fail when a function in `lib/` exceeds CC 30, so the ceiling cannot come back?
+1. Accepted: after PR 2, `check()` no longer surfaces diagram builder crashes when a model has no `@link`.
+2. Add a per-model board cache (a `WeakMap` keyed by the model) as PR 8, after PRs 1 to 7.
+3. Commit the coverage attribution tool as `scripts/measure.js` (P2, no new dependency) as PR 0, before PR 1, so every later PR measures before and after with it.
+4. Add a check that fails when a `lib/` function exceeds CC 30, as PR 9, landed last once every function is under.
+
+Final order: PR 0 (`scripts/measure.js`), PRs 1 to 7 as above, PR 8 (board cache), PR 9 (CC 30 guard).
+A PR whose predecessor is not merged yet is stacked on its branch and says so in its body.
 
 ## Out of scope
 
