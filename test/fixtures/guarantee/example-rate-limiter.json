@@ -1,0 +1,2567 @@
+{
+ "model": {
+  "system": {
+   "name": "RateLimiterAPI",
+   "externals": [
+    {
+     "name": "stripe",
+     "role": "payment-gateway"
+    },
+    {
+     "name": "sentry",
+     "role": "monitoring"
+    }
+   ],
+   "slo": [
+    "99.99% uptime",
+    "p99 < 2ms"
+   ],
+   "regions": [
+    "us-primary",
+    "eu-secondary"
+   ],
+   "dataClassification": [
+    "pii"
+   ],
+   "constraints": [],
+   "attrs": {},
+   "line": 2
+  },
+  "contexts": [],
+  "actors": [
+   {
+    "name": "User",
+    "attributes": {
+     "auth": "session",
+     "tier": "free|pro"
+    },
+    "line": 9
+   },
+   {
+    "name": "Admin",
+    "attributes": {
+     "auth": "oauth",
+     "mfa": "required"
+    },
+    "line": 10
+   },
+   {
+    "name": "Visitor",
+    "attributes": {
+     "auth": "none"
+    },
+    "line": 11
+   }
+  ],
+  "boundaries": [
+   {
+    "name": "UserRateLimit",
+    "params": [
+     "userId",
+     "currentMinute"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "userId"
+     },
+     "time": {
+      "window": "fixed:1m",
+      "source": "clock.wall",
+      "clockSkewBudget": "<250ms"
+     },
+     "cost": {
+      "regions": "3",
+      "shardFanout": "100000",
+      "writeRpsPeak": "50000"
+     },
+     "ops": {
+      "owner": "traffic-platform",
+      "slo": "99.99%",
+      "alert": "rate-limit-shard-unavailable"
+     }
+    },
+    "line": 14
+   }
+  ],
+  "views": [
+   {
+    "name": "TierLimit",
+    "params": [
+     "tierId"
+    ],
+    "paramDefs": [
+     {
+      "name": "tierId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "tier-created",
+      "wildcard": false,
+      "args": "tierId"
+     },
+     {
+      "name": "tier-limit-increased",
+      "wildcard": true,
+      "args": "tierId"
+     },
+     {
+      "name": "tier-limit-decreased",
+      "wildcard": true,
+      "args": "tierId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "tierId"
+     },
+     {
+      "name": "limit"
+     }
+    ],
+    "annotations": {
+     "cache": {
+      "key": "tier:{tierId}:limit",
+      "ttl": "24h"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 31,
+    "endLine": 38
+   },
+   {
+    "name": "UserQuota",
+    "params": [
+     "userId"
+    ],
+    "paramDefs": [
+     {
+      "name": "userId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "user-auth-succeeded",
+      "wildcard": false,
+      "args": "userId"
+     },
+     {
+      "name": "request-logged",
+      "wildcard": true,
+      "args": "userId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "tierId"
+     },
+     {
+      "name": "remainingRequests"
+     },
+     {
+      "name": "resetsIn"
+     }
+    ],
+    "annotations": {
+     "cache": {
+      "key": "quota:{userId}",
+      "ttl": "60s"
+     },
+     "cost": {
+      "memory": "~6MB/region",
+      "readRpsPeak": "50000"
+     },
+     "ops": {
+      "owner": "edge-runtime",
+      "dashboard": "quota-window-overview"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 65,
+    "endLine": 71
+   }
+  ],
+  "commands": [
+   {
+    "actor": "user",
+    "name": "authenticate",
+    "params": [
+     "email",
+     "password",
+     "ip"
+    ],
+    "paramDefs": [
+     {
+      "name": "email",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "password",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "ip",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": null,
+    "on": [
+     {
+      "name": "user-created",
+      "wildcard": false,
+      "args": "email"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "invalidCredentials",
+      "default": false,
+      "emits": [
+       {
+        "event": "user-auth-failed",
+        "fields": [
+         {
+          "name": "email"
+         },
+         {
+          "name": "ip"
+         },
+         {
+          "name": "reason",
+          "expr": "\"bad_password\""
+         }
+        ],
+        "payload": "email, ip, reason: \"bad_password\""
+       }
+      ],
+      "reject": null,
+      "line": 23
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "user-auth-succeeded",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "ip"
+         },
+         {
+          "name": "tierId"
+         }
+        ],
+        "payload": "userId, ip, tierId"
+       }
+      ],
+      "reject": null,
+      "line": 26
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 21,
+    "endLine": 28,
+    "triggers": [],
+    "source": null
+   },
+   {
+    "actor": "user",
+    "name": "makeRequest",
+    "params": [
+     "resourceId"
+    ],
+    "paramDefs": [
+     {
+      "name": "resourceId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "UserRateLimit",
+     "args": "userId, currentMinute"
+    },
+    "on": [
+     {
+      "name": "user-auth-succeeded",
+      "wildcard": false,
+      "args": "userId, tierId"
+     },
+     {
+      "name": "request-logged",
+      "wildcard": true,
+      "args": "userId, window: currentMinute"
+     }
+    ],
+    "from": [
+     {
+      "name": "TierLimit",
+      "wildcard": false,
+      "args": "tierId",
+      "freshness": "24h",
+      "alias": "tierLimit"
+     }
+    ],
+    "branches": [
+     {
+      "guard": "!canAccessResource",
+      "default": false,
+      "emits": [
+       {
+        "event": "request-failed",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "resourceId"
+         },
+         {
+          "name": "reason",
+          "expr": "\"unauthorized\""
+         }
+        ],
+        "payload": "userId, resourceId, reason: \"unauthorized\""
+       }
+      ],
+      "reject": null,
+      "line": 49
+     },
+     {
+      "guard": "count(request-logged) >= tierLimit.limit",
+      "default": false,
+      "emits": [
+       {
+        "event": "rate-limit-reached",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "resourceId"
+         },
+         {
+          "name": "retryAfter",
+          "expr": "60s"
+         }
+        ],
+        "payload": "userId, resourceId, retryAfter: 60s"
+       }
+      ],
+      "reject": null,
+      "line": 52
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "request-logged",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "resourceId"
+         },
+         {
+          "name": "requestMinute",
+          "expr": "currentMinute"
+         },
+         {
+          "name": "requestAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "userId, resourceId, requestMinute: currentMinute, requestAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 55
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 41,
+    "endLine": 62,
+    "triggers": [],
+    "source": null
+   }
+  ],
+  "policies": [
+   {
+    "name": null,
+    "trigger": {
+     "event": "rate-limit-reached",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "userId"
+      }
+     ],
+     "payload": "userId"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": "violationsLastHour > 50",
+      "worker": "waf-bot",
+      "command": {
+       "name": "applyTemporaryBan",
+       "args": "userId, duration=15m"
+      },
+      "emits": [],
+      "line": 75
+     }
+    ],
+    "line": 74,
+    "endLine": 75
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": "unavailable-shard-request-received",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "userId"
+      },
+      {
+       "name": "shardId"
+      }
+     ],
+     "payload": "userId, shardId"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": "staleCacheExists",
+      "worker": null,
+      "command": null,
+      "emits": [
+       {
+        "event": "request-logged",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "requestMinute",
+          "expr": "currentMinute"
+         },
+         {
+          "name": "requestAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "userId, requestMinute: currentMinute, requestAt: clock.wall()",
+        "annotations": {
+         "confidence": {
+          "level": "low",
+          "reason": "stale_quota",
+          "asOf": "cache.timestamp"
+         }
+        }
+       }
+      ],
+      "line": 79
+     }
+    ],
+    "line": 78,
+    "endLine": 85
+   }
+  ],
+  "events": [
+   {
+    "name": "user-created",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "authenticate"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "user-auth-failed",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "authenticate",
+      "branch": "invalidCredentials"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "email"
+     },
+     {
+      "name": "ip"
+     },
+     {
+      "name": "reason",
+      "expr": "\"bad_password\""
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "user-auth-succeeded",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "authenticate",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "makeRequest"
+     },
+     {
+      "kind": "view",
+      "name": "UserQuota"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "ip"
+     },
+     {
+      "name": "tierId"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "request-logged",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "makeRequest",
+      "branch": "default"
+     },
+     {
+      "kind": "policy",
+      "name": "unavailable-shard-request-received",
+      "worker": null
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "makeRequest"
+     },
+     {
+      "kind": "view",
+      "name": "UserQuota"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "resourceId"
+     },
+     {
+      "name": "requestMinute",
+      "expr": "currentMinute"
+     },
+     {
+      "name": "requestAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "request-failed",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "makeRequest",
+      "branch": "!canAccessResource"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "resourceId"
+     },
+     {
+      "name": "reason",
+      "expr": "\"unauthorized\""
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "rate-limit-reached",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "makeRequest",
+      "branch": "count(request-logged) >= tierLimit.limit"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "policy",
+      "name": "rate-limit-reached"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "resourceId"
+     },
+     {
+      "name": "retryAfter",
+      "expr": "60s"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "tier-created",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "TierLimit"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tier-limit-increased",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "TierLimit"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tier-limit-decreased",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "TierLimit"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "unavailable-shard-request-received",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "policy",
+      "name": "unavailable-shard-request-received"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "shardId"
+     }
+    ],
+    "declared": null
+   }
+  ],
+  "declarations": []
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "info",
+    "rule": "command-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> authenticate\" does not say which boundary it is in (add: in BoundaryName(key))",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-created, tier-created, tier-limit-increased, tier-limit-decreased, unavailable-shard-request-received. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "info",
+    "rule": "command-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> authenticate\" does not say which boundary it is in (add: in BoundaryName(key))",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-created, tier-created, tier-limit-increased, tier-limit-decreased, unavailable-shard-request-received. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "info",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"UserQuota\" shows \"remainingRequests\", \"resetsIn\", which no event it projects from carries. Add them to an event, or compute them (name: expression)",
+    "line": 65,
+    "endLine": 71,
+    "subject": {
+     "kind": "view",
+     "name": "UserQuota",
+     "line": 65,
+     "endLine": 71
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "4 of 4 commands and read models have no scenario, starting with \"authenticate\"",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"rate-limit-reached\" starts straight from the event. Write a read model such as PendingWafBot(...) fed by rate-limit-reached, and start from it: \"rate-limit-reached from [PendingWafBot] -> ...\" or \"from [PendingWafBot] -> ...\"",
+    "line": 74,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "rate-limit-reached",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"unavailable-shard-request-received\" starts straight from the event. Write a read model such as PendingUnavailableShardRequestReceived(...) fed by unavailable-shard-request-received, and start from it: \"unavailable-shard-request-received from [PendingUnavailableShardRequestReceived] -> ...\" or \"from [PendingUnavailableShardRequestReceived] -> ...\"",
+    "line": 78,
+    "endLine": 85,
+    "subject": {
+     "kind": "policy",
+     "name": "unavailable-shard-request-received",
+     "line": 78,
+     "endLine": 85
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "info",
+    "rule": "command-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> authenticate\" does not say which boundary it is in (add: in BoundaryName(key))",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-created, tier-created, tier-limit-increased, tier-limit-decreased, unavailable-shard-request-received. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"UserQuota\" shows \"remainingRequests\", \"resetsIn\", which no event it projects from carries. Add them to an event, or compute them (name: expression)",
+    "line": 65,
+    "endLine": 71,
+    "subject": {
+     "kind": "view",
+     "name": "UserQuota",
+     "line": 65,
+     "endLine": 71
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "4 of 4 commands and read models have no scenario, starting with \"authenticate\"",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"rate-limit-reached\" starts straight from the event. Write a read model such as PendingWafBot(...) fed by rate-limit-reached, and start from it: \"rate-limit-reached from [PendingWafBot] -> ...\" or \"from [PendingWafBot] -> ...\"",
+    "line": 74,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "rate-limit-reached",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"unavailable-shard-request-received\" starts straight from the event. Write a read model such as PendingUnavailableShardRequestReceived(...) fed by unavailable-shard-request-received, and start from it: \"unavailable-shard-request-received from [PendingUnavailableShardRequestReceived] -> ...\" or \"from [PendingUnavailableShardRequestReceived] -> ...\"",
+    "line": 78,
+    "endLine": 85,
+    "subject": {
+     "kind": "policy",
+     "name": "unavailable-shard-request-received",
+     "line": 78,
+     "endLine": 85
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "info",
+    "rule": "command-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> authenticate\" does not say which boundary it is in (add: in BoundaryName(key))",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-created, tier-created, tier-limit-increased, tier-limit-decreased, unavailable-shard-request-received. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"UserQuota\" shows \"remainingRequests\", \"resetsIn\", which no event it projects from carries. Add them to an event, or compute them (name: expression)",
+    "line": 65,
+    "endLine": 71,
+    "subject": {
+     "kind": "view",
+     "name": "UserQuota",
+     "line": 65,
+     "endLine": 71
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "4 of 4 commands and read models have no scenario, starting with \"authenticate\"",
+    "line": 21,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "authenticate",
+     "line": 21,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"rate-limit-reached\" starts straight from the event. Write a read model such as PendingWafBot(...) fed by rate-limit-reached, and start from it: \"rate-limit-reached from [PendingWafBot] -> ...\" or \"from [PendingWafBot] -> ...\"",
+    "line": 74,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "rate-limit-reached",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"unavailable-shard-request-received\" starts straight from the event. Write a read model such as PendingUnavailableShardRequestReceived(...) fed by unavailable-shard-request-received, and start from it: \"unavailable-shard-request-received from [PendingUnavailableShardRequestReceived] -> ...\" or \"from [PendingUnavailableShardRequestReceived] -> ...\"",
+    "line": 78,
+    "endLine": 85,
+    "subject": {
+     "kind": "policy",
+     "name": "unavailable-shard-request-received",
+     "line": 78,
+     "endLine": 85
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "RateLimiterAPI",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:authenticate",
+     "lane": "actor",
+     "label": "User",
+     "col": 0,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       21,
+       21
+      ]
+     ]
+    },
+    {
+     "id": "cmd:authenticate",
+     "lane": "command",
+     "label": "authenticate(email, password, ip)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       21,
+       28
+      ]
+     ],
+     "notes": [
+      "checks user-created (assumed)"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-created (assumed)"
+     ]
+    },
+    {
+     "id": "actor:makeRequest",
+     "lane": "actor",
+     "label": "User",
+     "col": 1,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       41,
+       41
+      ]
+     ]
+    },
+    {
+     "id": "cmd:makeRequest",
+     "lane": "command",
+     "label": "makeRequest(resourceId)",
+     "col": 1,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       41,
+       62
+      ]
+     ],
+     "notes": [
+      "checks user-auth-succeeded, request-logged*"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-auth-succeeded",
+      "request-logged*"
+     ]
+    },
+    {
+     "id": "evt:user-auth-failed",
+     "lane": "event",
+     "label": "user-auth-failed",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if invalidCredentials",
+     "owner": "cmd:authenticate"
+    },
+    {
+     "id": "evt:user-auth-succeeded",
+     "lane": "event",
+     "label": "user-auth-succeeded",
+     "col": 0,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:authenticate"
+    },
+    {
+     "id": "evt:request-failed",
+     "lane": "event",
+     "label": "request-failed",
+     "col": 1,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if !canAccessResource",
+     "owner": "cmd:makeRequest"
+    },
+    {
+     "id": "evt:rate-limit-reached",
+     "lane": "event",
+     "label": "rate-limit-reached",
+     "col": 1,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if count(request-logged) >= tier…",
+     "owner": "cmd:makeRequest"
+    },
+    {
+     "id": "evt:request-logged",
+     "lane": "event",
+     "label": "request-logged",
+     "col": 1,
+     "row": 2,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:makeRequest"
+    },
+    {
+     "id": "view:TierLimit",
+     "lane": "command",
+     "label": "TierLimit(tierId)",
+     "col": 5,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       31,
+       38
+      ]
+     ],
+     "fullNotes": [],
+     "notes": [
+      "from tier-created, tier-limit-increased, tie…"
+     ]
+    },
+    {
+     "id": "view:UserQuota",
+     "lane": "command",
+     "label": "UserQuota(userId)",
+     "col": 3,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       65,
+       71
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "implied:rate-limit-reached",
+     "lane": "command",
+     "label": "rate-limit-reached",
+     "col": 2,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       74,
+       75
+      ]
+     ]
+    },
+    {
+     "id": "pol:waf-bot",
+     "lane": "actor",
+     "label": "waf-bot",
+     "col": 3,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       74,
+       75
+      ]
+     ]
+    },
+    {
+     "id": "cmd:applyTemporaryBan",
+     "lane": "command",
+     "label": "applyTemporaryBan()",
+     "col": 4,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    },
+    {
+     "id": "evt:unavailable-shard-request-received",
+     "lane": "event",
+     "label": "unavailable-shard-request-received",
+     "col": 6,
+     "row": 0,
+     "kind": "event",
+     "assumed": true,
+     "sub": "assumed"
+    },
+    {
+     "id": "implied:unavailable-shard-request-received",
+     "lane": "command",
+     "label": "unavailable-shard-request-received",
+     "col": 7,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       78,
+       85
+      ]
+     ]
+    },
+    {
+     "id": "auto:78:0",
+     "lane": "actor",
+     "label": "automation",
+     "col": 8,
+     "row": 0,
+     "kind": "policy",
+     "sub": "unnamed processor",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       78,
+       85
+      ]
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:authenticate",
+     "to": "cmd:authenticate",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "actor:makeRequest",
+     "to": "cmd:makeRequest",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:authenticate",
+     "to": "evt:user-auth-failed",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:authenticate",
+     "to": "evt:user-auth-succeeded",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:makeRequest",
+     "to": "evt:request-failed",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:makeRequest",
+     "to": "evt:rate-limit-reached",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:makeRequest",
+     "to": "evt:request-logged",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:user-auth-succeeded",
+     "to": "view:UserQuota",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:request-logged",
+     "to": "view:UserQuota",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "view:TierLimit",
+     "to": "cmd:makeRequest",
+     "kind": "reads",
+     "label": "fresh 24h"
+    },
+    {
+     "from": "evt:rate-limit-reached",
+     "to": "implied:rate-limit-reached",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:rate-limit-reached",
+     "to": "pol:waf-bot",
+     "kind": "reads",
+     "label": "violationsLastHour > 50"
+    },
+    {
+     "from": "pol:waf-bot",
+     "to": "cmd:applyTemporaryBan",
+     "kind": "invokes",
+     "label": "userId, duration=15m"
+    },
+    {
+     "from": "evt:unavailable-shard-request-received",
+     "to": "implied:unavailable-shard-request-received",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:unavailable-shard-request-received",
+     "to": "auto:78:0",
+     "kind": "reads",
+     "label": "staleCacheExists"
+    },
+    {
+     "from": "auto:78:0",
+     "to": "evt:request-logged",
+     "kind": "emits",
+     "label": ""
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "TierLimit",
+     "nodes": [
+      "view:TierLimit"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "UserQuota",
+     "nodes": [
+      "view:UserQuota",
+      "evt:user-auth-succeeded",
+      "evt:request-logged"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "waf-bot",
+     "nodes": [
+      "evt:rate-limit-reached",
+      "implied:rate-limit-reached",
+      "pol:waf-bot",
+      "cmd:applyTemporaryBan"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "unavailable-shard-request-received",
+     "nodes": [
+      "evt:unavailable-shard-request-received",
+      "implied:unavailable-shard-request-received",
+      "auto:78:0",
+      "evt:request-logged"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "authenticate",
+     "nodes": [
+      "actor:authenticate",
+      "cmd:authenticate",
+      "evt:user-auth-failed",
+      "evt:user-auth-succeeded"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "makeRequest",
+     "nodes": [
+      "actor:makeRequest",
+      "cmd:makeRequest",
+      "evt:request-failed",
+      "evt:rate-limit-reached",
+      "evt:request-logged"
+     ]
+    }
+   ],
+   "groups": [
+    {
+     "id": "bnd:UserRateLimit",
+     "label": "UserRateLimit(userId, currentMinute)",
+     "kind": "boundary",
+     "members": [
+      "cmd:makeRequest",
+      "evt:request-failed",
+      "evt:rate-limit-reached",
+      "evt:request-logged"
+     ],
+     "sub": "shard by userId"
+    }
+   ],
+   "cols": 9
+  },
+  "context": {
+   "title": "RateLimiterAPI · system context",
+   "subtitle": "slo 99.99% uptime, p99 < 2ms   ·   regions us-primary, eu-secondary   ·   data pii",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "RateLimiterAPI",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:visitor",
+     "label": "Visitor",
+     "sub": "auth none",
+     "kind": "actor"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment-gateway",
+     "kind": "external"
+    },
+    {
+     "id": "ext:sentry",
+     "label": "sentry",
+     "sub": "monitoring",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "sys",
+     "label": "authenticate, makeRequest"
+    },
+    {
+     "from": "actor:admin",
+     "to": "sys",
+     "label": "no commands"
+    },
+    {
+     "from": "actor:visitor",
+     "to": "sys",
+     "label": "no commands"
+    },
+    {
+     "from": "sys",
+     "to": "ext:stripe",
+     "label": "depends on"
+    },
+    {
+     "from": "sys",
+     "to": "ext:sentry",
+     "label": "depends on"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "RateLimiterAPI · containers",
+   "subtitle": "slo 99.99% uptime, p99 < 2ms   ·   regions us-primary, eu-secondary   ·   data pii",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:visitor",
+     "label": "Visitor",
+     "sub": "auth none",
+     "kind": "actor"
+    },
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "2 commands",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "partitioned by userId",
+     "kind": "store"
+    },
+    {
+     "id": "view:TierLimit",
+     "label": "TierLimit",
+     "sub": "read model, cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "view:UserQuota",
+     "label": "UserQuota",
+     "sub": "read model, cache ttl 60s",
+     "kind": "cache"
+    },
+    {
+     "id": "worker:waf-bot",
+     "label": "waf-bot",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment-gateway · system dependency",
+     "kind": "external",
+     "side": "right"
+    },
+    {
+     "id": "ext:sentry",
+     "label": "sentry",
+     "sub": "monitoring · system dependency",
+     "kind": "external",
+     "side": "right"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "api",
+     "label": "authenticate, makeRequest"
+    },
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 5 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:TierLimit",
+     "label": "tier-created, tier-limit-increased +1"
+    },
+    {
+     "from": "view:TierLimit",
+     "to": "api",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "view:UserQuota",
+     "label": "user-auth-succeeded, request-logged"
+    },
+    {
+     "from": "store",
+     "to": "worker:waf-bot",
+     "label": "rate-limit-reached"
+    },
+    {
+     "from": "worker:waf-bot",
+     "to": "api",
+     "label": "applyTemporaryBan",
+     "weak": true
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "RateLimiterAPI (us-primary, eu-secondary)",
+     "members": [
+      "api",
+      "store",
+      "view:TierLimit",
+      "view:UserQuota",
+      "worker:waf-bot"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "RateLimiterAPI · data flow",
+   "subtitle": "slo 99.99% uptime, p99 < 2ms   ·   regions us-primary, eu-secondary   ·   data pii   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:authenticate",
+     "label": "authenticate()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:makeRequest",
+     "label": "makeRequest()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:TierLimit",
+     "label": "TierLimit",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:UserQuota",
+     "label": "UserQuota",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "worker:waf-bot",
+     "label": "waf-bot",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:applyTemporaryBan",
+     "label": "applyTemporaryBan()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "cmd:authenticate",
+     "label": "email, password, ip"
+    },
+    {
+     "from": "cmd:authenticate",
+     "to": "log",
+     "label": "user-auth-failed, user-auth-succeeded"
+    },
+    {
+     "from": "log",
+     "to": "cmd:authenticate",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "actor:user",
+     "to": "cmd:makeRequest",
+     "label": "resourceId"
+    },
+    {
+     "from": "cmd:makeRequest",
+     "to": "log",
+     "label": "request-failed, rate-limit-reached +1"
+    },
+    {
+     "from": "log",
+     "to": "cmd:makeRequest",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "view:TierLimit",
+     "to": "cmd:makeRequest",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "view:TierLimit",
+     "label": "tier-created, tier-limit-increased +1"
+    },
+    {
+     "from": "log",
+     "to": "view:UserQuota",
+     "label": "user-auth-succeeded, request-logged"
+    },
+    {
+     "from": "log",
+     "to": "worker:waf-bot",
+     "label": "rate-limit-reached"
+    },
+    {
+     "from": "worker:waf-bot",
+     "to": "cmd:applyTemporaryBan",
+     "label": "issues",
+     "weak": true
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "RateLimiterAPI · deployment",
+   "subtitle": "slo 99.99% uptime, p99 < 2ms   ·   regions us-primary, eu-secondary   ·   data pii   ·   Inferred: each region runs the full stack unless a boundary says @cost(regions=n).",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "us-primary:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "us-primary:shard:UserRateLimit",
+     "label": "UserRateLimit shards",
+     "sub": "by userId · 100000 shards · in 2 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us-primary:view:TierLimit",
+     "label": "TierLimit",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "us-primary:view:UserQuota",
+     "label": "UserQuota",
+     "sub": "cache ttl 60s",
+     "kind": "cache"
+    },
+    {
+     "id": "us-primary:worker:waf-bot",
+     "label": "waf-bot",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu-secondary:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "eu-secondary:shard:UserRateLimit",
+     "label": "UserRateLimit shards",
+     "sub": "by userId · 100000 shards · in 2 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu-secondary:view:TierLimit",
+     "label": "TierLimit",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-secondary:view:UserQuota",
+     "label": "UserQuota",
+     "sub": "cache ttl 60s",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-secondary:worker:waf-bot",
+     "label": "waf-bot",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "us-primary:api",
+     "to": "us-primary:shard:UserRateLimit",
+     "label": "makeRequest"
+    },
+    {
+     "from": "us-primary:api",
+     "to": "us-primary:view:TierLimit",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:UserRateLimit",
+     "to": "us-primary:view:UserQuota",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:UserRateLimit",
+     "to": "us-primary:worker:waf-bot",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:api",
+     "to": "eu-secondary:shard:UserRateLimit",
+     "label": "makeRequest"
+    },
+    {
+     "from": "eu-secondary:api",
+     "to": "eu-secondary:view:TierLimit",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:UserRateLimit",
+     "to": "eu-secondary:view:UserQuota",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:UserRateLimit",
+     "to": "eu-secondary:worker:waf-bot",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:us-primary",
+     "label": "us-primary",
+     "members": [
+      "us-primary:api",
+      "us-primary:shard:UserRateLimit",
+      "us-primary:view:TierLimit",
+      "us-primary:view:UserQuota",
+      "us-primary:worker:waf-bot"
+     ]
+    },
+    {
+     "id": "region:eu-secondary",
+     "label": "eu-secondary",
+     "members": [
+      "eu-secondary:api",
+      "eu-secondary:shard:UserRateLimit",
+      "eu-secondary:view:TierLimit",
+      "eu-secondary:view:UserQuota",
+      "eu-secondary:worker:waf-bot"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "error": "NO_CONTEXTS"
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "actor:authenticate": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:authenticate": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:authenticate",
+     "label": "data flow: authenticate()",
+     "url": null
+    }
+   ],
+   "actor:makeRequest": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:makeRequest": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:makeRequest",
+     "label": "data flow: makeRequest()",
+     "url": null
+    }
+   ],
+   "evt:user-auth-failed": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:user-auth-succeeded": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:request-failed": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:rate-limit-reached": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:request-logged": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:TierLimit": [
+    {
+     "diagram": "containers",
+     "node": "view:TierLimit",
+     "label": "containers: TierLimit",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:TierLimit",
+     "label": "data flow: TierLimit",
+     "url": null
+    }
+   ],
+   "view:UserQuota": [
+    {
+     "diagram": "containers",
+     "node": "view:UserQuota",
+     "label": "containers: UserQuota",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:UserQuota",
+     "label": "data flow: UserQuota",
+     "url": null
+    }
+   ],
+   "pol:waf-bot": [
+    {
+     "diagram": "containers",
+     "node": "worker:waf-bot",
+     "label": "containers: waf-bot",
+     "url": null
+    }
+   ],
+   "cmd:applyTemporaryBan": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:applyTemporaryBan",
+     "label": "data flow: applyTemporaryBan()",
+     "url": null
+    }
+   ],
+   "evt:unavailable-shard-request-received": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "bnd:UserRateLimit": [
+    {
+     "diagram": "deployment",
+     "node": "us-primary:shard:UserRateLimit",
+     "label": "deployment: UserRateLimit shards",
+     "url": null
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: RateLimiterAPI (us-primary, eu-secondary)",
+     "url": null
+    }
+   ],
+   "actor:user": [
+    {
+     "diagram": "containers",
+     "node": "actor:user",
+     "label": "containers: User",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "containers",
+     "node": "actor:admin",
+     "label": "containers: Admin",
+     "url": null
+    }
+   ],
+   "actor:visitor": [
+    {
+     "diagram": "containers",
+     "node": "actor:visitor",
+     "label": "containers: Visitor",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "containers",
+     "node": "ext:stripe",
+     "label": "containers: stripe",
+     "url": null
+    }
+   ],
+   "ext:sentry": [
+    {
+     "diagram": "containers",
+     "node": "ext:sentry",
+     "label": "containers: sentry",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "context",
+     "node": "actor:admin",
+     "label": "system context: Admin",
+     "url": null
+    }
+   ],
+   "actor:visitor": [
+    {
+     "diagram": "context",
+     "node": "actor:visitor",
+     "label": "system context: Visitor",
+     "url": null
+    }
+   ],
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:TierLimit": [
+    {
+     "diagram": "dataflow",
+     "node": "view:TierLimit",
+     "label": "data flow: TierLimit",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:TierLimit",
+     "label": "event model: TierLimit(tierId)",
+     "url": null
+    }
+   ],
+   "view:UserQuota": [
+    {
+     "diagram": "dataflow",
+     "node": "view:UserQuota",
+     "label": "data flow: UserQuota",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:UserQuota",
+     "label": "event model: UserQuota(userId)",
+     "url": null
+    }
+   ],
+   "worker:waf-bot": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:waf-bot",
+     "label": "data flow: waf-bot",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:waf-bot",
+     "label": "event model: waf-bot",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "ext:sentry": [
+    {
+     "diagram": "context",
+     "node": "ext:sentry",
+     "label": "system context: sentry",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: RateLimiterAPI",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:authenticate": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:authenticate",
+     "label": "event model: authenticate(email, password, ip)",
+     "url": null
+    }
+   ],
+   "cmd:makeRequest": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:makeRequest",
+     "label": "event model: makeRequest(resourceId)",
+     "url": null
+    }
+   ],
+   "view:TierLimit": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:TierLimit",
+     "label": "event model: TierLimit(tierId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:TierLimit",
+     "label": "containers: TierLimit",
+     "url": null
+    }
+   ],
+   "view:UserQuota": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:UserQuota",
+     "label": "event model: UserQuota(userId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:UserQuota",
+     "label": "containers: UserQuota",
+     "url": null
+    }
+   ],
+   "worker:waf-bot": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:waf-bot",
+     "label": "event model: waf-bot",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:waf-bot",
+     "label": "containers: waf-bot",
+     "url": null
+    }
+   ],
+   "cmd:applyTemporaryBan": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:applyTemporaryBan",
+     "label": "event model: applyTemporaryBan()",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "us-primary:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "us-primary:shard:UserRateLimit": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserRateLimit",
+     "label": "event model: UserRateLimit(userId, currentMinute)",
+     "url": null
+    }
+   ],
+   "us-primary:view:TierLimit": [
+    {
+     "diagram": "containers",
+     "node": "view:TierLimit",
+     "label": "containers: TierLimit",
+     "url": null
+    }
+   ],
+   "us-primary:view:UserQuota": [
+    {
+     "diagram": "containers",
+     "node": "view:UserQuota",
+     "label": "containers: UserQuota",
+     "url": null
+    }
+   ],
+   "us-primary:worker:waf-bot": [
+    {
+     "diagram": "containers",
+     "node": "worker:waf-bot",
+     "label": "containers: waf-bot",
+     "url": null
+    }
+   ],
+   "eu-secondary:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "eu-secondary:shard:UserRateLimit": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserRateLimit",
+     "label": "event model: UserRateLimit(userId, currentMinute)",
+     "url": null
+    }
+   ],
+   "eu-secondary:view:TierLimit": [
+    {
+     "diagram": "containers",
+     "node": "view:TierLimit",
+     "label": "containers: TierLimit",
+     "url": null
+    }
+   ],
+   "eu-secondary:view:UserQuota": [
+    {
+     "diagram": "containers",
+     "node": "view:UserQuota",
+     "label": "containers: UserQuota",
+     "url": null
+    }
+   ],
+   "eu-secondary:worker:waf-bot": [
+    {
+     "diagram": "containers",
+     "node": "worker:waf-bot",
+     "label": "containers: waf-bot",
+     "url": null
+    }
+   ],
+   "region:us-primary": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: RateLimiterAPI (us-primary, eu-secondary)",
+     "url": null
+    }
+   ],
+   "region:eu-secondary": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: RateLimiterAPI (us-primary, eu-secondary)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:authenticate": [
+    [
+     21,
+     28
+    ]
+   ],
+   "cmd:makeRequest": [
+    [
+     41,
+     62
+    ]
+   ],
+   "view:TierLimit": [
+    [
+     31,
+     38
+    ]
+   ],
+   "view:UserQuota": [
+    [
+     65,
+     71
+    ]
+   ],
+   "pol:waf-bot": [
+    [
+     74,
+     75
+    ]
+   ],
+   "bnd:UserRateLimit": [
+    [
+     14,
+     14
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:TierLimit": [
+    [
+     31,
+     38
+    ]
+   ],
+   "view:UserQuota": [
+    [
+     65,
+     71
+    ]
+   ],
+   "worker:waf-bot": [
+    [
+     74,
+     75
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:authenticate": [
+    [
+     21,
+     28
+    ]
+   ],
+   "cmd:makeRequest": [
+    [
+     41,
+     62
+    ]
+   ],
+   "view:TierLimit": [
+    [
+     31,
+     38
+    ]
+   ],
+   "view:UserQuota": [
+    [
+     65,
+     71
+    ]
+   ],
+   "worker:waf-bot": [
+    [
+     74,
+     75
+    ]
+   ]
+  },
+  "deployment": {
+   "us-primary:view:TierLimit": [
+    [
+     31,
+     38
+    ]
+   ],
+   "eu-secondary:view:TierLimit": [
+    [
+     31,
+     38
+    ]
+   ],
+   "us-primary:view:UserQuota": [
+    [
+     65,
+     71
+    ]
+   ],
+   "eu-secondary:view:UserQuota": [
+    [
+     65,
+     71
+    ]
+   ],
+   "us-primary:worker:waf-bot": [
+    [
+     74,
+     75
+    ]
+   ],
+   "eu-secondary:worker:waf-bot": [
+    [
+     74,
+     75
+    ]
+   ],
+   "us-primary:shard:UserRateLimit": [
+    [
+     14,
+     14
+    ]
+   ],
+   "eu-secondary:shard:UserRateLimit": [
+    [
+     14,
+     14
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}
