@@ -326,3 +326,24 @@ test('automation-reads-event keeps a named policy in its message and suggested r
   assert.equal(msg('tweet-liked { tweetId } -> notifier -> notify(tweetId)'),
     'Automation on "tweet-liked" starts straight from the event. Write a read model such as PendingNotifier(...) fed by tweet-liked, and start from it: "tweet-liked from [PendingNotifier] -> ..." or "from [PendingNotifier] -> ..."');
 });
+
+test('triggers, scenarios and read model rules each report once, on the statement they belong to', () => {
+  const text = `user -> go(id) @trigger(type=ui) @trigger(name="X", type=cli, route="GET /x") @trigger(name="Y")
+  -[default]-> [x-done { id }]
+  scenario "" {
+    Given x
+  }
+  scenario "a" {
+  }
+  scenario "a" {
+    Given y
+  }
+view V(id) = [x-done(id)] => { id } @query(returns="all") @projection @trigger(type=ui, name="S")
+view W(id) = [V(id)] => { id }
+view Z(id) = [] => { id }
+view Q(id) = [x-done(id)] => { id } @query(key=id)
+`;
+  const rules = ['trigger-name', 'trigger-type', 'trigger-route', 'scenario-name', 'scenario-empty', 'scenario-duplicate', 'query-returns', 'projection-trigger', 'view-from-view', 'view-sources'];
+  const found = check(parse(text)).filter((i) => rules.includes(i.rule)).map((i) => `${i.rule} ${i.line}`);
+  assert.deepEqual(found, ['trigger-name 1', 'trigger-route 1', 'trigger-type 1', 'scenario-name 3', 'scenario-empty 6', 'scenario-duplicate 8', 'query-returns 11', 'projection-trigger 11', 'view-from-view 12', 'view-sources 13', 'query-returns 14']);
+});
