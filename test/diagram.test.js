@@ -332,3 +332,11 @@ test('layering skips a self-loop and an edge to an unknown node, so neither plac
   assert.deepEqual([...r.back], []);
   assert.deepEqual(r.preds.get('a'), []);
 });
+
+test('board: built once per model, so check and render share it, and a new parse gets a new board', () => {
+  const text = 'user -> go(id)\n  -[default]-> [x-done { id }]\n';
+  const model = parse(text);
+  assert.equal(buildBoard(model), buildBoard(model));
+  assert.notEqual(buildBoard(parse(text)), buildBoard(model));
+  assert.deepEqual(buildBoard(parse(text)), buildBoard(model));
+});

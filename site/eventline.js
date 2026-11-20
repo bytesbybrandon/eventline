@@ -1804,7 +1804,7 @@ function boundaryGroups(g, h, cmds, membersOf) {
   return [...byBoundary.values()].map((grp) => ({ ...grp, members: [...grp.members] }));
 }
 
-function buildBoard(model) {
+function layoutBoard(model) {
   const g = grid();
   const h = lookups(model);
   const cmds = orderCommands(model, commandGroups(model));
@@ -1817,6 +1817,14 @@ function buildBoard(model) {
   const list = [...g.nodes.values()];
   const cols = Math.max(...list.map((n) => n.col)) + 1;
   return { title: model.system ? model.system.name : 'eventline model', lanes: LANES, nodes: list, edges: g.edges, slices: g.slices, groups: boundaryGroups(g, h, cmds, membersOf), cols };
+}
+
+/* One board per parsed model. A model is not changed after parse, and nothing changes a board, so check and render can share it. */
+const boards = new WeakMap();
+
+function buildBoard(model) {
+  if (!boards.has(model)) boards.set(model, layoutBoard(model));
+  return boards.get(model);
 }
 
 /* The generic graph form, for the Mermaid and DOT exporters. */

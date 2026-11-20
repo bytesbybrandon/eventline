@@ -24,9 +24,9 @@ function ms(fn, runs) {
 
 // check and board columns include their own parse; the loop column is one parse, then check and board on that model.
 console.log('scale      bytes    parse ms  check ms  board ms  loop ms');
-// The last row adds one @link to the deployment diagram, which makes check build that diagram.
-const LINK = '\nuser -> linkProbe(id) @link(to="deployment")\n  -[default]-> [link-probed { id }]\n';
-for (const [n, label, extra] of [[1, '1x', ''], [10, '10x', ''], [50, '50x', ''], [50, '50x+@link', LINK]]) {
+// The last rows add one @link, which makes check build the diagram it names: the deployment diagram, then the board.
+const link = (to) => `\nuser -> linkProbe(id) @link(to="${to}")\n  -[default]-> [link-probed { id }]\n`;
+for (const [n, label, extra] of [[1, '1x', ''], [10, '10x', ''], [50, '50x', ''], [50, '50x+@link', link('deployment')], [50, '50x+@board', link('eventmodel')]]) {
   let text = src;
   for (let i = 1; i < n; i++) text += `\n${copy(i)}`;
   text += extra;
