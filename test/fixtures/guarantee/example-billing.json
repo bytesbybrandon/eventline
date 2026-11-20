@@ -1,0 +1,2431 @@
+{
+ "model": {
+  "system": {
+   "name": "BillingPlatform",
+   "externals": [
+    {
+     "name": "stripe",
+     "role": "payments"
+    }
+   ],
+   "slo": [],
+   "regions": [
+    "eu-west",
+    "us-east"
+   ],
+   "dataClassification": [],
+   "constraints": [],
+   "attrs": {
+    "event-naming": "kebab"
+   },
+   "line": 4
+  },
+  "contexts": [
+   {
+    "name": "Billing",
+    "description": "Invoices, refunds and reminders",
+    "role": "core",
+    "publishes": [
+     "invoice-opened",
+     "invoice-refunded"
+    ],
+    "attrs": {},
+    "line": 13
+   },
+   {
+    "name": "Notifications",
+    "description": "Messages to customers",
+    "role": "adapter",
+    "publishes": [],
+    "attrs": {
+     "infrastructure": "Email provider"
+    },
+    "line": 39
+   }
+  ],
+  "actors": [
+   {
+    "name": "Customer",
+    "attributes": {
+     "auth": "session"
+    },
+    "line": 10
+   },
+   {
+    "name": "Admin",
+    "attributes": {
+     "auth": "oauth"
+    },
+    "line": 11
+   }
+  ],
+  "boundaries": [
+   {
+    "name": "Invoice",
+    "params": [
+     "invoiceId"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "invoiceId"
+     }
+    },
+    "line": 18,
+    "context": "Billing"
+   }
+  ],
+  "views": [
+   {
+    "name": "InvoiceStatus",
+    "params": [
+     "invoiceId"
+    ],
+    "paramDefs": [
+     {
+      "name": "invoiceId",
+      "optional": false,
+      "type": "id"
+     }
+    ],
+    "sources": [
+     {
+      "name": "invoice-opened",
+      "wildcard": false,
+      "args": "invoiceId"
+     },
+     {
+      "name": "invoice-refunded",
+      "wildcard": true,
+      "args": "invoiceId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "state",
+      "expr": "text"
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 30,
+    "endLine": 30,
+    "context": "Billing"
+   },
+   {
+    "name": "OverdueInvoices",
+    "params": [
+     "accountId"
+    ],
+    "paramDefs": [
+     {
+      "name": "accountId",
+      "optional": false,
+      "type": "id"
+     }
+    ],
+    "sources": [
+     {
+      "name": "invoice-opened",
+      "wildcard": true,
+      "args": "accountId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "invoiceId",
+      "expr": "id"
+     },
+     {
+      "name": "daysLate",
+      "expr": "number"
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 32,
+    "endLine": 32,
+    "context": "Billing"
+   }
+  ],
+  "commands": [
+   {
+    "actor": "Customer",
+    "name": "openInvoice",
+    "params": [
+     "accountId",
+     "amount"
+    ],
+    "paramDefs": [
+     {
+      "name": "accountId",
+      "optional": false,
+      "type": "id"
+     },
+     {
+      "name": "amount",
+      "optional": false,
+      "type": "number"
+     }
+    ],
+    "boundary": {
+     "name": "Invoice",
+     "args": "invoiceId"
+    },
+    "on": [],
+    "from": [],
+    "branches": [
+     {
+      "guard": "the amount is not positive",
+      "default": false,
+      "emits": [],
+      "reject": "AMOUNT_INVALID",
+      "line": 22
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "invoice-opened",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "accountId"
+         },
+         {
+          "name": "amount"
+         }
+        ],
+        "payload": "invoiceId, accountId, amount"
+       }
+      ],
+      "reject": null,
+      "line": 23
+     }
+    ],
+    "annotations": {
+     "trigger": {
+      "type": "ui",
+      "name": "InvoicesPage",
+      "part": "Open button",
+      "route": "POST /invoices"
+     }
+    },
+    "notes": [],
+    "scenarios": [],
+    "line": 20,
+    "endLine": 23,
+    "triggers": [
+     {
+      "type": "ui",
+      "name": "InvoicesPage",
+      "part": "Open button",
+      "route": "POST /invoices"
+     }
+    ],
+    "source": null,
+    "context": "Billing"
+   },
+   {
+    "actor": "Admin",
+    "name": "refundInvoice",
+    "params": [
+     "invoiceId",
+     "amount"
+    ],
+    "paramDefs": [
+     {
+      "name": "invoiceId",
+      "optional": false,
+      "type": "id"
+     },
+     {
+      "name": "amount",
+      "optional": false,
+      "type": "number"
+     }
+    ],
+    "boundary": {
+     "name": "Invoice",
+     "args": "invoiceId"
+    },
+    "on": [
+     {
+      "name": "invoice-opened",
+      "wildcard": false,
+      "args": "invoiceId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "the invoice was refunded before",
+      "default": false,
+      "emits": [],
+      "reject": "ALREADY_REFUNDED",
+      "line": 27
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "invoice-refunded",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "amount"
+         }
+        ],
+        "payload": "invoiceId, amount"
+       }
+      ],
+      "reject": null,
+      "line": 28
+     }
+    ],
+    "annotations": {
+     "slice": {
+      "_": [
+       "Refund an invoice"
+      ]
+     },
+     "planned": true
+    },
+    "notes": [],
+    "scenarios": [],
+    "line": 25,
+    "endLine": 28,
+    "triggers": [],
+    "source": null,
+    "context": "Billing"
+   }
+  ],
+  "policies": [
+   {
+    "name": null,
+    "trigger": {
+     "event": null,
+     "schedule": "every 1 hours",
+     "readModels": false,
+     "fields": []
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [
+     {
+      "name": "OverdueInvoices",
+      "wildcard": false,
+      "args": "accountId",
+      "freshness": "5m"
+     }
+    ],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "reminder-sender",
+      "command": {
+       "name": "sendReminder",
+       "args": "accountId"
+      },
+      "emits": [],
+      "line": 36
+     }
+    ],
+    "line": 34,
+    "endLine": 36,
+    "context": "Billing"
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": "invoice-opened",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "invoiceId"
+      },
+      {
+       "name": "accountId"
+      }
+     ],
+     "payload": "invoiceId, accountId"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "mailer",
+      "command": {
+       "name": "sendInvoiceEmail",
+       "args": "invoiceId"
+      },
+      "emits": [],
+      "line": 45
+     }
+    ],
+    "line": 44,
+    "endLine": 45,
+    "context": "Notifications"
+   }
+  ],
+  "events": [
+   {
+    "name": "invoice-opened",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "openInvoice",
+      "branch": "default",
+      "context": "Billing"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "refundInvoice",
+      "context": "Billing"
+     },
+     {
+      "kind": "view",
+      "name": "InvoiceStatus",
+      "context": "Billing"
+     },
+     {
+      "kind": "view",
+      "name": "OverdueInvoices",
+      "context": "Billing"
+     },
+     {
+      "kind": "policy",
+      "name": "invoice-opened",
+      "context": "Notifications"
+     }
+    ],
+    "fields": [
+     {
+      "name": "invoiceId"
+     },
+     {
+      "name": "accountId"
+     },
+     {
+      "name": "amount"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "invoice-refunded",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "refundInvoice",
+      "branch": "default",
+      "context": "Billing"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "InvoiceStatus",
+      "context": "Billing"
+     }
+    ],
+    "fields": [
+     {
+      "name": "invoiceId"
+     },
+     {
+      "name": "amount"
+     }
+    ],
+    "declared": null
+   }
+  ],
+  "declarations": []
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"Customer -> openInvoice\" lists no facts it needs (fine for a command that creates something)",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"Admin -> refundInvoice\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 25,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "refundInvoice",
+     "line": 25,
+     "endLine": 28
+    },
+    "slice": "Refund an invoice",
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"invoice-opened\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"Customer -> openInvoice\" lists no facts it needs (fine for a command that creates something)",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"Admin -> refundInvoice\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 25,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "refundInvoice",
+     "line": 25,
+     "endLine": 28
+    },
+    "slice": "Refund an invoice",
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"invoice-opened\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"InvoiceStatus\" shows \"state\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 30,
+    "endLine": 30,
+    "subject": {
+     "kind": "view",
+     "name": "InvoiceStatus",
+     "line": 30,
+     "endLine": 30
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"OverdueInvoices\" shows \"daysLate\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 32,
+    "endLine": 32,
+    "subject": {
+     "kind": "view",
+     "name": "OverdueInvoices",
+     "line": 32,
+     "endLine": 32
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "4 of 4 commands and read models have no scenario, starting with \"openInvoice\"",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"invoice-opened\" starts straight from the event. Write a read model such as PendingMailer(...) fed by invoice-opened, and start from it: \"invoice-opened from [PendingMailer] -> ...\" or \"from [PendingMailer] -> ...\"",
+    "line": 44,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"Customer -> openInvoice\" lists no facts it needs (fine for a command that creates something)",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"Admin -> refundInvoice\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 25,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "refundInvoice",
+     "line": 25,
+     "endLine": 28
+    },
+    "slice": "Refund an invoice",
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"invoice-opened\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"InvoiceStatus\" shows \"state\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 30,
+    "endLine": 30,
+    "subject": {
+     "kind": "view",
+     "name": "InvoiceStatus",
+     "line": 30,
+     "endLine": 30
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"OverdueInvoices\" shows \"daysLate\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 32,
+    "endLine": 32,
+    "subject": {
+     "kind": "view",
+     "name": "OverdueInvoices",
+     "line": 32,
+     "endLine": 32
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "4 of 4 commands and read models have no scenario, starting with \"openInvoice\"",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"invoice-opened\" starts straight from the event. Write a read model such as PendingMailer(...) fed by invoice-opened, and start from it: \"invoice-opened from [PendingMailer] -> ...\" or \"from [PendingMailer] -> ...\"",
+    "line": 44,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"Customer -> openInvoice\" lists no facts it needs (fine for a command that creates something)",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"Admin -> refundInvoice\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 25,
+    "endLine": 28,
+    "subject": {
+     "kind": "command",
+     "name": "refundInvoice",
+     "line": 25,
+     "endLine": 28
+    },
+    "slice": "Refund an invoice",
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"invoice-opened\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"InvoiceStatus\" shows \"state\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 30,
+    "endLine": 30,
+    "subject": {
+     "kind": "view",
+     "name": "InvoiceStatus",
+     "line": 30,
+     "endLine": 30
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"OverdueInvoices\" shows \"daysLate\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 32,
+    "endLine": 32,
+    "subject": {
+     "kind": "view",
+     "name": "OverdueInvoices",
+     "line": 32,
+     "endLine": 32
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "4 of 4 commands and read models have no scenario, starting with \"openInvoice\"",
+    "line": 20,
+    "endLine": 23,
+    "subject": {
+     "kind": "command",
+     "name": "openInvoice",
+     "line": 20,
+     "endLine": 23
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"invoice-opened\" starts straight from the event. Write a read model such as PendingMailer(...) fed by invoice-opened, and start from it: \"invoice-opened from [PendingMailer] -> ...\" or \"from [PendingMailer] -> ...\"",
+    "line": 44,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "invoice-opened",
+     "line": 44,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "BillingPlatform",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:openInvoice",
+     "lane": "actor",
+     "label": "Customer",
+     "col": 0,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       20,
+       20
+      ]
+     ]
+    },
+    {
+     "id": "cmd:openInvoice",
+     "lane": "command",
+     "label": "openInvoice(accountId, amount)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       20,
+       23
+      ]
+     ],
+     "notes": [
+      "rejects AMOUNT_INVALID"
+     ],
+     "fullNotes": [],
+     "checks": []
+    },
+    {
+     "id": "actor:refundInvoice",
+     "lane": "actor",
+     "label": "Admin",
+     "col": 4,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       25,
+       25
+      ]
+     ]
+    },
+    {
+     "id": "cmd:refundInvoice",
+     "lane": "command",
+     "label": "refundInvoice(invoiceId, amount)",
+     "col": 4,
+     "row": 0,
+     "kind": "command",
+     "sub": "planned",
+     "slice": "state change",
+     "planned": true,
+     "ranges": [
+      [
+       25,
+       28
+      ]
+     ],
+     "notes": [
+      "checks invoice-opened",
+      "rejects ALREADY_REFUNDED"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "invoice-opened"
+     ]
+    },
+    {
+     "id": "evt:invoice-opened",
+     "lane": "event",
+     "label": "invoice-opened",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:openInvoice"
+    },
+    {
+     "id": "evt:invoice-refunded",
+     "lane": "event",
+     "label": "invoice-refunded",
+     "col": 4,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:refundInvoice"
+    },
+    {
+     "id": "view:InvoiceStatus",
+     "lane": "command",
+     "label": "InvoiceStatus(invoiceId)",
+     "col": 5,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       30,
+       30
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "view:OverdueInvoices",
+     "lane": "command",
+     "label": "OverdueInvoices(accountId)",
+     "col": 2,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       32,
+       32
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "timer:every 1 hours",
+     "lane": "actor",
+     "label": "every 1 hours",
+     "col": 6,
+     "row": 0,
+     "kind": "timer"
+    },
+    {
+     "id": "pol:reminder-sender",
+     "lane": "actor",
+     "label": "reminder-sender",
+     "col": 7,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       34,
+       36
+      ]
+     ]
+    },
+    {
+     "id": "cmd:sendReminder",
+     "lane": "command",
+     "label": "sendReminder()",
+     "col": 8,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    },
+    {
+     "id": "implied:invoice-opened",
+     "lane": "command",
+     "label": "invoice-opened",
+     "col": 1,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       44,
+       45
+      ]
+     ]
+    },
+    {
+     "id": "pol:mailer",
+     "lane": "actor",
+     "label": "mailer",
+     "col": 2,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       44,
+       45
+      ]
+     ]
+    },
+    {
+     "id": "cmd:sendInvoiceEmail",
+     "lane": "command",
+     "label": "sendInvoiceEmail()",
+     "col": 3,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:openInvoice",
+     "to": "cmd:openInvoice",
+     "kind": "triggers",
+     "label": "InvoicesPage > Open button"
+    },
+    {
+     "from": "actor:refundInvoice",
+     "to": "cmd:refundInvoice",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:openInvoice",
+     "to": "evt:invoice-opened",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:refundInvoice",
+     "to": "evt:invoice-refunded",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:invoice-opened",
+     "to": "view:InvoiceStatus",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:invoice-refunded",
+     "to": "view:InvoiceStatus",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:invoice-opened",
+     "to": "view:OverdueInvoices",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "view:OverdueInvoices",
+     "to": "pol:reminder-sender",
+     "kind": "reads",
+     "label": "fresh 5m"
+    },
+    {
+     "from": "timer:every 1 hours",
+     "to": "pol:reminder-sender",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "pol:reminder-sender",
+     "to": "cmd:sendReminder",
+     "kind": "invokes",
+     "label": "accountId"
+    },
+    {
+     "from": "evt:invoice-opened",
+     "to": "implied:invoice-opened",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:invoice-opened",
+     "to": "pol:mailer",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "pol:mailer",
+     "to": "cmd:sendInvoiceEmail",
+     "kind": "invokes",
+     "label": "invoiceId"
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "InvoiceStatus",
+     "nodes": [
+      "view:InvoiceStatus",
+      "evt:invoice-opened",
+      "evt:invoice-refunded"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "OverdueInvoices",
+     "nodes": [
+      "view:OverdueInvoices",
+      "evt:invoice-opened"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "reminder-sender",
+     "nodes": [
+      "timer:every 1 hours",
+      "pol:reminder-sender",
+      "cmd:sendReminder"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "mailer",
+     "nodes": [
+      "evt:invoice-opened",
+      "implied:invoice-opened",
+      "pol:mailer",
+      "cmd:sendInvoiceEmail"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "openInvoice",
+     "nodes": [
+      "actor:openInvoice",
+      "cmd:openInvoice",
+      "evt:invoice-opened"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "refundInvoice",
+     "nodes": [
+      "actor:refundInvoice",
+      "cmd:refundInvoice",
+      "evt:invoice-refunded"
+     ]
+    }
+   ],
+   "groups": [
+    {
+     "id": "bnd:Invoice",
+     "label": "Invoice(invoiceId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:openInvoice",
+      "evt:invoice-opened",
+      "cmd:refundInvoice",
+      "evt:invoice-refunded"
+     ],
+     "sub": "shard by invoiceId"
+    }
+   ],
+   "cols": 9
+  },
+  "context": {
+   "title": "BillingPlatform · system context",
+   "subtitle": "regions eu-west, us-east",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "BillingPlatform",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "actor:customer",
+     "label": "Customer",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payments",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:customer",
+     "to": "sys",
+     "label": "openInvoice"
+    },
+    {
+     "from": "actor:admin",
+     "to": "sys",
+     "label": "refundInvoice"
+    },
+    {
+     "from": "sys",
+     "to": "ext:stripe",
+     "label": "depends on"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "BillingPlatform · containers",
+   "subtitle": "regions eu-west, us-east",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:customer",
+     "label": "Customer",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "2 commands",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "partitioned by invoiceId",
+     "kind": "store"
+    },
+    {
+     "id": "view:InvoiceStatus",
+     "label": "InvoiceStatus",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "view:OverdueInvoices",
+     "label": "OverdueInvoices",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "worker:reminder-sender",
+     "label": "reminder-sender",
+     "sub": "runs every 1 hours",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:mailer",
+     "label": "mailer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payments · system dependency",
+     "kind": "external",
+     "side": "right"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:customer",
+     "to": "api",
+     "label": "openInvoice"
+    },
+    {
+     "from": "actor:admin",
+     "to": "api",
+     "label": "refundInvoice"
+    },
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 2 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:InvoiceStatus",
+     "label": "invoice-opened, invoice-refunded"
+    },
+    {
+     "from": "store",
+     "to": "view:OverdueInvoices",
+     "label": "invoice-opened"
+    },
+    {
+     "from": "view:OverdueInvoices",
+     "to": "worker:reminder-sender",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:reminder-sender",
+     "to": "api",
+     "label": "sendReminder",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "worker:mailer",
+     "label": "invoice-opened"
+    },
+    {
+     "from": "worker:mailer",
+     "to": "api",
+     "label": "sendInvoiceEmail",
+     "weak": true
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "BillingPlatform (eu-west, us-east)",
+     "members": [
+      "api",
+      "store",
+      "view:InvoiceStatus",
+      "view:OverdueInvoices",
+      "worker:reminder-sender",
+      "worker:mailer"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "BillingPlatform · data flow",
+   "subtitle": "regions eu-west, us-east   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:customer",
+     "label": "Customer",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:openInvoice",
+     "label": "openInvoice()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:refundInvoice",
+     "label": "refundInvoice()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:InvoiceStatus",
+     "label": "InvoiceStatus",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:OverdueInvoices",
+     "label": "OverdueInvoices",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "worker:reminder-sender",
+     "label": "reminder-sender",
+     "sub": "process, every 1 hours",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:sendReminder",
+     "label": "sendReminder()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    },
+    {
+     "id": "worker:mailer",
+     "label": "mailer",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:sendInvoiceEmail",
+     "label": "sendInvoiceEmail()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:customer",
+     "to": "cmd:openInvoice",
+     "label": "accountId, amount"
+    },
+    {
+     "from": "cmd:openInvoice",
+     "to": "log",
+     "label": "invoice-opened"
+    },
+    {
+     "from": "actor:admin",
+     "to": "cmd:refundInvoice",
+     "label": "invoiceId, amount"
+    },
+    {
+     "from": "cmd:refundInvoice",
+     "to": "log",
+     "label": "invoice-refunded"
+    },
+    {
+     "from": "log",
+     "to": "cmd:refundInvoice",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "view:InvoiceStatus",
+     "label": "invoice-opened, invoice-refunded"
+    },
+    {
+     "from": "log",
+     "to": "view:OverdueInvoices",
+     "label": "invoice-opened"
+    },
+    {
+     "from": "view:OverdueInvoices",
+     "to": "worker:reminder-sender",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:reminder-sender",
+     "to": "cmd:sendReminder",
+     "label": "issues",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "worker:mailer",
+     "label": "invoice-opened"
+    },
+    {
+     "from": "worker:mailer",
+     "to": "cmd:sendInvoiceEmail",
+     "label": "issues",
+     "weak": true
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "BillingPlatform · deployment",
+   "subtitle": "regions eu-west, us-east   ·   Inferred: each region runs the full stack unless a boundary says @cost(regions=n).",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "eu-west:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "eu-west:shard:Invoice",
+     "label": "Invoice shards",
+     "sub": "by invoiceId · in 2 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu-west:view:InvoiceStatus",
+     "label": "InvoiceStatus",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-west:view:OverdueInvoices",
+     "label": "OverdueInvoices",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-west:worker:reminder-sender",
+     "label": "reminder-sender",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu-west:worker:mailer",
+     "label": "mailer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us-east:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "us-east:shard:Invoice",
+     "label": "Invoice shards",
+     "sub": "by invoiceId · in 2 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us-east:view:InvoiceStatus",
+     "label": "InvoiceStatus",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "us-east:view:OverdueInvoices",
+     "label": "OverdueInvoices",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "us-east:worker:reminder-sender",
+     "label": "reminder-sender",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us-east:worker:mailer",
+     "label": "mailer",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "eu-west:api",
+     "to": "eu-west:shard:Invoice",
+     "label": "openInvoice, refundInvoice"
+    },
+    {
+     "from": "eu-west:shard:Invoice",
+     "to": "eu-west:view:InvoiceStatus",
+     "label": ""
+    },
+    {
+     "from": "eu-west:shard:Invoice",
+     "to": "eu-west:view:OverdueInvoices",
+     "label": ""
+    },
+    {
+     "from": "eu-west:api",
+     "to": "eu-west:worker:reminder-sender",
+     "label": ""
+    },
+    {
+     "from": "eu-west:shard:Invoice",
+     "to": "eu-west:worker:mailer",
+     "label": ""
+    },
+    {
+     "from": "us-east:api",
+     "to": "us-east:shard:Invoice",
+     "label": "openInvoice, refundInvoice"
+    },
+    {
+     "from": "us-east:shard:Invoice",
+     "to": "us-east:view:InvoiceStatus",
+     "label": ""
+    },
+    {
+     "from": "us-east:shard:Invoice",
+     "to": "us-east:view:OverdueInvoices",
+     "label": ""
+    },
+    {
+     "from": "us-east:api",
+     "to": "us-east:worker:reminder-sender",
+     "label": ""
+    },
+    {
+     "from": "us-east:shard:Invoice",
+     "to": "us-east:worker:mailer",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:eu-west",
+     "label": "eu-west",
+     "members": [
+      "eu-west:api",
+      "eu-west:shard:Invoice",
+      "eu-west:view:InvoiceStatus",
+      "eu-west:view:OverdueInvoices",
+      "eu-west:worker:reminder-sender",
+      "eu-west:worker:mailer"
+     ]
+    },
+    {
+     "id": "region:us-east",
+     "label": "us-east",
+     "members": [
+      "us-east:api",
+      "us-east:shard:Invoice",
+      "us-east:view:InvoiceStatus",
+      "us-east:view:OverdueInvoices",
+      "us-east:worker:reminder-sender",
+      "us-east:worker:mailer"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "title": "BillingPlatform · context map",
+   "subtitle": "regions eu-west, us-east   ·   dashed = an event the sender does not publish",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "ctx:Billing",
+     "label": "Billing",
+     "sub": "core · 2 commands, 2 read models",
+     "kind": "process"
+    },
+    {
+     "id": "ctx:Notifications",
+     "label": "Notifications",
+     "sub": "adapter · 0 commands, 0 read models",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "ctx:Billing",
+     "to": "ctx:Notifications",
+     "label": "invoice-opened",
+     "style": "solid"
+    }
+   ],
+   "groups": []
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "actor:openInvoice": [
+    {
+     "diagram": "context",
+     "node": "actor:customer",
+     "label": "system context: Customer",
+     "url": null
+    }
+   ],
+   "cmd:openInvoice": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:openInvoice",
+     "label": "data flow: openInvoice()",
+     "url": null
+    }
+   ],
+   "actor:refundInvoice": [
+    {
+     "diagram": "context",
+     "node": "actor:admin",
+     "label": "system context: Admin",
+     "url": null
+    }
+   ],
+   "cmd:refundInvoice": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:refundInvoice",
+     "label": "data flow: refundInvoice()",
+     "url": null
+    }
+   ],
+   "evt:invoice-opened": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:invoice-refunded": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:InvoiceStatus": [
+    {
+     "diagram": "containers",
+     "node": "view:InvoiceStatus",
+     "label": "containers: InvoiceStatus",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:InvoiceStatus",
+     "label": "data flow: InvoiceStatus",
+     "url": null
+    }
+   ],
+   "view:OverdueInvoices": [
+    {
+     "diagram": "containers",
+     "node": "view:OverdueInvoices",
+     "label": "containers: OverdueInvoices",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:OverdueInvoices",
+     "label": "data flow: OverdueInvoices",
+     "url": null
+    }
+   ],
+   "pol:reminder-sender": [
+    {
+     "diagram": "containers",
+     "node": "worker:reminder-sender",
+     "label": "containers: reminder-sender",
+     "url": null
+    }
+   ],
+   "cmd:sendReminder": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:sendReminder",
+     "label": "data flow: sendReminder()",
+     "url": null
+    }
+   ],
+   "pol:mailer": [
+    {
+     "diagram": "containers",
+     "node": "worker:mailer",
+     "label": "containers: mailer",
+     "url": null
+    }
+   ],
+   "cmd:sendInvoiceEmail": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:sendInvoiceEmail",
+     "label": "data flow: sendInvoiceEmail()",
+     "url": null
+    }
+   ],
+   "bnd:Invoice": [
+    {
+     "diagram": "deployment",
+     "node": "eu-west:shard:Invoice",
+     "label": "deployment: Invoice shards",
+     "url": null
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: BillingPlatform (eu-west, us-east)",
+     "url": null
+    }
+   ],
+   "actor:customer": [
+    {
+     "diagram": "containers",
+     "node": "actor:customer",
+     "label": "containers: Customer",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "containers",
+     "node": "actor:admin",
+     "label": "containers: Admin",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "containers",
+     "node": "ext:stripe",
+     "label": "containers: stripe",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "actor:customer": [
+    {
+     "diagram": "context",
+     "node": "actor:customer",
+     "label": "system context: Customer",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "context",
+     "node": "actor:admin",
+     "label": "system context: Admin",
+     "url": null
+    }
+   ],
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:InvoiceStatus": [
+    {
+     "diagram": "dataflow",
+     "node": "view:InvoiceStatus",
+     "label": "data flow: InvoiceStatus",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:InvoiceStatus",
+     "label": "event model: InvoiceStatus(invoiceId)",
+     "url": null
+    }
+   ],
+   "view:OverdueInvoices": [
+    {
+     "diagram": "dataflow",
+     "node": "view:OverdueInvoices",
+     "label": "data flow: OverdueInvoices",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:OverdueInvoices",
+     "label": "event model: OverdueInvoices(accountId)",
+     "url": null
+    }
+   ],
+   "worker:reminder-sender": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:reminder-sender",
+     "label": "data flow: reminder-sender",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:reminder-sender",
+     "label": "event model: reminder-sender",
+     "url": null
+    }
+   ],
+   "worker:mailer": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:mailer",
+     "label": "data flow: mailer",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:mailer",
+     "label": "event model: mailer",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: BillingPlatform",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "actor:customer": [
+    {
+     "diagram": "context",
+     "node": "actor:customer",
+     "label": "system context: Customer",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "context",
+     "node": "actor:admin",
+     "label": "system context: Admin",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:openInvoice": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:openInvoice",
+     "label": "event model: openInvoice(accountId, amount)",
+     "url": null
+    }
+   ],
+   "cmd:refundInvoice": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:refundInvoice",
+     "label": "event model: refundInvoice(invoiceId, amount)",
+     "url": null
+    }
+   ],
+   "view:InvoiceStatus": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:InvoiceStatus",
+     "label": "event model: InvoiceStatus(invoiceId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:InvoiceStatus",
+     "label": "containers: InvoiceStatus",
+     "url": null
+    }
+   ],
+   "view:OverdueInvoices": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:OverdueInvoices",
+     "label": "event model: OverdueInvoices(accountId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:OverdueInvoices",
+     "label": "containers: OverdueInvoices",
+     "url": null
+    }
+   ],
+   "worker:reminder-sender": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:reminder-sender",
+     "label": "event model: reminder-sender",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:reminder-sender",
+     "label": "containers: reminder-sender",
+     "url": null
+    }
+   ],
+   "cmd:sendReminder": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:sendReminder",
+     "label": "event model: sendReminder()",
+     "url": null
+    }
+   ],
+   "worker:mailer": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:mailer",
+     "label": "event model: mailer",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:mailer",
+     "label": "containers: mailer",
+     "url": null
+    }
+   ],
+   "cmd:sendInvoiceEmail": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:sendInvoiceEmail",
+     "label": "event model: sendInvoiceEmail()",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "eu-west:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "eu-west:shard:Invoice": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:Invoice",
+     "label": "event model: Invoice(invoiceId)",
+     "url": null
+    }
+   ],
+   "eu-west:view:InvoiceStatus": [
+    {
+     "diagram": "containers",
+     "node": "view:InvoiceStatus",
+     "label": "containers: InvoiceStatus",
+     "url": null
+    }
+   ],
+   "eu-west:view:OverdueInvoices": [
+    {
+     "diagram": "containers",
+     "node": "view:OverdueInvoices",
+     "label": "containers: OverdueInvoices",
+     "url": null
+    }
+   ],
+   "eu-west:worker:reminder-sender": [
+    {
+     "diagram": "containers",
+     "node": "worker:reminder-sender",
+     "label": "containers: reminder-sender",
+     "url": null
+    }
+   ],
+   "eu-west:worker:mailer": [
+    {
+     "diagram": "containers",
+     "node": "worker:mailer",
+     "label": "containers: mailer",
+     "url": null
+    }
+   ],
+   "us-east:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "us-east:shard:Invoice": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:Invoice",
+     "label": "event model: Invoice(invoiceId)",
+     "url": null
+    }
+   ],
+   "us-east:view:InvoiceStatus": [
+    {
+     "diagram": "containers",
+     "node": "view:InvoiceStatus",
+     "label": "containers: InvoiceStatus",
+     "url": null
+    }
+   ],
+   "us-east:view:OverdueInvoices": [
+    {
+     "diagram": "containers",
+     "node": "view:OverdueInvoices",
+     "label": "containers: OverdueInvoices",
+     "url": null
+    }
+   ],
+   "us-east:worker:reminder-sender": [
+    {
+     "diagram": "containers",
+     "node": "worker:reminder-sender",
+     "label": "containers: reminder-sender",
+     "url": null
+    }
+   ],
+   "us-east:worker:mailer": [
+    {
+     "diagram": "containers",
+     "node": "worker:mailer",
+     "label": "containers: mailer",
+     "url": null
+    }
+   ],
+   "region:eu-west": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: BillingPlatform (eu-west, us-east)",
+     "url": null
+    }
+   ],
+   "region:us-east": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: BillingPlatform (eu-west, us-east)",
+     "url": null
+    }
+   ]
+  },
+  "contextmap": {
+   "ctx:Billing": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:openInvoice",
+     "label": "event model: openInvoice(accountId, amount)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:openInvoice": [
+    [
+     20,
+     23
+    ]
+   ],
+   "cmd:refundInvoice": [
+    [
+     25,
+     28
+    ]
+   ],
+   "view:InvoiceStatus": [
+    [
+     30,
+     30
+    ]
+   ],
+   "view:OverdueInvoices": [
+    [
+     32,
+     32
+    ]
+   ],
+   "pol:reminder-sender": [
+    [
+     34,
+     36
+    ]
+   ],
+   "pol:mailer": [
+    [
+     44,
+     45
+    ]
+   ],
+   "bnd:Invoice": [
+    [
+     18,
+     18
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:InvoiceStatus": [
+    [
+     30,
+     30
+    ]
+   ],
+   "view:OverdueInvoices": [
+    [
+     32,
+     32
+    ]
+   ],
+   "worker:reminder-sender": [
+    [
+     34,
+     36
+    ]
+   ],
+   "worker:mailer": [
+    [
+     44,
+     45
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:openInvoice": [
+    [
+     20,
+     23
+    ]
+   ],
+   "cmd:refundInvoice": [
+    [
+     25,
+     28
+    ]
+   ],
+   "view:InvoiceStatus": [
+    [
+     30,
+     30
+    ]
+   ],
+   "view:OverdueInvoices": [
+    [
+     32,
+     32
+    ]
+   ],
+   "worker:reminder-sender": [
+    [
+     34,
+     36
+    ]
+   ],
+   "worker:mailer": [
+    [
+     44,
+     45
+    ]
+   ]
+  },
+  "deployment": {
+   "eu-west:view:InvoiceStatus": [
+    [
+     30,
+     30
+    ]
+   ],
+   "us-east:view:InvoiceStatus": [
+    [
+     30,
+     30
+    ]
+   ],
+   "eu-west:view:OverdueInvoices": [
+    [
+     32,
+     32
+    ]
+   ],
+   "us-east:view:OverdueInvoices": [
+    [
+     32,
+     32
+    ]
+   ],
+   "eu-west:worker:reminder-sender": [
+    [
+     34,
+     36
+    ]
+   ],
+   "us-east:worker:reminder-sender": [
+    [
+     34,
+     36
+    ]
+   ],
+   "eu-west:worker:mailer": [
+    [
+     44,
+     45
+    ]
+   ],
+   "us-east:worker:mailer": [
+    [
+     44,
+     45
+    ]
+   ],
+   "eu-west:shard:Invoice": [
+    [
+     18,
+     18
+    ]
+   ],
+   "us-east:shard:Invoice": [
+    [
+     18,
+     18
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}

@@ -1,0 +1,5397 @@
+{
+ "model": {
+  "system": {
+   "name": "Shop",
+   "externals": [
+    {
+     "name": "stripe",
+     "role": "payment"
+    }
+   ],
+   "slo": [],
+   "regions": [
+    "eu",
+    "us",
+    "ap"
+   ],
+   "dataClassification": [],
+   "constraints": [],
+   "attrs": {},
+   "line": 1
+  },
+  "contexts": [
+   {
+    "name": "Sales",
+    "description": "Carts and orders",
+    "role": "core",
+    "publishes": [
+     "order-placed"
+    ],
+    "attrs": {},
+    "line": 14
+   },
+   {
+    "name": "Shipping",
+    "description": "",
+    "role": "core",
+    "publishes": [],
+    "attrs": {},
+    "line": 34
+   }
+  ],
+  "actors": [
+   {
+    "name": "User",
+    "attributes": {
+     "auth": "session"
+    },
+    "line": 6
+   }
+  ],
+  "boundaries": [
+   {
+    "name": "Cart",
+    "params": [
+     "cartId"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "cartId"
+     },
+     "cost": {
+      "regions": "1"
+     },
+     "link": {
+      "label": "nowhere"
+     }
+    },
+    "line": 8
+   },
+   {
+    "name": "Order",
+    "params": [
+     "orderId"
+    ],
+    "annotations": {
+     "link": {
+      "url": "https://wiki.example.com/order"
+     }
+    },
+    "line": 9
+   }
+  ],
+  "views": [
+   {
+    "name": "CartView",
+    "params": [
+     "cartId"
+    ],
+    "paramDefs": [
+     {
+      "name": "cartId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "item-added",
+      "wildcard": true,
+      "args": "cartId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "items",
+      "expr": "count(item-added*(cartId))"
+     }
+    ],
+    "annotations": {
+     "link": [
+      {
+       "to": "containers",
+       "node": "api"
+      },
+      {
+       "url": "ftp-ish"
+      }
+     ]
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 40,
+    "endLine": 40
+   },
+   {
+    "name": "OrdersToShip",
+    "params": [
+     "orderId"
+    ],
+    "paramDefs": [
+     {
+      "name": "orderId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "order-placed",
+      "wildcard": false,
+      "args": "orderId"
+     },
+     {
+      "name": "payment-captured",
+      "wildcard": false,
+      "args": "orderId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "orderId"
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 41,
+    "endLine": 41
+   },
+   {
+    "name": "Activity",
+    "params": [
+     "cartId"
+    ],
+    "paramDefs": [
+     {
+      "name": "cartId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "item-added",
+      "wildcard": false,
+      "args": "cartId"
+     },
+     {
+      "name": "order-placed",
+      "wildcard": false,
+      "args": "cartId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "n"
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 42,
+    "endLine": 42
+   }
+  ],
+  "commands": [
+   {
+    "actor": "user",
+    "name": "addItem",
+    "params": [
+     "cartId",
+     "sku"
+    ],
+    "paramDefs": [
+     {
+      "name": "cartId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "sku",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "Cart",
+     "args": "cartId"
+    },
+    "on": [],
+    "from": [],
+    "branches": [
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "item-added",
+        "fields": [
+         {
+          "name": "cartId"
+         },
+         {
+          "name": "sku"
+         }
+        ],
+        "payload": "cartId, sku"
+       }
+      ],
+      "reject": null,
+      "line": 20
+     }
+    ],
+    "annotations": {
+     "link": {
+      "to": "eventmodel",
+      "node": "view:CartView"
+     },
+     "trigger": {
+      "type": "ui",
+      "name": "CartScreen",
+      "route": "POST /carts/{cartId}/items"
+     }
+    },
+    "notes": [],
+    "scenarios": [
+     {
+      "name": "adds an item",
+      "text": "Given an empty cart\nWhen the user adds an item\nThen the cart has one item",
+      "line": 21,
+      "steps": null
+     }
+    ],
+    "line": 18,
+    "endLine": 20,
+    "triggers": [
+     {
+      "type": "ui",
+      "name": "CartScreen",
+      "part": null,
+      "route": "POST /carts/{cartId}/items"
+     }
+    ],
+    "source": null,
+    "context": "Sales"
+   },
+   {
+    "actor": "user",
+    "name": "placeOrder",
+    "params": [
+     "cartId",
+     "orderId"
+    ],
+    "paramDefs": [
+     {
+      "name": "cartId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "orderId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "Order",
+     "args": "orderId"
+    },
+    "on": [
+     {
+      "name": "item-added",
+      "wildcard": false,
+      "args": "cartId"
+     }
+    ],
+    "from": [
+     {
+      "name": "CartView",
+      "wildcard": false,
+      "args": "cartId",
+      "freshness": "5s",
+      "alias": "cart"
+     }
+    ],
+    "branches": [
+     {
+      "guard": "cart.empty",
+      "default": false,
+      "emits": [],
+      "reject": "CART_EMPTY",
+      "line": 30
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "order-placed",
+        "fields": [
+         {
+          "name": "cartId"
+         },
+         {
+          "name": "orderId"
+         }
+        ],
+        "payload": "cartId, orderId"
+       }
+      ],
+      "reject": null,
+      "line": 31
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 27,
+    "endLine": 31,
+    "triggers": [],
+    "source": null,
+    "context": "Sales"
+   },
+   {
+    "actor": "stripe-webhook",
+    "name": "capture",
+    "params": [
+     "orderId",
+     "amount"
+    ],
+    "paramDefs": [
+     {
+      "name": "orderId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "amount",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "Order",
+     "args": "orderId"
+    },
+    "on": [
+     {
+      "name": "order-placed",
+      "wildcard": false,
+      "args": "orderId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "payment-captured",
+        "fields": [
+         {
+          "name": "orderId"
+         },
+         {
+          "name": "amount"
+         }
+        ],
+        "payload": "orderId, amount"
+       }
+      ],
+      "reject": null,
+      "line": 37
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 35,
+    "endLine": 37,
+    "triggers": [],
+    "source": null,
+    "context": "Shipping"
+   }
+  ],
+  "policies": [
+   {
+    "name": null,
+    "trigger": {
+     "event": "order-placed",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "orderId"
+      }
+     ],
+     "payload": "orderId"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "fulfilment-worker",
+      "command": {
+       "name": "ship",
+       "args": "orderId"
+      },
+      "emits": [],
+      "line": 44
+     }
+    ],
+    "line": 44,
+    "endLine": 44
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": "payment-captured",
+     "readModels": false,
+     "fields": []
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [
+     {
+      "name": "OrdersToShip",
+      "wildcard": false,
+      "args": ""
+     }
+    ],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "fulfilment-worker",
+      "command": {
+       "name": "ship",
+       "args": "orderId"
+      },
+      "emits": [],
+      "line": 45
+     }
+    ],
+    "line": 45,
+    "endLine": 45
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": null,
+     "schedule": null,
+     "readModels": true,
+     "fields": []
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [
+     {
+      "name": "OrdersToShip",
+      "wildcard": false,
+      "args": ""
+     }
+    ],
+    "rules": [
+     {
+      "guard": "ready",
+      "worker": "packer",
+      "command": {
+       "name": "pack",
+       "args": "orderId"
+      },
+      "emits": [],
+      "line": 46
+     }
+    ],
+    "line": 46,
+    "endLine": 46
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": "item-added",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "cartId"
+      }
+     ],
+     "payload": "cartId"
+    },
+    "annotations": {
+     "planned": true
+    },
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": "sku == \"gift\"",
+      "worker": "gift-worker",
+      "command": null,
+      "emits": [
+       {
+        "event": "gift-wrapped",
+        "fields": [
+         {
+          "name": "cartId"
+         }
+        ],
+        "payload": "cartId"
+       }
+      ],
+      "line": 48
+     }
+    ],
+    "line": 47,
+    "endLine": 48
+   },
+   {
+    "name": "Notify",
+    "trigger": {
+     "event": "order-placed",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "orderId"
+      }
+     ],
+     "payload": "orderId"
+    },
+    "annotations": {
+     "link": {
+      "to": "nonsense"
+     }
+    },
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "notifier",
+      "command": {
+       "name": "notify",
+       "args": "orderId"
+      },
+      "emits": [],
+      "line": 50
+     }
+    ],
+    "line": 49,
+    "endLine": 50
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": null,
+     "schedule": "every 5 minutes",
+     "readModels": false,
+     "fields": []
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [
+     {
+      "name": "CartView",
+      "wildcard": false,
+      "args": "cartId"
+     }
+    ],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "sweeper",
+      "command": null,
+      "emits": [
+       {
+        "event": "cart-abandoned",
+        "fields": [
+         {
+          "name": "cartId"
+         }
+        ],
+        "payload": "cartId"
+       }
+      ],
+      "line": 53
+     }
+    ],
+    "line": 51,
+    "endLine": 53
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": null,
+     "schedule": "cron \"0 * * * *\"",
+     "readModels": false,
+     "fields": []
+    },
+    "annotations": {
+     "link": {
+      "to": "dataflow",
+      "node": "cmd:nope"
+     }
+    },
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "reporter",
+      "command": {
+       "name": "report",
+       "args": ""
+      },
+      "emits": [],
+      "line": 55
+     }
+    ],
+    "line": 54,
+    "endLine": 55
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": "readmodel",
+     "readModels": false,
+     "fields": []
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [
+     {
+      "name": "CartView",
+      "wildcard": false,
+      "args": ""
+     }
+    ],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "lister",
+      "command": {
+       "name": "list",
+       "args": "cartId"
+      },
+      "emits": [],
+      "line": 56
+     }
+    ],
+    "line": 56,
+    "endLine": 56
+   }
+  ],
+  "events": [
+   {
+    "name": "item-added",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "addItem",
+      "branch": "default",
+      "context": "Sales"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "placeOrder",
+      "context": "Sales"
+     },
+     {
+      "kind": "view",
+      "name": "CartView"
+     },
+     {
+      "kind": "view",
+      "name": "Activity"
+     },
+     {
+      "kind": "policy",
+      "name": "item-added"
+     }
+    ],
+    "fields": [
+     {
+      "name": "cartId"
+     },
+     {
+      "name": "sku"
+     }
+    ],
+    "declared": {
+     "fields": [
+      "cartId",
+      "sku"
+     ],
+     "line": 11,
+     "context": null
+    }
+   },
+   {
+    "name": "order-placed",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "placeOrder",
+      "branch": "default",
+      "context": "Sales"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "capture",
+      "context": "Shipping"
+     },
+     {
+      "kind": "view",
+      "name": "OrdersToShip"
+     },
+     {
+      "kind": "view",
+      "name": "Activity"
+     },
+     {
+      "kind": "policy",
+      "name": "order-placed"
+     },
+     {
+      "kind": "policy",
+      "name": "order-placed"
+     }
+    ],
+    "fields": [
+     {
+      "name": "cartId"
+     },
+     {
+      "name": "orderId"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "payment-captured",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "capture",
+      "branch": "default",
+      "context": "Shipping"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "OrdersToShip"
+     },
+     {
+      "kind": "policy",
+      "name": "payment-captured"
+     }
+    ],
+    "fields": [
+     {
+      "name": "orderId"
+     },
+     {
+      "name": "amount"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "gift-wrapped",
+    "emittedBy": [
+     {
+      "kind": "policy",
+      "name": "item-added",
+      "worker": "gift-worker"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "cartId"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "cart-abandoned",
+    "emittedBy": [
+     {
+      "kind": "policy",
+      "name": "every 5 minutes",
+      "worker": "sweeper"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "cartId"
+     }
+    ],
+    "declared": {
+     "fields": null,
+     "line": 12,
+     "context": null
+    }
+   },
+   {
+    "name": "readmodel",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "policy",
+      "name": "readmodel"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   }
+  ],
+  "declarations": [
+   {
+    "name": "item-added",
+    "fields": [
+     {
+      "name": "cartId"
+     },
+     {
+      "name": "sku"
+     }
+    ],
+    "line": 11,
+    "context": null
+   },
+   {
+    "name": "cart-abandoned",
+    "fields": null,
+    "line": 12,
+    "context": null
+   }
+  ]
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "warn",
+    "rule": "event-naming",
+    "category": "naming",
+    "profile": "core",
+    "message": "Event \"readmodel\" does not match {aggregate}-{verb}",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#event-naming"
+   },
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> addItem\" lists no facts it needs (fine for a command that creates something)",
+    "line": 18,
+    "endLine": 20,
+    "subject": {
+     "kind": "command",
+     "name": "addItem",
+     "line": 18,
+     "endLine": 20
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"user -> placeOrder\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"stripe-webhook -> capture\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"order-placed\" has an unguarded rule",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"payment-captured\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 45,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy Notify has an unguarded rule",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"readmodel\" has an unguarded rule",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: readmodel. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-url",
+    "category": "links",
+    "profile": "core",
+    "message": "read model CartView has an @link with url \"ftp-ish\". Use an http(s) address or a path.",
+    "line": 40,
+    "endLine": 40,
+    "subject": {
+     "kind": "view",
+     "name": "CartView",
+     "line": 40,
+     "endLine": 40
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-url"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy Notify has an @link to \"nonsense\", which is not a diagram. Choose one of: eventmodel, context, containers, dataflow, deployment, contextmap.",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy cron \"0 * * * *\" has an @link to \"cmd:nope\", which is not a box on the data flow.",
+    "line": 54,
+    "endLine": 55,
+    "subject": {
+     "kind": "policy",
+     "name": "cron \"0 * * * *\"",
+     "line": 54,
+     "endLine": 55
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "boundary Cart has an @link with neither to=\"...\" nor url=\"...\".",
+    "line": 8,
+    "endLine": 8,
+    "subject": {
+     "kind": "boundary",
+     "name": "Cart",
+     "line": 8,
+     "endLine": 8
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "warn",
+    "rule": "event-naming",
+    "category": "naming",
+    "profile": "core",
+    "message": "Event \"readmodel\" does not match {aggregate}-{verb}",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#event-naming"
+   },
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> addItem\" lists no facts it needs (fine for a command that creates something)",
+    "line": 18,
+    "endLine": 20,
+    "subject": {
+     "kind": "command",
+     "name": "addItem",
+     "line": 18,
+     "endLine": 20
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"user -> placeOrder\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"stripe-webhook -> capture\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"order-placed\" has an unguarded rule",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"payment-captured\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 45,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy Notify has an unguarded rule",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"readmodel\" has an unguarded rule",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: readmodel. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-url",
+    "category": "links",
+    "profile": "core",
+    "message": "read model CartView has an @link with url \"ftp-ish\". Use an http(s) address or a path.",
+    "line": 40,
+    "endLine": 40,
+    "subject": {
+     "kind": "view",
+     "name": "CartView",
+     "line": 40,
+     "endLine": 40
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-url"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy Notify has an @link to \"nonsense\", which is not a diagram. Choose one of: eventmodel, context, containers, dataflow, deployment, contextmap.",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy cron \"0 * * * *\" has an @link to \"cmd:nope\", which is not a box on the data flow.",
+    "line": 54,
+    "endLine": 55,
+    "subject": {
+     "kind": "policy",
+     "name": "cron \"0 * * * *\"",
+     "line": 54,
+     "endLine": 55
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "boundary Cart has an @link with neither to=\"...\" nor url=\"...\".",
+    "line": 8,
+    "endLine": 8,
+    "subject": {
+     "kind": "boundary",
+     "name": "Cart",
+     "line": 8,
+     "endLine": 8
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "info",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"Activity\" shows \"n\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 42,
+    "endLine": 42,
+    "subject": {
+     "kind": "view",
+     "name": "Activity",
+     "line": 42,
+     "endLine": 42
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "5 of 6 commands and read models have no scenario, starting with \"placeOrder\"",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"capture\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"order-placed\" starts straight from the event. Write a read model such as PendingFulfilmentWorker(...) fed by order-placed, and start from it: \"order-placed from [PendingFulfilmentWorker] -> ...\" or \"from [PendingFulfilmentWorker] -> ...\"",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"item-added\" starts straight from the event. Write a read model such as PendingGiftWorker(...) fed by item-added, and start from it: \"item-added from [PendingGiftWorker] -> ...\" or \"from [PendingGiftWorker] -> ...\"",
+    "line": 47,
+    "endLine": 48,
+    "subject": {
+     "kind": "policy",
+     "name": "item-added",
+     "line": 47,
+     "endLine": 48
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation policy Notify on \"order-placed\" starts straight from the event. Write a read model such as PendingNotify(...) fed by order-placed, and start from it: \"policy Notify = order-placed from [PendingNotify] -> ...\" or \"policy Notify = from [PendingNotify] -> ...\"",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"readmodel\" starts straight from the event. Write a read model such as PendingLister(...) fed by readmodel, and start from it: \"readmodel from [PendingLister] -> ...\" or \"from [PendingLister] -> ...\"",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "warn",
+    "rule": "event-naming",
+    "category": "naming",
+    "profile": "core",
+    "message": "Event \"readmodel\" does not match {aggregate}-{verb}",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#event-naming"
+   },
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> addItem\" lists no facts it needs (fine for a command that creates something)",
+    "line": 18,
+    "endLine": 20,
+    "subject": {
+     "kind": "command",
+     "name": "addItem",
+     "line": 18,
+     "endLine": 20
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"user -> placeOrder\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"stripe-webhook -> capture\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"order-placed\" has an unguarded rule",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"payment-captured\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 45,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy Notify has an unguarded rule",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"readmodel\" has an unguarded rule",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: readmodel. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-url",
+    "category": "links",
+    "profile": "core",
+    "message": "read model CartView has an @link with url \"ftp-ish\". Use an http(s) address or a path.",
+    "line": 40,
+    "endLine": 40,
+    "subject": {
+     "kind": "view",
+     "name": "CartView",
+     "line": 40,
+     "endLine": 40
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-url"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy Notify has an @link to \"nonsense\", which is not a diagram. Choose one of: eventmodel, context, containers, dataflow, deployment, contextmap.",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy cron \"0 * * * *\" has an @link to \"cmd:nope\", which is not a box on the data flow.",
+    "line": 54,
+    "endLine": 55,
+    "subject": {
+     "kind": "policy",
+     "name": "cron \"0 * * * *\"",
+     "line": 54,
+     "endLine": 55
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "boundary Cart has an @link with neither to=\"...\" nor url=\"...\".",
+    "line": 8,
+    "endLine": 8,
+    "subject": {
+     "kind": "boundary",
+     "name": "Cart",
+     "line": 8,
+     "endLine": 8
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"Activity\" shows \"n\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 42,
+    "endLine": 42,
+    "subject": {
+     "kind": "view",
+     "name": "Activity",
+     "line": 42,
+     "endLine": 42
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "5 of 6 commands and read models have no scenario, starting with \"placeOrder\"",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"capture\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"order-placed\" starts straight from the event. Write a read model such as PendingFulfilmentWorker(...) fed by order-placed, and start from it: \"order-placed from [PendingFulfilmentWorker] -> ...\" or \"from [PendingFulfilmentWorker] -> ...\"",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"item-added\" starts straight from the event. Write a read model such as PendingGiftWorker(...) fed by item-added, and start from it: \"item-added from [PendingGiftWorker] -> ...\" or \"from [PendingGiftWorker] -> ...\"",
+    "line": 47,
+    "endLine": 48,
+    "subject": {
+     "kind": "policy",
+     "name": "item-added",
+     "line": 47,
+     "endLine": 48
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation policy Notify on \"order-placed\" starts straight from the event. Write a read model such as PendingNotify(...) fed by order-placed, and start from it: \"policy Notify = order-placed from [PendingNotify] -> ...\" or \"policy Notify = from [PendingNotify] -> ...\"",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"readmodel\" starts straight from the event. Write a read model such as PendingLister(...) fed by readmodel, and start from it: \"readmodel from [PendingLister] -> ...\" or \"from [PendingLister] -> ...\"",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "warn",
+    "rule": "event-naming",
+    "category": "naming",
+    "profile": "core",
+    "message": "Event \"readmodel\" does not match {aggregate}-{verb}",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#event-naming"
+   },
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> addItem\" lists no facts it needs (fine for a command that creates something)",
+    "line": 18,
+    "endLine": 20,
+    "subject": {
+     "kind": "command",
+     "name": "addItem",
+     "line": 18,
+     "endLine": 20
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"user -> placeOrder\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "command-trigger",
+    "category": "triggers",
+    "profile": "core",
+    "message": "Command \"stripe-webhook -> capture\" does not say what is used to reach it (add: @trigger(type=ui, name=\"...\"))",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-trigger"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"order-placed\" has an unguarded rule",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"payment-captured\" has an unguarded rule",
+    "line": 45,
+    "endLine": 45,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 45,
+     "endLine": 45
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy Notify has an unguarded rule",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"readmodel\" has an unguarded rule",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: readmodel. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-url",
+    "category": "links",
+    "profile": "core",
+    "message": "read model CartView has an @link with url \"ftp-ish\". Use an http(s) address or a path.",
+    "line": 40,
+    "endLine": 40,
+    "subject": {
+     "kind": "view",
+     "name": "CartView",
+     "line": 40,
+     "endLine": 40
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-url"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy Notify has an @link to \"nonsense\", which is not a diagram. Choose one of: eventmodel, context, containers, dataflow, deployment, contextmap.",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "policy cron \"0 * * * *\" has an @link to \"cmd:nope\", which is not a box on the data flow.",
+    "line": 54,
+    "endLine": 55,
+    "subject": {
+     "kind": "policy",
+     "name": "cron \"0 * * * *\"",
+     "line": 54,
+     "endLine": 55
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "link-target",
+    "category": "links",
+    "profile": "core",
+    "message": "boundary Cart has an @link with neither to=\"...\" nor url=\"...\".",
+    "line": 8,
+    "endLine": 8,
+    "subject": {
+     "kind": "boundary",
+     "name": "Cart",
+     "line": 8,
+     "endLine": 8
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#link-target"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"Activity\" shows \"n\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 42,
+    "endLine": 42,
+    "subject": {
+     "kind": "view",
+     "name": "Activity",
+     "line": 42,
+     "endLine": 42
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "5 of 6 commands and read models have no scenario, starting with \"placeOrder\"",
+    "line": 27,
+    "endLine": 31,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"capture\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 35,
+    "endLine": 37,
+    "subject": {
+     "kind": "command",
+     "name": "capture",
+     "line": 35,
+     "endLine": 37
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"order-placed\" starts straight from the event. Write a read model such as PendingFulfilmentWorker(...) fed by order-placed, and start from it: \"order-placed from [PendingFulfilmentWorker] -> ...\" or \"from [PendingFulfilmentWorker] -> ...\"",
+    "line": 44,
+    "endLine": 44,
+    "subject": {
+     "kind": "policy",
+     "name": "order-placed",
+     "line": 44,
+     "endLine": 44
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"item-added\" starts straight from the event. Write a read model such as PendingGiftWorker(...) fed by item-added, and start from it: \"item-added from [PendingGiftWorker] -> ...\" or \"from [PendingGiftWorker] -> ...\"",
+    "line": 47,
+    "endLine": 48,
+    "subject": {
+     "kind": "policy",
+     "name": "item-added",
+     "line": 47,
+     "endLine": 48
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation policy Notify on \"order-placed\" starts straight from the event. Write a read model such as PendingNotify(...) fed by order-placed, and start from it: \"policy Notify = order-placed from [PendingNotify] -> ...\" or \"policy Notify = from [PendingNotify] -> ...\"",
+    "line": 49,
+    "endLine": 50,
+    "subject": {
+     "kind": "policy",
+     "name": "policy Notify",
+     "line": 49,
+     "endLine": 50
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"readmodel\" starts straight from the event. Write a read model such as PendingLister(...) fed by readmodel, and start from it: \"readmodel from [PendingLister] -> ...\" or \"from [PendingLister] -> ...\"",
+    "line": 56,
+    "endLine": 56,
+    "subject": {
+     "kind": "policy",
+     "name": "readmodel",
+     "line": 56,
+     "endLine": 56
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "warn",
+    "rule": "rejection-uncovered",
+    "category": "scenarios",
+    "profile": "slicerm",
+    "message": "Command \"placeOrder\" can refuse with CART_EMPTY, and no scenario names it",
+    "line": 30,
+    "endLine": 30,
+    "subject": {
+     "kind": "command",
+     "name": "placeOrder",
+     "line": 27,
+     "endLine": 31
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-uncovered"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "Shop",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:addItem",
+     "lane": "actor",
+     "label": "User",
+     "col": 0,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       18,
+       18
+      ]
+     ]
+    },
+    {
+     "id": "cmd:addItem",
+     "lane": "command",
+     "label": "addItem(cartId, sku)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       18,
+       20
+      ]
+     ],
+     "notes": [],
+     "fullNotes": [],
+     "checks": []
+    },
+    {
+     "id": "actor:placeOrder",
+     "lane": "actor",
+     "label": "User",
+     "col": 4,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       27,
+       27
+      ]
+     ]
+    },
+    {
+     "id": "cmd:placeOrder",
+     "lane": "command",
+     "label": "placeOrder(cartId, orderId)",
+     "col": 4,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       27,
+       31
+      ]
+     ],
+     "notes": [
+      "checks item-added",
+      "rejects CART_EMPTY"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "item-added"
+     ]
+    },
+    {
+     "id": "actor:capture",
+     "lane": "actor",
+     "label": "stripe-webhook",
+     "col": 10,
+     "row": 0,
+     "kind": "external",
+     "ranges": [
+      [
+       35,
+       35
+      ]
+     ]
+    },
+    {
+     "id": "cmd:capture",
+     "lane": "command",
+     "label": "capture(orderId, amount)",
+     "col": 10,
+     "row": 0,
+     "kind": "command",
+     "sub": "translation",
+     "slice": "translation",
+     "planned": false,
+     "ranges": [
+      [
+       35,
+       37
+      ]
+     ],
+     "notes": [
+      "checks order-placed"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "order-placed"
+     ]
+    },
+    {
+     "id": "evt:item-added",
+     "lane": "event",
+     "label": "item-added",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:addItem"
+    },
+    {
+     "id": "evt:order-placed",
+     "lane": "event",
+     "label": "order-placed",
+     "col": 4,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:placeOrder"
+    },
+    {
+     "id": "evt:payment-captured",
+     "lane": "event",
+     "label": "payment-captured",
+     "col": 10,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:capture"
+    },
+    {
+     "id": "view:CartView",
+     "lane": "command",
+     "label": "CartView(cartId)",
+     "col": 2,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       40,
+       40
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "view:OrdersToShip",
+     "lane": "command",
+     "label": "OrdersToShip(orderId)",
+     "col": 11,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       41,
+       41
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "view:Activity",
+     "lane": "command",
+     "label": "Activity(cartId)",
+     "col": 6,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       42,
+       42
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "implied:order-placed",
+     "lane": "command",
+     "label": "order-placed",
+     "col": 5,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       44,
+       44
+      ],
+      [
+       49,
+       50
+      ]
+     ]
+    },
+    {
+     "id": "pol:fulfilment-worker",
+     "lane": "actor",
+     "label": "fulfilment-worker",
+     "col": 6,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       44,
+       44
+      ],
+      [
+       45,
+       45
+      ]
+     ]
+    },
+    {
+     "id": "cmd:ship",
+     "lane": "command",
+     "label": "ship()",
+     "col": 7,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    },
+    {
+     "id": "pol:packer",
+     "lane": "actor",
+     "label": "packer",
+     "col": 12,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       46,
+       46
+      ]
+     ]
+    },
+    {
+     "id": "cmd:pack",
+     "lane": "command",
+     "label": "pack()",
+     "col": 13,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    },
+    {
+     "id": "implied:item-added",
+     "lane": "command",
+     "label": "item-added",
+     "col": 1,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       47,
+       48
+      ]
+     ]
+    },
+    {
+     "id": "pol:gift-worker",
+     "lane": "actor",
+     "label": "gift-worker",
+     "col": 2,
+     "row": 0,
+     "kind": "policy",
+     "sub": "planned",
+     "slice": "automation",
+     "planned": true,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       47,
+       48
+      ]
+     ]
+    },
+    {
+     "id": "evt:gift-wrapped",
+     "lane": "event",
+     "label": "gift-wrapped",
+     "col": 3,
+     "row": 0,
+     "kind": "event"
+    },
+    {
+     "id": "policy:Notify",
+     "lane": "actor",
+     "label": "Notify",
+     "col": 8,
+     "row": 0,
+     "kind": "policy",
+     "sub": "notifier",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       49,
+       50
+      ]
+     ]
+    },
+    {
+     "id": "cmd:notify",
+     "lane": "command",
+     "label": "notify()",
+     "col": 9,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    },
+    {
+     "id": "timer:every 5 minutes",
+     "lane": "actor",
+     "label": "every 5 minutes",
+     "col": 14,
+     "row": 0,
+     "kind": "timer"
+    },
+    {
+     "id": "pol:sweeper",
+     "lane": "actor",
+     "label": "sweeper",
+     "col": 15,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       51,
+       53
+      ]
+     ]
+    },
+    {
+     "id": "evt:cart-abandoned",
+     "lane": "event",
+     "label": "cart-abandoned",
+     "col": 16,
+     "row": 0,
+     "kind": "event"
+    },
+    {
+     "id": "timer:cron \"0 * * * *\"",
+     "lane": "actor",
+     "label": "cron \"0 * * * *\"",
+     "col": 17,
+     "row": 0,
+     "kind": "timer"
+    },
+    {
+     "id": "pol:reporter",
+     "lane": "actor",
+     "label": "reporter",
+     "col": 18,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       54,
+       55
+      ]
+     ]
+    },
+    {
+     "id": "cmd:report",
+     "lane": "command",
+     "label": "report()",
+     "col": 19,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    },
+    {
+     "id": "evt:readmodel",
+     "lane": "event",
+     "label": "readmodel",
+     "col": 20,
+     "row": 0,
+     "kind": "event",
+     "assumed": true,
+     "sub": "assumed"
+    },
+    {
+     "id": "implied:readmodel",
+     "lane": "command",
+     "label": "readmodel",
+     "col": 21,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       56,
+       56
+      ]
+     ]
+    },
+    {
+     "id": "pol:lister",
+     "lane": "actor",
+     "label": "lister",
+     "col": 22,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       56,
+       56
+      ]
+     ]
+    },
+    {
+     "id": "cmd:list",
+     "lane": "command",
+     "label": "list()",
+     "col": 23,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:addItem",
+     "to": "cmd:addItem",
+     "kind": "triggers",
+     "label": "CartScreen"
+    },
+    {
+     "from": "actor:placeOrder",
+     "to": "cmd:placeOrder",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "actor:capture",
+     "to": "cmd:capture",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:addItem",
+     "to": "evt:item-added",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:placeOrder",
+     "to": "evt:order-placed",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:capture",
+     "to": "evt:payment-captured",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:item-added",
+     "to": "view:CartView",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:order-placed",
+     "to": "view:OrdersToShip",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:payment-captured",
+     "to": "view:OrdersToShip",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:item-added",
+     "to": "view:Activity",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:order-placed",
+     "to": "view:Activity",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "view:CartView",
+     "to": "cmd:placeOrder",
+     "kind": "reads",
+     "label": "fresh 5s"
+    },
+    {
+     "from": "evt:order-placed",
+     "to": "implied:order-placed",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:order-placed",
+     "to": "pol:fulfilment-worker",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "pol:fulfilment-worker",
+     "to": "cmd:ship",
+     "kind": "invokes",
+     "label": "orderId"
+    },
+    {
+     "from": "view:OrdersToShip",
+     "to": "pol:fulfilment-worker",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "view:OrdersToShip",
+     "to": "pol:packer",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "pol:packer",
+     "to": "cmd:pack",
+     "kind": "invokes",
+     "label": "orderId"
+    },
+    {
+     "from": "evt:item-added",
+     "to": "implied:item-added",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:item-added",
+     "to": "pol:gift-worker",
+     "kind": "reads",
+     "label": "sku == \"gift\""
+    },
+    {
+     "from": "pol:gift-worker",
+     "to": "evt:gift-wrapped",
+     "kind": "emits",
+     "label": ""
+    },
+    {
+     "from": "implied:order-placed",
+     "to": "policy:Notify",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "policy:Notify",
+     "to": "cmd:notify",
+     "kind": "invokes",
+     "label": ""
+    },
+    {
+     "from": "view:CartView",
+     "to": "pol:sweeper",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "timer:every 5 minutes",
+     "to": "pol:sweeper",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "pol:sweeper",
+     "to": "evt:cart-abandoned",
+     "kind": "emits",
+     "label": ""
+    },
+    {
+     "from": "timer:cron \"0 * * * *\"",
+     "to": "pol:reporter",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "pol:reporter",
+     "to": "cmd:report",
+     "kind": "invokes",
+     "label": ""
+    },
+    {
+     "from": "evt:readmodel",
+     "to": "implied:readmodel",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "view:CartView",
+     "to": "pol:lister",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "implied:readmodel",
+     "to": "pol:lister",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "pol:lister",
+     "to": "cmd:list",
+     "kind": "invokes",
+     "label": "cartId"
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "CartView",
+     "nodes": [
+      "view:CartView",
+      "evt:item-added"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "OrdersToShip",
+     "nodes": [
+      "view:OrdersToShip",
+      "evt:order-placed",
+      "evt:payment-captured"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "Activity",
+     "nodes": [
+      "view:Activity",
+      "evt:item-added",
+      "evt:order-placed"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "fulfilment-worker",
+     "nodes": [
+      "evt:order-placed",
+      "implied:order-placed",
+      "pol:fulfilment-worker",
+      "cmd:ship"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "fulfilment-worker",
+     "nodes": [
+      "evt:payment-captured",
+      "view:OrdersToShip",
+      "pol:fulfilment-worker",
+      "cmd:ship"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "packer",
+     "nodes": [
+      "pol:packer",
+      "cmd:pack"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "gift-worker",
+     "nodes": [
+      "evt:item-added",
+      "implied:item-added",
+      "pol:gift-worker",
+      "evt:gift-wrapped"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "Notify",
+     "nodes": [
+      "evt:order-placed",
+      "implied:order-placed",
+      "policy:Notify",
+      "cmd:notify"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "sweeper",
+     "nodes": [
+      "timer:every 5 minutes",
+      "pol:sweeper",
+      "evt:cart-abandoned"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "reporter",
+     "nodes": [
+      "timer:cron \"0 * * * *\"",
+      "pol:reporter",
+      "cmd:report"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "lister",
+     "nodes": [
+      "evt:readmodel",
+      "implied:readmodel",
+      "pol:lister",
+      "cmd:list"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "addItem",
+     "nodes": [
+      "actor:addItem",
+      "cmd:addItem",
+      "evt:item-added"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "placeOrder",
+     "nodes": [
+      "actor:placeOrder",
+      "cmd:placeOrder",
+      "evt:order-placed"
+     ]
+    },
+    {
+     "type": "translation",
+     "name": "capture",
+     "nodes": [
+      "actor:capture",
+      "cmd:capture",
+      "evt:payment-captured"
+     ]
+    }
+   ],
+   "groups": [
+    {
+     "id": "bnd:Cart",
+     "label": "Cart(cartId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:addItem",
+      "evt:item-added"
+     ],
+     "sub": "shard by cartId"
+    },
+    {
+     "id": "bnd:Order",
+     "label": "Order(orderId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:placeOrder",
+      "evt:order-placed",
+      "cmd:capture",
+      "evt:payment-captured"
+     ]
+    }
+   ],
+   "cols": 24
+  },
+  "context": {
+   "title": "Shop · system context",
+   "subtitle": "regions eu, us, ap",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "Shop",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "sys",
+     "label": "addItem, placeOrder"
+    },
+    {
+     "from": "ext:stripe",
+     "to": "sys",
+     "label": "capture"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "Shop · containers",
+   "subtitle": "regions eu, us, ap",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "3 commands",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "partitioned by cartId",
+     "kind": "store"
+    },
+    {
+     "id": "view:CartView",
+     "label": "CartView",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "view:OrdersToShip",
+     "label": "OrdersToShip",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "view:Activity",
+     "label": "Activity",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "worker:fulfilment-worker",
+     "label": "fulfilment-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:packer",
+     "label": "packer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:gift-worker",
+     "label": "gift-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:notifier",
+     "label": "notifier",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:sweeper",
+     "label": "sweeper",
+     "sub": "runs every 5 minutes",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:reporter",
+     "label": "reporter",
+     "sub": "runs cron \"0 * * * *\"",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:lister",
+     "label": "lister",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "api",
+     "label": "addItem, placeOrder"
+    },
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 3 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:CartView",
+     "label": "item-added"
+    },
+    {
+     "from": "view:CartView",
+     "to": "api",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "view:OrdersToShip",
+     "label": "order-placed, payment-captured"
+    },
+    {
+     "from": "store",
+     "to": "view:Activity",
+     "label": "item-added, order-placed"
+    },
+    {
+     "from": "store",
+     "to": "worker:fulfilment-worker",
+     "label": "order-placed, payment-captured"
+    },
+    {
+     "from": "view:OrdersToShip",
+     "to": "worker:fulfilment-worker",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:fulfilment-worker",
+     "to": "api",
+     "label": "ship",
+     "weak": true
+    },
+    {
+     "from": "view:OrdersToShip",
+     "to": "worker:packer",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:packer",
+     "to": "api",
+     "label": "pack",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "worker:gift-worker",
+     "label": "item-added"
+    },
+    {
+     "from": "worker:gift-worker",
+     "to": "store",
+     "label": "gift-wrapped",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "worker:notifier",
+     "label": "order-placed"
+    },
+    {
+     "from": "worker:notifier",
+     "to": "api",
+     "label": "notify",
+     "weak": true
+    },
+    {
+     "from": "view:CartView",
+     "to": "worker:sweeper",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:sweeper",
+     "to": "store",
+     "label": "cart-abandoned",
+     "weak": true
+    },
+    {
+     "from": "worker:reporter",
+     "to": "api",
+     "label": "report",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "worker:lister",
+     "label": "readmodel"
+    },
+    {
+     "from": "view:CartView",
+     "to": "worker:lister",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:lister",
+     "to": "api",
+     "label": "list",
+     "weak": true
+    },
+    {
+     "from": "ext:stripe",
+     "to": "api",
+     "label": "capture"
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "Shop (eu, us, ap)",
+     "members": [
+      "api",
+      "store",
+      "view:CartView",
+      "view:OrdersToShip",
+      "view:Activity",
+      "worker:fulfilment-worker",
+      "worker:packer",
+      "worker:gift-worker",
+      "worker:notifier",
+      "worker:sweeper",
+      "worker:reporter",
+      "worker:lister"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "Shop · data flow",
+   "subtitle": "regions eu, us, ap   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment",
+     "kind": "external"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:addItem",
+     "label": "addItem()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:placeOrder",
+     "label": "placeOrder()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:capture",
+     "label": "capture()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:CartView",
+     "label": "CartView",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:OrdersToShip",
+     "label": "OrdersToShip",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:Activity",
+     "label": "Activity",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "worker:fulfilment-worker",
+     "label": "fulfilment-worker",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:ship",
+     "label": "ship()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    },
+    {
+     "id": "worker:packer",
+     "label": "packer",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:pack",
+     "label": "pack()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    },
+    {
+     "id": "worker:gift-worker",
+     "label": "gift-worker",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:notifier",
+     "label": "notifier",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:notify",
+     "label": "notify()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    },
+    {
+     "id": "worker:sweeper",
+     "label": "sweeper",
+     "sub": "process, every 5 minutes",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:reporter",
+     "label": "reporter",
+     "sub": "process, cron \"0 * * * *\"",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:report",
+     "label": "report()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    },
+    {
+     "id": "worker:lister",
+     "label": "lister",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:list",
+     "label": "list()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "cmd:addItem",
+     "label": "cartId, sku"
+    },
+    {
+     "from": "cmd:addItem",
+     "to": "log",
+     "label": "item-added"
+    },
+    {
+     "from": "actor:user",
+     "to": "cmd:placeOrder",
+     "label": "cartId, orderId"
+    },
+    {
+     "from": "cmd:placeOrder",
+     "to": "log",
+     "label": "order-placed"
+    },
+    {
+     "from": "log",
+     "to": "cmd:placeOrder",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "view:CartView",
+     "to": "cmd:placeOrder",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "ext:stripe",
+     "to": "cmd:capture",
+     "label": "orderId, amount"
+    },
+    {
+     "from": "cmd:capture",
+     "to": "log",
+     "label": "payment-captured"
+    },
+    {
+     "from": "log",
+     "to": "cmd:capture",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "view:CartView",
+     "label": "item-added"
+    },
+    {
+     "from": "log",
+     "to": "view:OrdersToShip",
+     "label": "order-placed, payment-captured"
+    },
+    {
+     "from": "log",
+     "to": "view:Activity",
+     "label": "item-added, order-placed"
+    },
+    {
+     "from": "log",
+     "to": "worker:fulfilment-worker",
+     "label": "order-placed, payment-captured"
+    },
+    {
+     "from": "view:OrdersToShip",
+     "to": "worker:fulfilment-worker",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:fulfilment-worker",
+     "to": "cmd:ship",
+     "label": "issues",
+     "weak": true
+    },
+    {
+     "from": "view:OrdersToShip",
+     "to": "worker:packer",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:packer",
+     "to": "cmd:pack",
+     "label": "issues",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "worker:gift-worker",
+     "label": "item-added"
+    },
+    {
+     "from": "worker:gift-worker",
+     "to": "log",
+     "label": "gift-wrapped",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "worker:notifier",
+     "label": "order-placed"
+    },
+    {
+     "from": "worker:notifier",
+     "to": "cmd:notify",
+     "label": "issues",
+     "weak": true
+    },
+    {
+     "from": "view:CartView",
+     "to": "worker:sweeper",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:sweeper",
+     "to": "log",
+     "label": "cart-abandoned",
+     "weak": true
+    },
+    {
+     "from": "worker:reporter",
+     "to": "cmd:report",
+     "label": "issues",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "worker:lister",
+     "label": "readmodel"
+    },
+    {
+     "from": "view:CartView",
+     "to": "worker:lister",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "worker:lister",
+     "to": "cmd:list",
+     "label": "issues",
+     "weak": true
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "Shop · deployment",
+   "subtitle": "regions eu, us, ap   ·   Inferred: each region runs the full stack unless a boundary says @cost(regions=n).",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "eu:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "eu:shard:Cart",
+     "label": "Cart shards",
+     "sub": "by cartId · this region only",
+     "kind": "store"
+    },
+    {
+     "id": "eu:shard:Order",
+     "label": "Order shards",
+     "sub": "in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu:view:CartView",
+     "label": "CartView",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "eu:view:OrdersToShip",
+     "label": "OrdersToShip",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "eu:view:Activity",
+     "label": "Activity",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "eu:worker:fulfilment-worker",
+     "label": "fulfilment-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu:worker:packer",
+     "label": "packer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu:worker:gift-worker",
+     "label": "gift-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu:worker:notifier",
+     "label": "notifier",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu:worker:sweeper",
+     "label": "sweeper",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu:worker:reporter",
+     "label": "reporter",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu:worker:lister",
+     "label": "lister",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "us:shard:Order",
+     "label": "Order shards",
+     "sub": "in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us:view:CartView",
+     "label": "CartView",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "us:view:OrdersToShip",
+     "label": "OrdersToShip",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "us:view:Activity",
+     "label": "Activity",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "us:worker:fulfilment-worker",
+     "label": "fulfilment-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:worker:packer",
+     "label": "packer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:worker:gift-worker",
+     "label": "gift-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:worker:notifier",
+     "label": "notifier",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:worker:sweeper",
+     "label": "sweeper",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:worker:reporter",
+     "label": "reporter",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us:worker:lister",
+     "label": "lister",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "ap:shard:Order",
+     "label": "Order shards",
+     "sub": "in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "ap:view:CartView",
+     "label": "CartView",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "ap:view:OrdersToShip",
+     "label": "OrdersToShip",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "ap:view:Activity",
+     "label": "Activity",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "ap:worker:fulfilment-worker",
+     "label": "fulfilment-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:worker:packer",
+     "label": "packer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:worker:gift-worker",
+     "label": "gift-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:worker:notifier",
+     "label": "notifier",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:worker:sweeper",
+     "label": "sweeper",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:worker:reporter",
+     "label": "reporter",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap:worker:lister",
+     "label": "lister",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "eu:api",
+     "to": "eu:shard:Cart",
+     "label": "addItem"
+    },
+    {
+     "from": "eu:api",
+     "to": "eu:shard:Order",
+     "label": "placeOrder, capture"
+    },
+    {
+     "from": "eu:shard:Cart",
+     "to": "eu:view:CartView",
+     "label": ""
+    },
+    {
+     "from": "eu:shard:Order",
+     "to": "eu:view:OrdersToShip",
+     "label": ""
+    },
+    {
+     "from": "eu:shard:Cart",
+     "to": "eu:view:Activity",
+     "label": ""
+    },
+    {
+     "from": "eu:shard:Order",
+     "to": "eu:view:Activity",
+     "label": ""
+    },
+    {
+     "from": "eu:shard:Order",
+     "to": "eu:worker:fulfilment-worker",
+     "label": ""
+    },
+    {
+     "from": "eu:api",
+     "to": "eu:worker:packer",
+     "label": ""
+    },
+    {
+     "from": "eu:shard:Cart",
+     "to": "eu:worker:gift-worker",
+     "label": ""
+    },
+    {
+     "from": "eu:shard:Order",
+     "to": "eu:worker:notifier",
+     "label": ""
+    },
+    {
+     "from": "eu:api",
+     "to": "eu:worker:sweeper",
+     "label": ""
+    },
+    {
+     "from": "eu:api",
+     "to": "eu:worker:reporter",
+     "label": ""
+    },
+    {
+     "from": "eu:api",
+     "to": "eu:worker:lister",
+     "label": ""
+    },
+    {
+     "from": "us:api",
+     "to": "us:shard:Order",
+     "label": "placeOrder, capture"
+    },
+    {
+     "from": "us:api",
+     "to": "us:view:CartView",
+     "label": ""
+    },
+    {
+     "from": "us:shard:Order",
+     "to": "us:view:OrdersToShip",
+     "label": ""
+    },
+    {
+     "from": "us:shard:Order",
+     "to": "us:view:Activity",
+     "label": ""
+    },
+    {
+     "from": "us:shard:Order",
+     "to": "us:worker:fulfilment-worker",
+     "label": ""
+    },
+    {
+     "from": "us:api",
+     "to": "us:worker:packer",
+     "label": ""
+    },
+    {
+     "from": "us:api",
+     "to": "us:worker:gift-worker",
+     "label": ""
+    },
+    {
+     "from": "us:shard:Order",
+     "to": "us:worker:notifier",
+     "label": ""
+    },
+    {
+     "from": "us:api",
+     "to": "us:worker:sweeper",
+     "label": ""
+    },
+    {
+     "from": "us:api",
+     "to": "us:worker:reporter",
+     "label": ""
+    },
+    {
+     "from": "us:api",
+     "to": "us:worker:lister",
+     "label": ""
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:shard:Order",
+     "label": "placeOrder, capture"
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:view:CartView",
+     "label": ""
+    },
+    {
+     "from": "ap:shard:Order",
+     "to": "ap:view:OrdersToShip",
+     "label": ""
+    },
+    {
+     "from": "ap:shard:Order",
+     "to": "ap:view:Activity",
+     "label": ""
+    },
+    {
+     "from": "ap:shard:Order",
+     "to": "ap:worker:fulfilment-worker",
+     "label": ""
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:worker:packer",
+     "label": ""
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:worker:gift-worker",
+     "label": ""
+    },
+    {
+     "from": "ap:shard:Order",
+     "to": "ap:worker:notifier",
+     "label": ""
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:worker:sweeper",
+     "label": ""
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:worker:reporter",
+     "label": ""
+    },
+    {
+     "from": "ap:api",
+     "to": "ap:worker:lister",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:eu",
+     "label": "eu",
+     "members": [
+      "eu:api",
+      "eu:shard:Cart",
+      "eu:shard:Order",
+      "eu:view:CartView",
+      "eu:view:OrdersToShip",
+      "eu:view:Activity",
+      "eu:worker:fulfilment-worker",
+      "eu:worker:packer",
+      "eu:worker:gift-worker",
+      "eu:worker:notifier",
+      "eu:worker:sweeper",
+      "eu:worker:reporter",
+      "eu:worker:lister"
+     ]
+    },
+    {
+     "id": "region:us",
+     "label": "us",
+     "members": [
+      "us:api",
+      "us:shard:Order",
+      "us:view:CartView",
+      "us:view:OrdersToShip",
+      "us:view:Activity",
+      "us:worker:fulfilment-worker",
+      "us:worker:packer",
+      "us:worker:gift-worker",
+      "us:worker:notifier",
+      "us:worker:sweeper",
+      "us:worker:reporter",
+      "us:worker:lister"
+     ]
+    },
+    {
+     "id": "region:ap",
+     "label": "ap",
+     "members": [
+      "ap:api",
+      "ap:shard:Order",
+      "ap:view:CartView",
+      "ap:view:OrdersToShip",
+      "ap:view:Activity",
+      "ap:worker:fulfilment-worker",
+      "ap:worker:packer",
+      "ap:worker:gift-worker",
+      "ap:worker:notifier",
+      "ap:worker:sweeper",
+      "ap:worker:reporter",
+      "ap:worker:lister"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "title": "Shop · context map",
+   "subtitle": "regions eu, us, ap   ·   dashed = an event the sender does not publish",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "ctx:Sales",
+     "label": "Sales",
+     "sub": "core · 2 commands, 0 read models",
+     "kind": "process"
+    },
+    {
+     "id": "ctx:Shipping",
+     "label": "Shipping",
+     "sub": "core · 1 commands, 0 read models",
+     "kind": "process"
+    }
+   ],
+   "edges": [
+    {
+     "from": "ctx:Sales",
+     "to": "ctx:Shipping",
+     "label": "order-placed",
+     "style": "solid"
+    }
+   ],
+   "groups": []
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "actor:addItem": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:addItem": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:CartView",
+     "label": "event model: CartView(cartId)",
+     "url": null
+    }
+   ],
+   "actor:placeOrder": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:placeOrder": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:placeOrder",
+     "label": "data flow: placeOrder()",
+     "url": null
+    }
+   ],
+   "cmd:capture": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:capture",
+     "label": "data flow: capture()",
+     "url": null
+    }
+   ],
+   "evt:item-added": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:order-placed": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:payment-captured": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:CartView": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    },
+    {
+     "diagram": null,
+     "node": null,
+     "label": "ftp-ish",
+     "url": "ftp-ish"
+    }
+   ],
+   "view:OrdersToShip": [
+    {
+     "diagram": "containers",
+     "node": "view:OrdersToShip",
+     "label": "containers: OrdersToShip",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:OrdersToShip",
+     "label": "data flow: OrdersToShip",
+     "url": null
+    }
+   ],
+   "view:Activity": [
+    {
+     "diagram": "containers",
+     "node": "view:Activity",
+     "label": "containers: Activity",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:Activity",
+     "label": "data flow: Activity",
+     "url": null
+    }
+   ],
+   "pol:fulfilment-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fulfilment-worker",
+     "label": "containers: fulfilment-worker",
+     "url": null
+    }
+   ],
+   "cmd:ship": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:ship",
+     "label": "data flow: ship()",
+     "url": null
+    }
+   ],
+   "pol:packer": [
+    {
+     "diagram": "containers",
+     "node": "worker:packer",
+     "label": "containers: packer",
+     "url": null
+    }
+   ],
+   "cmd:pack": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:pack",
+     "label": "data flow: pack()",
+     "url": null
+    }
+   ],
+   "pol:gift-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:gift-worker",
+     "label": "containers: gift-worker",
+     "url": null
+    }
+   ],
+   "evt:gift-wrapped": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:notify": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:notify",
+     "label": "data flow: notify()",
+     "url": null
+    }
+   ],
+   "pol:sweeper": [
+    {
+     "diagram": "containers",
+     "node": "worker:sweeper",
+     "label": "containers: sweeper",
+     "url": null
+    }
+   ],
+   "evt:cart-abandoned": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:report": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:report",
+     "label": "data flow: report()",
+     "url": null
+    }
+   ],
+   "evt:readmodel": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "pol:lister": [
+    {
+     "diagram": "containers",
+     "node": "worker:lister",
+     "label": "containers: lister",
+     "url": null
+    }
+   ],
+   "cmd:list": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:list",
+     "label": "data flow: list()",
+     "url": null
+    }
+   ],
+   "bnd:Order": [
+    {
+     "diagram": null,
+     "node": null,
+     "label": "https://wiki.example.com/order",
+     "url": "https://wiki.example.com/order"
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Shop (eu, us, ap)",
+     "url": null
+    }
+   ],
+   "actor:user": [
+    {
+     "diagram": "containers",
+     "node": "actor:user",
+     "label": "containers: User",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "containers",
+     "node": "ext:stripe",
+     "label": "containers: stripe",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:CartView": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    },
+    {
+     "diagram": null,
+     "node": null,
+     "label": "ftp-ish",
+     "url": "ftp-ish"
+    }
+   ],
+   "view:OrdersToShip": [
+    {
+     "diagram": "dataflow",
+     "node": "view:OrdersToShip",
+     "label": "data flow: OrdersToShip",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:OrdersToShip",
+     "label": "event model: OrdersToShip(orderId)",
+     "url": null
+    }
+   ],
+   "view:Activity": [
+    {
+     "diagram": "dataflow",
+     "node": "view:Activity",
+     "label": "data flow: Activity",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:Activity",
+     "label": "event model: Activity(cartId)",
+     "url": null
+    }
+   ],
+   "worker:fulfilment-worker": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:fulfilment-worker",
+     "label": "data flow: fulfilment-worker",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:fulfilment-worker",
+     "label": "event model: fulfilment-worker",
+     "url": null
+    }
+   ],
+   "worker:packer": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:packer",
+     "label": "data flow: packer",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:packer",
+     "label": "event model: packer",
+     "url": null
+    }
+   ],
+   "worker:gift-worker": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:gift-worker",
+     "label": "data flow: gift-worker",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:gift-worker",
+     "label": "event model: gift-worker",
+     "url": null
+    }
+   ],
+   "worker:sweeper": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:sweeper",
+     "label": "data flow: sweeper",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:sweeper",
+     "label": "event model: sweeper",
+     "url": null
+    }
+   ],
+   "worker:lister": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:lister",
+     "label": "data flow: lister",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:lister",
+     "label": "event model: lister",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: Shop",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:addItem": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:CartView",
+     "label": "event model: CartView(cartId)",
+     "url": null
+    }
+   ],
+   "cmd:placeOrder": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:placeOrder",
+     "label": "event model: placeOrder(cartId, orderId)",
+     "url": null
+    }
+   ],
+   "cmd:capture": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:capture",
+     "label": "event model: capture(orderId, amount)",
+     "url": null
+    }
+   ],
+   "view:CartView": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    },
+    {
+     "diagram": null,
+     "node": null,
+     "label": "ftp-ish",
+     "url": "ftp-ish"
+    }
+   ],
+   "view:OrdersToShip": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:OrdersToShip",
+     "label": "event model: OrdersToShip(orderId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:OrdersToShip",
+     "label": "containers: OrdersToShip",
+     "url": null
+    }
+   ],
+   "view:Activity": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:Activity",
+     "label": "event model: Activity(cartId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:Activity",
+     "label": "containers: Activity",
+     "url": null
+    }
+   ],
+   "worker:fulfilment-worker": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:fulfilment-worker",
+     "label": "event model: fulfilment-worker",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:fulfilment-worker",
+     "label": "containers: fulfilment-worker",
+     "url": null
+    }
+   ],
+   "cmd:ship": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:ship",
+     "label": "event model: ship()",
+     "url": null
+    }
+   ],
+   "worker:packer": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:packer",
+     "label": "event model: packer",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:packer",
+     "label": "containers: packer",
+     "url": null
+    }
+   ],
+   "cmd:pack": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:pack",
+     "label": "event model: pack()",
+     "url": null
+    }
+   ],
+   "worker:gift-worker": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:gift-worker",
+     "label": "event model: gift-worker",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:gift-worker",
+     "label": "containers: gift-worker",
+     "url": null
+    }
+   ],
+   "cmd:notify": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:notify",
+     "label": "event model: notify()",
+     "url": null
+    }
+   ],
+   "worker:sweeper": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:sweeper",
+     "label": "event model: sweeper",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:sweeper",
+     "label": "containers: sweeper",
+     "url": null
+    }
+   ],
+   "cmd:report": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:report",
+     "label": "event model: report()",
+     "url": null
+    }
+   ],
+   "worker:lister": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:lister",
+     "label": "event model: lister",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:lister",
+     "label": "containers: lister",
+     "url": null
+    }
+   ],
+   "cmd:list": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:list",
+     "label": "event model: list()",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "eu:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "eu:shard:Order": [
+    {
+     "diagram": null,
+     "node": null,
+     "label": "https://wiki.example.com/order",
+     "url": "https://wiki.example.com/order"
+    }
+   ],
+   "eu:view:CartView": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    },
+    {
+     "diagram": null,
+     "node": null,
+     "label": "ftp-ish",
+     "url": "ftp-ish"
+    }
+   ],
+   "eu:view:OrdersToShip": [
+    {
+     "diagram": "containers",
+     "node": "view:OrdersToShip",
+     "label": "containers: OrdersToShip",
+     "url": null
+    }
+   ],
+   "eu:view:Activity": [
+    {
+     "diagram": "containers",
+     "node": "view:Activity",
+     "label": "containers: Activity",
+     "url": null
+    }
+   ],
+   "eu:worker:fulfilment-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fulfilment-worker",
+     "label": "containers: fulfilment-worker",
+     "url": null
+    }
+   ],
+   "eu:worker:packer": [
+    {
+     "diagram": "containers",
+     "node": "worker:packer",
+     "label": "containers: packer",
+     "url": null
+    }
+   ],
+   "eu:worker:gift-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:gift-worker",
+     "label": "containers: gift-worker",
+     "url": null
+    }
+   ],
+   "eu:worker:sweeper": [
+    {
+     "diagram": "containers",
+     "node": "worker:sweeper",
+     "label": "containers: sweeper",
+     "url": null
+    }
+   ],
+   "eu:worker:lister": [
+    {
+     "diagram": "containers",
+     "node": "worker:lister",
+     "label": "containers: lister",
+     "url": null
+    }
+   ],
+   "us:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "us:shard:Order": [
+    {
+     "diagram": null,
+     "node": null,
+     "label": "https://wiki.example.com/order",
+     "url": "https://wiki.example.com/order"
+    }
+   ],
+   "us:view:CartView": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    },
+    {
+     "diagram": null,
+     "node": null,
+     "label": "ftp-ish",
+     "url": "ftp-ish"
+    }
+   ],
+   "us:view:OrdersToShip": [
+    {
+     "diagram": "containers",
+     "node": "view:OrdersToShip",
+     "label": "containers: OrdersToShip",
+     "url": null
+    }
+   ],
+   "us:view:Activity": [
+    {
+     "diagram": "containers",
+     "node": "view:Activity",
+     "label": "containers: Activity",
+     "url": null
+    }
+   ],
+   "us:worker:fulfilment-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fulfilment-worker",
+     "label": "containers: fulfilment-worker",
+     "url": null
+    }
+   ],
+   "us:worker:packer": [
+    {
+     "diagram": "containers",
+     "node": "worker:packer",
+     "label": "containers: packer",
+     "url": null
+    }
+   ],
+   "us:worker:gift-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:gift-worker",
+     "label": "containers: gift-worker",
+     "url": null
+    }
+   ],
+   "us:worker:sweeper": [
+    {
+     "diagram": "containers",
+     "node": "worker:sweeper",
+     "label": "containers: sweeper",
+     "url": null
+    }
+   ],
+   "us:worker:lister": [
+    {
+     "diagram": "containers",
+     "node": "worker:lister",
+     "label": "containers: lister",
+     "url": null
+    }
+   ],
+   "ap:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "ap:shard:Order": [
+    {
+     "diagram": null,
+     "node": null,
+     "label": "https://wiki.example.com/order",
+     "url": "https://wiki.example.com/order"
+    }
+   ],
+   "ap:view:CartView": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    },
+    {
+     "diagram": null,
+     "node": null,
+     "label": "ftp-ish",
+     "url": "ftp-ish"
+    }
+   ],
+   "ap:view:OrdersToShip": [
+    {
+     "diagram": "containers",
+     "node": "view:OrdersToShip",
+     "label": "containers: OrdersToShip",
+     "url": null
+    }
+   ],
+   "ap:view:Activity": [
+    {
+     "diagram": "containers",
+     "node": "view:Activity",
+     "label": "containers: Activity",
+     "url": null
+    }
+   ],
+   "ap:worker:fulfilment-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fulfilment-worker",
+     "label": "containers: fulfilment-worker",
+     "url": null
+    }
+   ],
+   "ap:worker:packer": [
+    {
+     "diagram": "containers",
+     "node": "worker:packer",
+     "label": "containers: packer",
+     "url": null
+    }
+   ],
+   "ap:worker:gift-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:gift-worker",
+     "label": "containers: gift-worker",
+     "url": null
+    }
+   ],
+   "ap:worker:sweeper": [
+    {
+     "diagram": "containers",
+     "node": "worker:sweeper",
+     "label": "containers: sweeper",
+     "url": null
+    }
+   ],
+   "ap:worker:lister": [
+    {
+     "diagram": "containers",
+     "node": "worker:lister",
+     "label": "containers: lister",
+     "url": null
+    }
+   ],
+   "region:eu": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Shop (eu, us, ap)",
+     "url": null
+    }
+   ],
+   "region:us": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Shop (eu, us, ap)",
+     "url": null
+    }
+   ],
+   "region:ap": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Shop (eu, us, ap)",
+     "url": null
+    }
+   ]
+  },
+  "contextmap": {
+   "ctx:Sales": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:addItem",
+     "label": "event model: addItem(cartId, sku)",
+     "url": null
+    }
+   ],
+   "ctx:Shipping": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:capture",
+     "label": "event model: capture(orderId, amount)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:addItem": [
+    [
+     18,
+     20
+    ]
+   ],
+   "cmd:placeOrder": [
+    [
+     27,
+     31
+    ]
+   ],
+   "cmd:capture": [
+    [
+     35,
+     37
+    ]
+   ],
+   "view:CartView": [
+    [
+     40,
+     40
+    ]
+   ],
+   "view:OrdersToShip": [
+    [
+     41,
+     41
+    ]
+   ],
+   "view:Activity": [
+    [
+     42,
+     42
+    ]
+   ],
+   "pol:fulfilment-worker": [
+    [
+     44,
+     44
+    ],
+    [
+     45,
+     45
+    ]
+   ],
+   "pol:packer": [
+    [
+     46,
+     46
+    ]
+   ],
+   "pol:gift-worker": [
+    [
+     47,
+     48
+    ]
+   ],
+   "policy:Notify": [
+    [
+     49,
+     50
+    ]
+   ],
+   "pol:sweeper": [
+    [
+     51,
+     53
+    ]
+   ],
+   "pol:reporter": [
+    [
+     54,
+     55
+    ]
+   ],
+   "pol:lister": [
+    [
+     56,
+     56
+    ]
+   ],
+   "bnd:Cart": [
+    [
+     8,
+     8
+    ]
+   ],
+   "bnd:Order": [
+    [
+     9,
+     9
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:CartView": [
+    [
+     40,
+     40
+    ]
+   ],
+   "view:OrdersToShip": [
+    [
+     41,
+     41
+    ]
+   ],
+   "view:Activity": [
+    [
+     42,
+     42
+    ]
+   ],
+   "worker:fulfilment-worker": [
+    [
+     44,
+     44
+    ],
+    [
+     45,
+     45
+    ]
+   ],
+   "worker:packer": [
+    [
+     46,
+     46
+    ]
+   ],
+   "worker:gift-worker": [
+    [
+     47,
+     48
+    ]
+   ],
+   "worker:notifier": [
+    [
+     49,
+     50
+    ]
+   ],
+   "worker:sweeper": [
+    [
+     51,
+     53
+    ]
+   ],
+   "worker:reporter": [
+    [
+     54,
+     55
+    ]
+   ],
+   "worker:lister": [
+    [
+     56,
+     56
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:addItem": [
+    [
+     18,
+     20
+    ]
+   ],
+   "cmd:placeOrder": [
+    [
+     27,
+     31
+    ]
+   ],
+   "cmd:capture": [
+    [
+     35,
+     37
+    ]
+   ],
+   "view:CartView": [
+    [
+     40,
+     40
+    ]
+   ],
+   "view:OrdersToShip": [
+    [
+     41,
+     41
+    ]
+   ],
+   "view:Activity": [
+    [
+     42,
+     42
+    ]
+   ],
+   "worker:fulfilment-worker": [
+    [
+     44,
+     44
+    ],
+    [
+     45,
+     45
+    ]
+   ],
+   "worker:packer": [
+    [
+     46,
+     46
+    ]
+   ],
+   "worker:gift-worker": [
+    [
+     47,
+     48
+    ]
+   ],
+   "worker:notifier": [
+    [
+     49,
+     50
+    ]
+   ],
+   "worker:sweeper": [
+    [
+     51,
+     53
+    ]
+   ],
+   "worker:reporter": [
+    [
+     54,
+     55
+    ]
+   ],
+   "worker:lister": [
+    [
+     56,
+     56
+    ]
+   ]
+  },
+  "deployment": {
+   "eu:view:CartView": [
+    [
+     40,
+     40
+    ]
+   ],
+   "us:view:CartView": [
+    [
+     40,
+     40
+    ]
+   ],
+   "ap:view:CartView": [
+    [
+     40,
+     40
+    ]
+   ],
+   "eu:view:OrdersToShip": [
+    [
+     41,
+     41
+    ]
+   ],
+   "us:view:OrdersToShip": [
+    [
+     41,
+     41
+    ]
+   ],
+   "ap:view:OrdersToShip": [
+    [
+     41,
+     41
+    ]
+   ],
+   "eu:view:Activity": [
+    [
+     42,
+     42
+    ]
+   ],
+   "us:view:Activity": [
+    [
+     42,
+     42
+    ]
+   ],
+   "ap:view:Activity": [
+    [
+     42,
+     42
+    ]
+   ],
+   "eu:worker:fulfilment-worker": [
+    [
+     44,
+     44
+    ],
+    [
+     45,
+     45
+    ]
+   ],
+   "us:worker:fulfilment-worker": [
+    [
+     44,
+     44
+    ],
+    [
+     45,
+     45
+    ]
+   ],
+   "ap:worker:fulfilment-worker": [
+    [
+     44,
+     44
+    ],
+    [
+     45,
+     45
+    ]
+   ],
+   "eu:worker:packer": [
+    [
+     46,
+     46
+    ]
+   ],
+   "us:worker:packer": [
+    [
+     46,
+     46
+    ]
+   ],
+   "ap:worker:packer": [
+    [
+     46,
+     46
+    ]
+   ],
+   "eu:worker:gift-worker": [
+    [
+     47,
+     48
+    ]
+   ],
+   "us:worker:gift-worker": [
+    [
+     47,
+     48
+    ]
+   ],
+   "ap:worker:gift-worker": [
+    [
+     47,
+     48
+    ]
+   ],
+   "eu:worker:notifier": [
+    [
+     49,
+     50
+    ]
+   ],
+   "us:worker:notifier": [
+    [
+     49,
+     50
+    ]
+   ],
+   "ap:worker:notifier": [
+    [
+     49,
+     50
+    ]
+   ],
+   "eu:worker:sweeper": [
+    [
+     51,
+     53
+    ]
+   ],
+   "us:worker:sweeper": [
+    [
+     51,
+     53
+    ]
+   ],
+   "ap:worker:sweeper": [
+    [
+     51,
+     53
+    ]
+   ],
+   "eu:worker:reporter": [
+    [
+     54,
+     55
+    ]
+   ],
+   "us:worker:reporter": [
+    [
+     54,
+     55
+    ]
+   ],
+   "ap:worker:reporter": [
+    [
+     54,
+     55
+    ]
+   ],
+   "eu:worker:lister": [
+    [
+     56,
+     56
+    ]
+   ],
+   "us:worker:lister": [
+    [
+     56,
+     56
+    ]
+   ],
+   "ap:worker:lister": [
+    [
+     56,
+     56
+    ]
+   ],
+   "eu:shard:Cart": [
+    [
+     8,
+     8
+    ]
+   ],
+   "eu:shard:Order": [
+    [
+     9,
+     9
+    ]
+   ],
+   "us:shard:Order": [
+    [
+     9,
+     9
+    ]
+   ],
+   "ap:shard:Order": [
+    [
+     9,
+     9
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}

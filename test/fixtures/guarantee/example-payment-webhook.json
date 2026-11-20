@@ -1,0 +1,2077 @@
+{
+ "model": {
+  "system": {
+   "name": "PaymentProcessor",
+   "externals": [
+    {
+     "name": "stripe",
+     "role": "payment"
+    }
+   ],
+   "slo": [],
+   "regions": [
+    "us-east",
+    "eu-west"
+   ],
+   "dataClassification": [
+    "pci"
+   ],
+   "constraints": [],
+   "attrs": {},
+   "line": 1
+  },
+  "contexts": [],
+  "actors": [],
+  "boundaries": [
+   {
+    "name": "InvoicePayment",
+    "params": [
+     "invoiceId"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "invoiceId"
+     },
+     "time": {
+      "window": "fixed:24h",
+      "source": "clock.wall",
+      "clockSkewBudget": "<500ms"
+     },
+     "cost": {
+      "regions": "2",
+      "writeRpsPeak": "5000"
+     },
+     "ops": {
+      "owner": "billing-platform",
+      "slo": "99.95%",
+      "alert": "payment-webhook-delay"
+     }
+    },
+    "line": 8
+   }
+  ],
+  "views": [
+   {
+    "name": "WebhookDedupView",
+    "params": [
+     "stripeEventId"
+    ],
+    "paramDefs": [
+     {
+      "name": "stripeEventId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "payment-captured",
+      "wildcard": false,
+      "args": "invoiceId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "seen"
+     }
+    ],
+    "annotations": {
+     "bergcache": {
+      "key": "dedup:{stripeEventId}",
+      "ttl": "24h"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 50,
+    "endLine": 52
+   },
+   {
+    "name": "PaymentStatusView",
+    "params": [
+     "invoiceId"
+    ],
+    "paramDefs": [
+     {
+      "name": "invoiceId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "payment-captured",
+      "wildcard": false,
+      "args": "invoiceId"
+     },
+     {
+      "name": "payment-refunded",
+      "wildcard": true,
+      "args": "invoiceId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "state"
+     },
+     {
+      "name": "capturedAmount"
+     },
+     {
+      "name": "refundedAmount"
+     },
+     {
+      "name": "updatedAt"
+     }
+    ],
+    "annotations": {
+     "bergcache": {
+      "key": "payment:{invoiceId}",
+      "ttl": "24h"
+     },
+     "cost": {
+      "memory": "~150MB/region",
+      "readRpsPeak": "12000"
+     },
+     "ops": {
+      "owner": "billing-read-model",
+      "dashboard": "invoice-payment-state"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 55,
+    "endLine": 65
+   }
+  ],
+  "commands": [
+   {
+    "actor": "stripe-webhook",
+    "name": "ingestCharge",
+    "params": [
+     "invoiceId",
+     "stripeEventId",
+     "amount"
+    ],
+    "paramDefs": [
+     {
+      "name": "invoiceId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "stripeEventId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "amount",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "InvoicePayment",
+     "args": "invoiceId"
+    },
+    "on": [
+     {
+      "name": "invoice-issued",
+      "wildcard": false,
+      "args": "invoiceId"
+     }
+    ],
+    "from": [
+     {
+      "name": "PaymentStatusView",
+      "wildcard": false,
+      "args": "invoiceId",
+      "freshness": "10s",
+      "alias": "paymentStatus"
+     },
+     {
+      "name": "WebhookDedupView",
+      "wildcard": false,
+      "args": "stripeEventId",
+      "freshness": "24h",
+      "alias": "dedup"
+     }
+    ],
+    "branches": [
+     {
+      "guard": "dedup.seen == true",
+      "default": false,
+      "emits": [
+       {
+        "event": "webhook-duplicate-ignored",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "stripeEventId"
+         },
+         {
+          "name": "receivedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "invoiceId, stripeEventId, receivedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 21
+     },
+     {
+      "guard": "paymentStatus.state == \"captured\"",
+      "default": false,
+      "emits": [
+       {
+        "event": "payment-already-captured",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "stripeEventId"
+         },
+         {
+          "name": "receivedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "invoiceId, stripeEventId, receivedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 24
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "payment-captured",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "stripeEventId"
+         },
+         {
+          "name": "amount"
+         },
+         {
+          "name": "capturedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "invoiceId, stripeEventId, amount, capturedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 27
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 15,
+    "endLine": 34,
+    "triggers": [],
+    "source": null
+   },
+   {
+    "actor": "stripe-webhook",
+    "name": "ingestCharge",
+    "params": [
+     "invoiceId",
+     "stripeEventId",
+     "amount"
+    ],
+    "paramDefs": [
+     {
+      "name": "invoiceId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "stripeEventId",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "amount",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "InvoicePayment",
+     "args": "invoiceId"
+    },
+    "on": [
+     {
+      "name": "invoice-issued",
+      "wildcard": false,
+      "args": "invoiceId"
+     }
+    ],
+    "from": [
+     {
+      "name": "WebhookDedupView",
+      "wildcard": false,
+      "args": "stripeEventId",
+      "freshness": "eventual",
+      "alias": "dedup"
+     }
+    ],
+    "branches": [
+     {
+      "guard": "dedup.unavailable",
+      "default": false,
+      "emits": [
+       {
+        "event": "payment-captured",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "stripeEventId"
+         },
+         {
+          "name": "amount"
+         },
+         {
+          "name": "capturedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "invoiceId, stripeEventId, amount, capturedAt: clock.wall()",
+        "annotations": {
+         "confidence": {
+          "level": "low",
+          "reason": "dedup_unavailable",
+          "asOf": "clock.wall()"
+         }
+        }
+       }
+      ],
+      "reject": null,
+      "line": 40
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 37,
+    "endLine": 47,
+    "triggers": [],
+    "source": null
+   }
+  ],
+  "policies": [
+   {
+    "name": null,
+    "trigger": {
+     "event": "payment-captured",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "invoiceId"
+      },
+      {
+       "name": "amount"
+      }
+     ],
+     "payload": "invoiceId, amount"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": "scoreBy(\"payment-fraud-v3\", invoiceId) > 0.92",
+      "worker": "fraud-worker",
+      "command": null,
+      "emits": [
+       {
+        "event": "payment-fraud-detected",
+        "fields": [
+         {
+          "name": "invoiceId"
+         },
+         {
+          "name": "score"
+         },
+         {
+          "name": "model",
+          "expr": "\"payment-fraud-v3\""
+         },
+         {
+          "name": "detectedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "invoiceId, score, model: \"payment-fraud-v3\", detectedAt: clock.wall()"
+       }
+      ],
+      "line": 69
+     }
+    ],
+    "line": 68,
+    "endLine": 76
+   }
+  ],
+  "events": [
+   {
+    "name": "invoice-issued",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "ingestCharge"
+     },
+     {
+      "kind": "command",
+      "name": "ingestCharge"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "webhook-duplicate-ignored",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "ingestCharge",
+      "branch": "dedup.seen == true"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "invoiceId"
+     },
+     {
+      "name": "stripeEventId"
+     },
+     {
+      "name": "receivedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "payment-already-captured",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "ingestCharge",
+      "branch": "paymentStatus.state == \"captured\""
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "invoiceId"
+     },
+     {
+      "name": "stripeEventId"
+     },
+     {
+      "name": "receivedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "payment-captured",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "ingestCharge",
+      "branch": "default"
+     },
+     {
+      "kind": "command",
+      "name": "ingestCharge",
+      "branch": "dedup.unavailable"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "WebhookDedupView"
+     },
+     {
+      "kind": "view",
+      "name": "PaymentStatusView"
+     },
+     {
+      "kind": "policy",
+      "name": "payment-captured"
+     }
+    ],
+    "fields": [
+     {
+      "name": "invoiceId"
+     },
+     {
+      "name": "stripeEventId"
+     },
+     {
+      "name": "amount"
+     },
+     {
+      "name": "capturedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "payment-refunded",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "PaymentStatusView"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "payment-fraud-detected",
+    "emittedBy": [
+     {
+      "kind": "policy",
+      "name": "payment-captured",
+      "worker": "fraud-worker"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "invoiceId"
+     },
+     {
+      "name": "score"
+     },
+     {
+      "name": "model",
+      "expr": "\"payment-fraud-v3\""
+     },
+     {
+      "name": "detectedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   }
+  ],
+  "declarations": []
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: invoice-issued, payment-refunded. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: invoice-issued, payment-refunded. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "info",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"WebhookDedupView\" shows \"seen\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 50,
+    "endLine": 52,
+    "subject": {
+     "kind": "view",
+     "name": "WebhookDedupView",
+     "line": 50,
+     "endLine": 52
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "3 of 3 commands and read models have no scenario, starting with \"ingestCharge\"",
+    "line": 15,
+    "endLine": 34,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 15,
+     "endLine": 34
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"ingestCharge\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 15,
+    "endLine": 34,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 15,
+     "endLine": 34
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"ingestCharge\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 37,
+    "endLine": 47,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 37,
+     "endLine": 47
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"payment-captured\" starts straight from the event. Write a read model such as PendingFraudWorker(...) fed by payment-captured, and start from it: \"payment-captured from [PendingFraudWorker] -> ...\" or \"from [PendingFraudWorker] -> ...\"",
+    "line": 68,
+    "endLine": 76,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 68,
+     "endLine": 76
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: invoice-issued, payment-refunded. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"WebhookDedupView\" shows \"seen\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 50,
+    "endLine": 52,
+    "subject": {
+     "kind": "view",
+     "name": "WebhookDedupView",
+     "line": 50,
+     "endLine": 52
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "3 of 3 commands and read models have no scenario, starting with \"ingestCharge\"",
+    "line": 15,
+    "endLine": 34,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 15,
+     "endLine": 34
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"ingestCharge\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 15,
+    "endLine": 34,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 15,
+     "endLine": 34
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"ingestCharge\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 37,
+    "endLine": 47,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 37,
+     "endLine": 47
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"payment-captured\" starts straight from the event. Write a read model such as PendingFraudWorker(...) fed by payment-captured, and start from it: \"payment-captured from [PendingFraudWorker] -> ...\" or \"from [PendingFraudWorker] -> ...\"",
+    "line": 68,
+    "endLine": 76,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 68,
+     "endLine": 76
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: invoice-issued, payment-refunded. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"WebhookDedupView\" shows \"seen\", which no event it projects from carries. Add it to an event, or compute it (name: expression)",
+    "line": 50,
+    "endLine": 52,
+    "subject": {
+     "kind": "view",
+     "name": "WebhookDedupView",
+     "line": 50,
+     "endLine": 52
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "3 of 3 commands and read models have no scenario, starting with \"ingestCharge\"",
+    "line": 15,
+    "endLine": 34,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 15,
+     "endLine": 34
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"ingestCharge\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 15,
+    "endLine": 34,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 15,
+     "endLine": 34
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "info",
+    "rule": "translation-no-dedupe",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Command \"ingestCharge\" comes from outside system \"stripe-webhook\", which can deliver the same fact twice. Say which field tells a repeat from a new one: @dedupe(eventId)",
+    "line": 37,
+    "endLine": 47,
+    "subject": {
+     "kind": "command",
+     "name": "ingestCharge",
+     "line": 37,
+     "endLine": 47
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#translation-no-dedupe"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"payment-captured\" starts straight from the event. Write a read model such as PendingFraudWorker(...) fed by payment-captured, and start from it: \"payment-captured from [PendingFraudWorker] -> ...\" or \"from [PendingFraudWorker] -> ...\"",
+    "line": 68,
+    "endLine": 76,
+    "subject": {
+     "kind": "policy",
+     "name": "payment-captured",
+     "line": 68,
+     "endLine": 76
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "PaymentProcessor",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:ingestCharge",
+     "lane": "actor",
+     "label": "stripe-webhook",
+     "col": 0,
+     "row": 0,
+     "kind": "external",
+     "ranges": [
+      [
+       15,
+       15
+      ],
+      [
+       37,
+       37
+      ]
+     ]
+    },
+    {
+     "id": "cmd:ingestCharge",
+     "lane": "command",
+     "label": "ingestCharge(invoiceId, stripeEventId, amount)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "translation",
+     "slice": "translation",
+     "planned": false,
+     "ranges": [
+      [
+       15,
+       34
+      ],
+      [
+       37,
+       47
+      ]
+     ],
+     "notes": [
+      "checks invoice-issued (assumed)"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "invoice-issued (assumed)"
+     ]
+    },
+    {
+     "id": "evt:webhook-duplicate-ignored",
+     "lane": "event",
+     "label": "webhook-duplicate-ignored",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if dedup.seen == true",
+     "owner": "cmd:ingestCharge"
+    },
+    {
+     "id": "evt:payment-already-captured",
+     "lane": "event",
+     "label": "payment-already-captured",
+     "col": 0,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if paymentStatus.state == \"captu…",
+     "owner": "cmd:ingestCharge"
+    },
+    {
+     "id": "evt:payment-captured",
+     "lane": "event",
+     "label": "payment-captured",
+     "col": 0,
+     "row": 2,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:ingestCharge"
+    },
+    {
+     "id": "view:WebhookDedupView",
+     "lane": "command",
+     "label": "WebhookDedupView(stripeEventId)",
+     "col": 3,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       50,
+       52
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "view:PaymentStatusView",
+     "lane": "command",
+     "label": "PaymentStatusView(invoiceId)",
+     "col": 2,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       55,
+       65
+      ]
+     ],
+     "fullNotes": [],
+     "notes": [
+      "from payment-refunded"
+     ]
+    },
+    {
+     "id": "implied:payment-captured",
+     "lane": "command",
+     "label": "payment-captured",
+     "col": 1,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       68,
+       76
+      ]
+     ]
+    },
+    {
+     "id": "pol:fraud-worker",
+     "lane": "actor",
+     "label": "fraud-worker",
+     "col": 2,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       68,
+       76
+      ]
+     ]
+    },
+    {
+     "id": "evt:payment-fraud-detected",
+     "lane": "event",
+     "label": "payment-fraud-detected",
+     "col": 3,
+     "row": 0,
+     "kind": "event"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:ingestCharge",
+     "to": "cmd:ingestCharge",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:ingestCharge",
+     "to": "evt:webhook-duplicate-ignored",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:ingestCharge",
+     "to": "evt:payment-already-captured",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:ingestCharge",
+     "to": "evt:payment-captured",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:payment-captured",
+     "to": "view:WebhookDedupView",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:payment-captured",
+     "to": "view:PaymentStatusView",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "view:PaymentStatusView",
+     "to": "cmd:ingestCharge",
+     "kind": "reads",
+     "label": "fresh 10s"
+    },
+    {
+     "from": "view:WebhookDedupView",
+     "to": "cmd:ingestCharge",
+     "kind": "reads",
+     "label": "fresh 24h"
+    },
+    {
+     "from": "view:WebhookDedupView",
+     "to": "cmd:ingestCharge",
+     "kind": "reads",
+     "label": "fresh eventual"
+    },
+    {
+     "from": "evt:payment-captured",
+     "to": "implied:payment-captured",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:payment-captured",
+     "to": "pol:fraud-worker",
+     "kind": "reads",
+     "label": "scoreBy(\"payment-fraud-…"
+    },
+    {
+     "from": "pol:fraud-worker",
+     "to": "evt:payment-fraud-detected",
+     "kind": "emits",
+     "label": ""
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "WebhookDedupView",
+     "nodes": [
+      "view:WebhookDedupView",
+      "evt:payment-captured"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "PaymentStatusView",
+     "nodes": [
+      "view:PaymentStatusView",
+      "evt:payment-captured"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "fraud-worker",
+     "nodes": [
+      "evt:payment-captured",
+      "implied:payment-captured",
+      "pol:fraud-worker",
+      "evt:payment-fraud-detected"
+     ]
+    },
+    {
+     "type": "translation",
+     "name": "ingestCharge",
+     "nodes": [
+      "actor:ingestCharge",
+      "cmd:ingestCharge",
+      "evt:webhook-duplicate-ignored",
+      "evt:payment-already-captured",
+      "evt:payment-captured"
+     ]
+    }
+   ],
+   "groups": [
+    {
+     "id": "bnd:InvoicePayment",
+     "label": "InvoicePayment(invoiceId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:ingestCharge",
+      "evt:webhook-duplicate-ignored",
+      "evt:payment-already-captured",
+      "evt:payment-captured"
+     ],
+     "sub": "shard by invoiceId"
+    }
+   ],
+   "cols": 4
+  },
+  "context": {
+   "title": "PaymentProcessor · system context",
+   "subtitle": "regions us-east, eu-west   ·   data pci",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "PaymentProcessor",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "ext:stripe",
+     "to": "sys",
+     "label": "ingestCharge"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "PaymentProcessor · containers",
+   "subtitle": "regions us-east, eu-west   ·   data pci",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "1 command",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "partitioned by invoiceId",
+     "kind": "store"
+    },
+    {
+     "id": "view:WebhookDedupView",
+     "label": "WebhookDedupView",
+     "sub": "read model, cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "view:PaymentStatusView",
+     "label": "PaymentStatusView",
+     "sub": "read model, cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "worker:fraud-worker",
+     "label": "fraud-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 3 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:WebhookDedupView",
+     "label": "payment-captured"
+    },
+    {
+     "from": "view:WebhookDedupView",
+     "to": "api",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "view:PaymentStatusView",
+     "label": "payment-captured, payment-refunded"
+    },
+    {
+     "from": "view:PaymentStatusView",
+     "to": "api",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "worker:fraud-worker",
+     "label": "payment-captured"
+    },
+    {
+     "from": "worker:fraud-worker",
+     "to": "store",
+     "label": "payment-fraud-detected",
+     "weak": true
+    },
+    {
+     "from": "ext:stripe",
+     "to": "api",
+     "label": "ingestCharge"
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "PaymentProcessor (us-east, eu-west)",
+     "members": [
+      "api",
+      "store",
+      "view:WebhookDedupView",
+      "view:PaymentStatusView",
+      "worker:fraud-worker"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "PaymentProcessor · data flow",
+   "subtitle": "regions us-east, eu-west   ·   data pci   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payment",
+     "kind": "external"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:ingestCharge",
+     "label": "ingestCharge()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:WebhookDedupView",
+     "label": "WebhookDedupView",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:PaymentStatusView",
+     "label": "PaymentStatusView",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "worker:fraud-worker",
+     "label": "fraud-worker",
+     "sub": "process, async",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "ext:stripe",
+     "to": "cmd:ingestCharge",
+     "label": "invoiceId, stripeEventId, amount"
+    },
+    {
+     "from": "cmd:ingestCharge",
+     "to": "log",
+     "label": "webhook-duplicate-ignored, payment-already-captured +1"
+    },
+    {
+     "from": "log",
+     "to": "cmd:ingestCharge",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "view:PaymentStatusView",
+     "to": "cmd:ingestCharge",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "view:WebhookDedupView",
+     "to": "cmd:ingestCharge",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "ext:stripe",
+     "to": "cmd:ingestCharge",
+     "label": "invoiceId, stripeEventId, amount"
+    },
+    {
+     "from": "cmd:ingestCharge",
+     "to": "log",
+     "label": "payment-captured"
+    },
+    {
+     "from": "log",
+     "to": "cmd:ingestCharge",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "view:WebhookDedupView",
+     "to": "cmd:ingestCharge",
+     "label": "read",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "view:WebhookDedupView",
+     "label": "payment-captured"
+    },
+    {
+     "from": "log",
+     "to": "view:PaymentStatusView",
+     "label": "payment-captured, payment-refunded"
+    },
+    {
+     "from": "log",
+     "to": "worker:fraud-worker",
+     "label": "payment-captured"
+    },
+    {
+     "from": "worker:fraud-worker",
+     "to": "log",
+     "label": "payment-fraud-detected",
+     "weak": true
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "PaymentProcessor · deployment",
+   "subtitle": "regions us-east, eu-west   ·   data pci   ·   Inferred: each region runs the full stack unless a boundary says @cost(regions=n).",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "us-east:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "us-east:shard:InvoicePayment",
+     "label": "InvoicePayment shards",
+     "sub": "by invoiceId · in 2 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us-east:view:WebhookDedupView",
+     "label": "WebhookDedupView",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "us-east:view:PaymentStatusView",
+     "label": "PaymentStatusView",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "us-east:worker:fraud-worker",
+     "label": "fraud-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu-west:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "eu-west:shard:InvoicePayment",
+     "label": "InvoicePayment shards",
+     "sub": "by invoiceId · in 2 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu-west:view:WebhookDedupView",
+     "label": "WebhookDedupView",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-west:view:PaymentStatusView",
+     "label": "PaymentStatusView",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-west:worker:fraud-worker",
+     "label": "fraud-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "us-east:api",
+     "to": "us-east:shard:InvoicePayment",
+     "label": "ingestCharge"
+    },
+    {
+     "from": "us-east:shard:InvoicePayment",
+     "to": "us-east:view:WebhookDedupView",
+     "label": ""
+    },
+    {
+     "from": "us-east:shard:InvoicePayment",
+     "to": "us-east:view:PaymentStatusView",
+     "label": ""
+    },
+    {
+     "from": "us-east:shard:InvoicePayment",
+     "to": "us-east:worker:fraud-worker",
+     "label": ""
+    },
+    {
+     "from": "eu-west:api",
+     "to": "eu-west:shard:InvoicePayment",
+     "label": "ingestCharge"
+    },
+    {
+     "from": "eu-west:shard:InvoicePayment",
+     "to": "eu-west:view:WebhookDedupView",
+     "label": ""
+    },
+    {
+     "from": "eu-west:shard:InvoicePayment",
+     "to": "eu-west:view:PaymentStatusView",
+     "label": ""
+    },
+    {
+     "from": "eu-west:shard:InvoicePayment",
+     "to": "eu-west:worker:fraud-worker",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:us-east",
+     "label": "us-east",
+     "members": [
+      "us-east:api",
+      "us-east:shard:InvoicePayment",
+      "us-east:view:WebhookDedupView",
+      "us-east:view:PaymentStatusView",
+      "us-east:worker:fraud-worker"
+     ]
+    },
+    {
+     "id": "region:eu-west",
+     "label": "eu-west",
+     "members": [
+      "eu-west:api",
+      "eu-west:shard:InvoicePayment",
+      "eu-west:view:WebhookDedupView",
+      "eu-west:view:PaymentStatusView",
+      "eu-west:worker:fraud-worker"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "error": "NO_CONTEXTS"
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "cmd:ingestCharge": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:ingestCharge",
+     "label": "data flow: ingestCharge()",
+     "url": null
+    }
+   ],
+   "evt:webhook-duplicate-ignored": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:payment-already-captured": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:payment-captured": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:WebhookDedupView": [
+    {
+     "diagram": "containers",
+     "node": "view:WebhookDedupView",
+     "label": "containers: WebhookDedupView",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:WebhookDedupView",
+     "label": "data flow: WebhookDedupView",
+     "url": null
+    }
+   ],
+   "view:PaymentStatusView": [
+    {
+     "diagram": "containers",
+     "node": "view:PaymentStatusView",
+     "label": "containers: PaymentStatusView",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:PaymentStatusView",
+     "label": "data flow: PaymentStatusView",
+     "url": null
+    }
+   ],
+   "pol:fraud-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fraud-worker",
+     "label": "containers: fraud-worker",
+     "url": null
+    }
+   ],
+   "evt:payment-fraud-detected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "bnd:InvoicePayment": [
+    {
+     "diagram": "deployment",
+     "node": "us-east:shard:InvoicePayment",
+     "label": "deployment: InvoicePayment shards",
+     "url": null
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: PaymentProcessor (us-east, eu-west)",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "containers",
+     "node": "ext:stripe",
+     "label": "containers: stripe",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:WebhookDedupView": [
+    {
+     "diagram": "dataflow",
+     "node": "view:WebhookDedupView",
+     "label": "data flow: WebhookDedupView",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:WebhookDedupView",
+     "label": "event model: WebhookDedupView(stripeEventId)",
+     "url": null
+    }
+   ],
+   "view:PaymentStatusView": [
+    {
+     "diagram": "dataflow",
+     "node": "view:PaymentStatusView",
+     "label": "data flow: PaymentStatusView",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:PaymentStatusView",
+     "label": "event model: PaymentStatusView(invoiceId)",
+     "url": null
+    }
+   ],
+   "worker:fraud-worker": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:fraud-worker",
+     "label": "data flow: fraud-worker",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:fraud-worker",
+     "label": "event model: fraud-worker",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: PaymentProcessor",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:ingestCharge": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:ingestCharge",
+     "label": "event model: ingestCharge(invoiceId, stripeEventId, amount)",
+     "url": null
+    }
+   ],
+   "view:WebhookDedupView": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:WebhookDedupView",
+     "label": "event model: WebhookDedupView(stripeEventId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:WebhookDedupView",
+     "label": "containers: WebhookDedupView",
+     "url": null
+    }
+   ],
+   "view:PaymentStatusView": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:PaymentStatusView",
+     "label": "event model: PaymentStatusView(invoiceId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:PaymentStatusView",
+     "label": "containers: PaymentStatusView",
+     "url": null
+    }
+   ],
+   "worker:fraud-worker": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:fraud-worker",
+     "label": "event model: fraud-worker",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:fraud-worker",
+     "label": "containers: fraud-worker",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "us-east:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "us-east:shard:InvoicePayment": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:InvoicePayment",
+     "label": "event model: InvoicePayment(invoiceId)",
+     "url": null
+    }
+   ],
+   "us-east:view:WebhookDedupView": [
+    {
+     "diagram": "containers",
+     "node": "view:WebhookDedupView",
+     "label": "containers: WebhookDedupView",
+     "url": null
+    }
+   ],
+   "us-east:view:PaymentStatusView": [
+    {
+     "diagram": "containers",
+     "node": "view:PaymentStatusView",
+     "label": "containers: PaymentStatusView",
+     "url": null
+    }
+   ],
+   "us-east:worker:fraud-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fraud-worker",
+     "label": "containers: fraud-worker",
+     "url": null
+    }
+   ],
+   "eu-west:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "eu-west:shard:InvoicePayment": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:InvoicePayment",
+     "label": "event model: InvoicePayment(invoiceId)",
+     "url": null
+    }
+   ],
+   "eu-west:view:WebhookDedupView": [
+    {
+     "diagram": "containers",
+     "node": "view:WebhookDedupView",
+     "label": "containers: WebhookDedupView",
+     "url": null
+    }
+   ],
+   "eu-west:view:PaymentStatusView": [
+    {
+     "diagram": "containers",
+     "node": "view:PaymentStatusView",
+     "label": "containers: PaymentStatusView",
+     "url": null
+    }
+   ],
+   "eu-west:worker:fraud-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:fraud-worker",
+     "label": "containers: fraud-worker",
+     "url": null
+    }
+   ],
+   "region:us-east": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: PaymentProcessor (us-east, eu-west)",
+     "url": null
+    }
+   ],
+   "region:eu-west": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: PaymentProcessor (us-east, eu-west)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:ingestCharge": [
+    [
+     15,
+     34
+    ],
+    [
+     37,
+     47
+    ]
+   ],
+   "view:WebhookDedupView": [
+    [
+     50,
+     52
+    ]
+   ],
+   "view:PaymentStatusView": [
+    [
+     55,
+     65
+    ]
+   ],
+   "pol:fraud-worker": [
+    [
+     68,
+     76
+    ]
+   ],
+   "bnd:InvoicePayment": [
+    [
+     8,
+     8
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:WebhookDedupView": [
+    [
+     50,
+     52
+    ]
+   ],
+   "view:PaymentStatusView": [
+    [
+     55,
+     65
+    ]
+   ],
+   "worker:fraud-worker": [
+    [
+     68,
+     76
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:ingestCharge": [
+    [
+     15,
+     34
+    ],
+    [
+     37,
+     47
+    ]
+   ],
+   "view:WebhookDedupView": [
+    [
+     50,
+     52
+    ]
+   ],
+   "view:PaymentStatusView": [
+    [
+     55,
+     65
+    ]
+   ],
+   "worker:fraud-worker": [
+    [
+     68,
+     76
+    ]
+   ]
+  },
+  "deployment": {
+   "us-east:view:WebhookDedupView": [
+    [
+     50,
+     52
+    ]
+   ],
+   "eu-west:view:WebhookDedupView": [
+    [
+     50,
+     52
+    ]
+   ],
+   "us-east:view:PaymentStatusView": [
+    [
+     55,
+     65
+    ]
+   ],
+   "eu-west:view:PaymentStatusView": [
+    [
+     55,
+     65
+    ]
+   ],
+   "us-east:worker:fraud-worker": [
+    [
+     68,
+     76
+    ]
+   ],
+   "eu-west:worker:fraud-worker": [
+    [
+     68,
+     76
+    ]
+   ],
+   "us-east:shard:InvoicePayment": [
+    [
+     8,
+     8
+    ]
+   ],
+   "eu-west:shard:InvoicePayment": [
+    [
+     8,
+     8
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}
