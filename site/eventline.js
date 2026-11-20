@@ -1768,6 +1768,67 @@ function dataflow(model) {
   return { title: `${sysName} · data flow`, subtitle: `${subtitle(model)}   ·   dashed = a command reads existing facts or a read model`, direction: 'LR', nodes: nodes.filter((n) => connected.has(n.id)), edges: flows, groups: [] };
 }
 
+function boundaryIndex(model) {
+  const byName = new Map();
+  model.boundaries.forEach((b, i) => byName.set(b.name, [...(byName.get(b.name) || []), i]));
+  const commandsOf = new Map();
+  const feedersOf = new Map();
+  for (const c of model.commands) {
+    if (!c.boundary) continue;
+    commandsOf.set(c.boundary.name, [...(commandsOf.get(c.boundary.name) || []), c.name]);
+    for (const e of eventsOf(c)) {
+      if (!feedersOf.has(e)) feedersOf.set(e, new Set());
+      for (const i of byName.get(c.boundary.name) || []) feedersOf.get(e).add(i);
+    }
+  }
+  return { commandsOf, feedersOf };
+}
+
+function feeders(ctx, events) {
+  if (!ctx.scoped) return [];
+  const found = new Set(events.flatMap((e) => [...(ctx.index.feedersOf.get(e) || [])]));
+  return [...found].sort((a, b) => a - b).filter((i) => ctx.isLive(i)).map((i) => ctx.model.boundaries[i]);
+}
+
+/* How many regions a boundary runs in: @cost(regions=n), at most all of them. */
+const regionCountOf = (b, all) => {
+  const n = parseInt(b.annotations.cost && b.annotations.cost.regions, 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, all) : all;
+};
+
+/* "by userId · 100 shards · in 2 regions": what a shard box says about its boundary. */
+const shardSub = (b, count) => {
+  const cost = b.annotations.cost || {};
+  const key = b.annotations.partition && b.annotations.partition.shardKey;
+  return [key ? `by ${key}` : '', cost.shardFanout ? `${cost.shardFanout} shards` : '', count > 1 ? `in ${count} regions` : 'this region only'].filter(Boolean).join(' · ');
+};
+
+function regionShards(ctx, r) {
+  ctx.model.boundaries.forEach((b, i) => {
+    if (!ctx.isLive(i)) return;
+    ctx.add({ id: `shard:${b.name}`, label: `${b.name} shards`, sub: shardSub(b, regionCountOf(b, ctx.regions)), kind: 'store' });
+    ctx.edges.push({ from: `${r}:api`, to: `${r}:shard:${b.name}`, label: ctx.scoped ? short(ctx.index.commandsOf.get(b.name) || [], 2) : '' });
+  });
+}
+
+/* Edges into one box: from each shard that feeds it, or from the Command API when none does. */
+const feedEdges = (ctx, r, id, from) => {
+  if (from.length) for (const b of from) ctx.edges.push({ from: `${r}:shard:${b.name}`, to: `${r}:${id}`, label: '' });
+  else ctx.edges.push({ from: `${r}:api`, to: `${r}:${id}`, label: '' });
+};
+
+function regionReaders(ctx, r) {
+  for (const v of ctx.model.views) {
+    const c = cacheOf(v);
+    ctx.add({ id: `view:${v.name}`, label: v.name, sub: c ? `cache ttl ${c.ttl || '?'}` : 'read model', kind: 'cache' });
+    feedEdges(ctx, r, `view:${v.name}`, feeders(ctx, v.sources.map((s) => s.name)));
+  }
+  for (const [name, w] of ctx.workers) {
+    ctx.add({ id: `worker:${name}`, label: name, sub: 'async worker', kind: 'worker' });
+    feedEdges(ctx, r, `worker:${name}`, feeders(ctx, w.triggers));
+  }
+}
+
 function deployment(model) {
   const regions = model.system ? model.system.regions : [];
   if (!regions.length) {
@@ -1775,50 +1836,24 @@ function deployment(model) {
     err.code = 'NO_REGIONS';
     throw err;
   }
-  const sysName = model.system.name;
   const nodes = [];
-  const edges = [];
   const groups = [];
-  const emitsOf = (b) => new Set(model.commands.filter((c) => c.boundary && c.boundary.name === b.name).flatMap(eventsOf));
-  const scoped = model.commands.some((c) => c.boundary);
-  const workers = workersOf(model);
-
-  const regionCount = (b) => {
-    const n = parseInt(b.annotations.cost && b.annotations.cost.regions, 10);
-    return Number.isFinite(n) && n > 0 ? Math.min(n, regions.length) : regions.length;
-  };
-
+  const counts = model.boundaries.map((b) => regionCountOf(b, regions.length));
+  const ctx = { model, regions: regions.length, edges: [], index: boundaryIndex(model), scoped: model.commands.some((c) => c.boundary), workers: workersOf(model) };
   regions.forEach((region, ri) => {
     const r = slug(region);
     const members = [];
-    const add = (n) => { nodes.push({ ...n, id: `${r}:${n.id}` }); members.push(`${r}:${n.id}`); };
-    add({ id: 'api', label: 'Command API', sub: 'stateless', kind: 'process' });
-    const live = model.boundaries.filter((b) => ri < regionCount(b));
-    for (const b of live) {
-      const cost = b.annotations.cost || {};
-      const key = b.annotations.partition && b.annotations.partition.shardKey;
-      add({ id: `shard:${b.name}`, label: `${b.name} shards`, sub: [key ? `by ${key}` : '', cost.shardFanout ? `${cost.shardFanout} shards` : '', regionCount(b) > 1 ? `in ${regionCount(b)} regions` : 'this region only'].filter(Boolean).join(' · '), kind: 'store' });
-      edges.push({ from: `${r}:api`, to: `${r}:shard:${b.name}`, label: scoped ? short(model.commands.filter((c) => c.boundary && c.boundary.name === b.name).map((c) => c.name), 2) : '' });
-    }
-    for (const v of model.views) {
-      const c = cacheOf(v);
-      add({ id: `view:${v.name}`, label: v.name, sub: c ? `cache ttl ${c.ttl || '?'}` : 'read model', kind: 'cache' });
-      const feeders = scoped ? live.filter((b) => v.sources.some((s) => emitsOf(b).has(s.name))) : [];
-      if (feeders.length) for (const b of feeders) edges.push({ from: `${r}:shard:${b.name}`, to: `${r}:view:${v.name}`, label: '' });
-      else edges.push({ from: `${r}:api`, to: `${r}:view:${v.name}`, label: '' });
-    }
-    for (const [name, w] of workers) {
-      add({ id: `worker:${name}`, label: name, sub: 'async worker', kind: 'worker' });
-      const feeders = scoped ? live.filter((b) => w.triggers.some((t) => emitsOf(b).has(t))) : [];
-      if (feeders.length) for (const b of feeders) edges.push({ from: `${r}:shard:${b.name}`, to: `${r}:worker:${name}`, label: '' });
-      else edges.push({ from: `${r}:api`, to: `${r}:worker:${name}`, label: '' });
-    }
+    ctx.add = (n) => { nodes.push({ ...n, id: `${r}:${n.id}` }); members.push(`${r}:${n.id}`); };
+    ctx.isLive = (i) => ri < counts[i];
+    ctx.add({ id: 'api', label: 'Command API', sub: 'stateless', kind: 'process' });
+    regionShards(ctx, r);
+    regionReaders(ctx, r);
     groups.push({ id: `region:${r}`, label: region, members });
   });
-  const note = scoped
+  const note = ctx.scoped
     ? 'Inferred: each region runs the full stack unless a boundary says @cost(regions=n).'
     : 'Inferred: each region runs the full stack. State "in Boundary(key)" on commands to see which shards feed which read models.';
-  return { title: `${sysName} · deployment`, subtitle: `${subtitle(model)}   ·   ${note}`, direction: 'LR', stack: true, nodes, edges, groups };
+  return { title: `${model.system.name} · deployment`, subtitle: `${subtitle(model)}   ·   ${note}`, direction: 'LR', stack: true, nodes, edges: ctx.edges, groups };
 }
 
 /* Contexts as boxes, and the events that cross between them. A dashed arrow is an event the sender does not list in publishes. */

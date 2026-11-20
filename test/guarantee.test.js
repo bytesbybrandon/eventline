@@ -43,6 +43,7 @@ const MODELS = {
   forms: fs.readFileSync(path.join(dir, 'forms.dsl'), 'utf8'),
   unscoped: 'system Plain {\n  region: a, b\n}\nuser -> go(id)\n  -[default]-> [x-done { id }]\nview V(id) = [x-done(id)] => { id }\nx-done { id } -> w -> other(id)\n',
   undrawable: 'user -> go(id) @link(to="deployment") @link(to="contextmap")\n  -[default]-> [x-done { id }]\n',
+  stray: 'system Stray {\n  region: a\n}\nuser -> go(id) in Ghost(id)\n  -[default]-> [x-done { id }]\nview V(id) = [x-done(id)] => { id } @cache(key="v")\n',
 };
 
 for (const [name, text] of Object.entries(MODELS)) {

@@ -115,4 +115,4 @@ CC comes from ESLint's `complexity` rule and branch coverage from V8 block cover
 
 Ranges are three runs of `node scripts/bench.js` on Node 22 under WSL2; the CI number is the job duration on a GitHub runner.
 `check` builds a diagram only for an `@link` that names it.
-A model with an `@link` to the deployment diagram still pays for `deployment`, which filters every command once per boundary; the refactor plan in PR #45 fixes that next.
+`deployment` indexes boundaries by the events they emit, so a model with an `@link` to it checks in 40 to 60 ms at 130 kB.
