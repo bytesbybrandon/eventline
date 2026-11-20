@@ -37,7 +37,7 @@ It may only grow when `lib/` gains a feature, and the PR says by how much.
 
 | Budget | Command | Notes |
 |---|---|---|
-| P0 and scaling | `node scripts/bench.js` | Prints parse, check and board time at 1x, 10x and 50x, and the bundle size. |
+| P0 and scaling | `node scripts/bench.js` | Prints parse, check, board and edit loop time at 1x, 10x and 50x, and the bundle size. The check and board columns include a parse; the loop column is the P0 number. |
 | P1 | `/usr/bin/time -f %e node bin/eventline-axi validate examples/twitter-pure.dsl` | Take the slowest of three runs. |
 | P2 | `/usr/bin/time -f %e node bin/eventline-axi diagrams examples/twitter-pure.dsl -o <dir>` | Same for the two build scripts. |
 | P3 | The duration of the CI job | No local command; read it from the workflow run. |
@@ -90,14 +90,16 @@ A new or changed function on a P0 or P1 path carries one doc line:
 
 | Component | Tier | Last measured | Result | Status |
 |---|---|---|---|---|
-| `parse` | P0 | 2026-11-20 | 0.7 ms at 3 kB, 2.1 ms at 30 kB, 9.4 ms at 130 kB | Pass |
-| board (`render` eventmodel) | P0 | 2026-11-20 | 0.7 ms at 3 kB, 10 ms at 30 kB, 134 ms at 130 kB | Pass, superlinear |
-| `check` | P0 | 2026-11-20 | 1.1 ms at 3 kB, 39 ms at 30 kB, 3.8 s at 130 kB | Fail at 30 kB with the board, fail at 130 kB |
-| parse + check + board | P0 | 2026-11-20 | 2.6 ms at 3 kB, 51 ms at 30 kB | Fail at 30 kB by 1 ms |
+| `parse` | P0 | 2026-11-20 | 0.7 ms at 3 kB, 2 ms at 30 kB, 7 to 9 ms at 130 kB | Pass |
+| board (`render` eventmodel) | P0 | 2026-11-20 | 0.7 ms at 3 kB, 10 ms at 30 kB, 130 ms at 130 kB | Pass, superlinear |
+| `check` | P0 | 2026-11-20 | 1.1 ms at 3 kB, 38 to 43 ms at 30 kB, 3.7 to 3.9 s at 130 kB | Superlinear |
+| edit loop (parse, check, board on one model) | P0 | 2026-11-20 | 1 ms at 3 kB, 45 to 47 ms at 30 kB, 3.7 to 4.1 s at 130 kB | Pass at 3 kB, at the limit at 30 kB, fail at 130 kB |
 | CLI `validate` | P1 | 2026-11-20 | 40 to 70 ms | Pass |
 | CLI `diagrams` | P2 | 2026-11-20 | 50 ms | Pass |
+| CI build job (`npm test`, docs site build) | P3 | 2026-11-20 | 29 s | Pass |
 | `site/eventline.js` | Bundle | 2026-11-20 | 161.7 kB raw, 45.3 kB gzip | Pass |
+| Per-function CC and CRAP | All | Not yet measured | Branch coverage is 94.5% overall; CC per function has not been measured | Unmeasured |
 
-Measured on Node 22 under WSL2.
+Ranges are three runs of `node scripts/bench.js` on Node 22 under WSL2; the CI number is the job duration on a GitHub runner.
 The `check` gap is known: a CPU profile at 25x puts most of the time in `eventsOf` and `emitsOf` in `lib/diagram/system.js`, which `check` reaches through the link rules and which filter every command once per boundary.
 Fix that before raising any P0 budget.

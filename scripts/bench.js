@@ -22,12 +22,17 @@ function ms(fn, runs) {
   return (Number(process.hrtime.bigint() - start) / 1e6 / runs).toFixed(2);
 }
 
-console.log('scale  bytes    parse ms  check ms  board ms');
+// check and board columns include their own parse; the loop column is one parse, then check and board on that model.
+console.log('scale  bytes    parse ms  check ms  board ms  loop ms');
 for (const n of [1, 10, 50]) {
   let text = src;
   for (let i = 1; i < n; i++) text += `\n${copy(i)}`;
   const runs = n === 50 ? 1 : 5;
-  const row = [`${n}x`.padEnd(6), String(text.length).padEnd(8), ms(() => parse(text), runs).padEnd(9), ms(() => check(parse(text)), runs).padEnd(9), ms(() => render(parse(text), 'eventmodel'), runs)];
+  const row = [`${n}x`.padEnd(6), String(text.length).padEnd(8), ms(() => parse(text), runs).padEnd(9), ms(() => check(parse(text)), runs).padEnd(9), ms(() => render(parse(text), 'eventmodel'), runs).padEnd(9), ms(() => {
+    const model = parse(text);
+    check(model);
+    render(model, 'eventmodel');
+  }, runs)];
   console.log(row.join(' '));
 }
 
