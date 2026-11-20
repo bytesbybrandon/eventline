@@ -23,12 +23,15 @@ function ms(fn, runs) {
 }
 
 // check and board columns include their own parse; the loop column is one parse, then check and board on that model.
-console.log('scale  bytes    parse ms  check ms  board ms  loop ms');
-for (const n of [1, 10, 50]) {
+console.log('scale      bytes    parse ms  check ms  board ms  loop ms');
+// The last rows add one @link, which makes check build the diagram it names: the deployment diagram, then the board.
+const link = (to) => `\nuser -> linkProbe(id) @link(to="${to}")\n  -[default]-> [link-probed { id }]\n`;
+for (const [n, label, extra] of [[1, '1x', ''], [10, '10x', ''], [50, '50x', ''], [50, '50x+@link', link('deployment')], [50, '50x+@board', link('eventmodel')]]) {
   let text = src;
   for (let i = 1; i < n; i++) text += `\n${copy(i)}`;
+  text += extra;
   const runs = n === 50 ? 1 : 5;
-  const row = [`${n}x`.padEnd(6), String(text.length).padEnd(8), ms(() => parse(text), runs).padEnd(9), ms(() => check(parse(text)), runs).padEnd(9), ms(() => render(parse(text), 'eventmodel'), runs).padEnd(9), ms(() => {
+  const row = [label.padEnd(10), String(text.length).padEnd(8), ms(() => parse(text), runs).padEnd(9), ms(() => check(parse(text)), runs).padEnd(9), ms(() => render(parse(text), 'eventmodel'), runs).padEnd(9), ms(() => {
     const model = parse(text);
     check(model);
     render(model, 'eventmodel');

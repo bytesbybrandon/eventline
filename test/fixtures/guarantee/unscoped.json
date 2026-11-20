@@ -1,0 +1,1330 @@
+{
+ "model": {
+  "system": {
+   "name": "Plain",
+   "externals": [],
+   "slo": [],
+   "regions": [
+    "a",
+    "b"
+   ],
+   "dataClassification": [],
+   "constraints": [],
+   "attrs": {},
+   "line": 1
+  },
+  "contexts": [],
+  "actors": [],
+  "boundaries": [],
+  "views": [
+   {
+    "name": "V",
+    "params": [
+     "id"
+    ],
+    "paramDefs": [
+     {
+      "name": "id",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "x-done",
+      "wildcard": false,
+      "args": "id"
+     }
+    ],
+    "shape": [
+     {
+      "name": "id"
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 6,
+    "endLine": 6
+   }
+  ],
+  "commands": [
+   {
+    "actor": "user",
+    "name": "go",
+    "params": [
+     "id"
+    ],
+    "paramDefs": [
+     {
+      "name": "id",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": null,
+    "on": [],
+    "from": [],
+    "branches": [
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "x-done",
+        "fields": [
+         {
+          "name": "id"
+         }
+        ],
+        "payload": "id"
+       }
+      ],
+      "reject": null,
+      "line": 5
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 4,
+    "endLine": 5,
+    "triggers": [],
+    "source": null
+   }
+  ],
+  "policies": [
+   {
+    "name": null,
+    "trigger": {
+     "event": "x-done",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "id"
+      }
+     ],
+     "payload": "id"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "w",
+      "command": {
+       "name": "other",
+       "args": "id"
+      },
+      "emits": [],
+      "line": 7
+     }
+    ],
+    "line": 7,
+    "endLine": 7
+   }
+  ],
+  "events": [
+   {
+    "name": "x-done",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "go",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "V"
+     },
+     {
+      "kind": "policy",
+      "name": "x-done"
+     }
+    ],
+    "fields": [
+     {
+      "name": "id"
+     }
+    ],
+    "declared": null
+   }
+  ],
+  "declarations": []
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"x-done\" has an unguarded rule",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"x-done\" has an unguarded rule",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "2 of 2 commands and read models have no scenario, starting with \"go\"",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"x-done\" starts straight from the event. Write a read model such as PendingW(...) fed by x-done, and start from it: \"x-done from [PendingW] -> ...\" or \"from [PendingW] -> ...\"",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"x-done\" has an unguarded rule",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "2 of 2 commands and read models have no scenario, starting with \"go\"",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"x-done\" starts straight from the event. Write a read model such as PendingW(...) fed by x-done, and start from it: \"x-done from [PendingW] -> ...\" or \"from [PendingW] -> ...\"",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"x-done\" has an unguarded rule",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "2 of 2 commands and read models have no scenario, starting with \"go\"",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"x-done\" starts straight from the event. Write a read model such as PendingW(...) fed by x-done, and start from it: \"x-done from [PendingW] -> ...\" or \"from [PendingW] -> ...\"",
+    "line": 7,
+    "endLine": 7,
+    "subject": {
+     "kind": "policy",
+     "name": "x-done",
+     "line": 7,
+     "endLine": 7
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "Plain",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:go",
+     "lane": "actor",
+     "label": "user",
+     "col": 0,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       4,
+       4
+      ]
+     ]
+    },
+    {
+     "id": "cmd:go",
+     "lane": "command",
+     "label": "go(id)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       4,
+       5
+      ]
+     ],
+     "notes": [],
+     "fullNotes": [],
+     "checks": []
+    },
+    {
+     "id": "evt:x-done",
+     "lane": "event",
+     "label": "x-done",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:go"
+    },
+    {
+     "id": "view:V",
+     "lane": "command",
+     "label": "V(id)",
+     "col": 2,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       6,
+       6
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "implied:x-done",
+     "lane": "command",
+     "label": "x-done",
+     "col": 1,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       7,
+       7
+      ]
+     ]
+    },
+    {
+     "id": "pol:w",
+     "lane": "actor",
+     "label": "w",
+     "col": 2,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       7,
+       7
+      ]
+     ]
+    },
+    {
+     "id": "cmd:other",
+     "lane": "command",
+     "label": "other()",
+     "col": 3,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:go",
+     "to": "cmd:go",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:go",
+     "to": "evt:x-done",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:x-done",
+     "to": "view:V",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:x-done",
+     "to": "implied:x-done",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:x-done",
+     "to": "pol:w",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "pol:w",
+     "to": "cmd:other",
+     "kind": "invokes",
+     "label": "id"
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "V",
+     "nodes": [
+      "view:V",
+      "evt:x-done"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "w",
+     "nodes": [
+      "evt:x-done",
+      "implied:x-done",
+      "pol:w",
+      "cmd:other"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "go",
+     "nodes": [
+      "actor:go",
+      "cmd:go",
+      "evt:x-done"
+     ]
+    }
+   ],
+   "groups": [],
+   "cols": 4
+  },
+  "context": {
+   "title": "Plain · system context",
+   "subtitle": "regions a, b",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "Plain",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "actor:user",
+     "label": "user",
+     "sub": "not declared",
+     "kind": "actor"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "sys",
+     "label": "go"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "Plain · containers",
+   "subtitle": "regions a, b",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "user",
+     "sub": "not declared",
+     "kind": "actor"
+    },
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "1 command",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "append only",
+     "kind": "store"
+    },
+    {
+     "id": "view:V",
+     "label": "V",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "worker:w",
+     "label": "w",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "api",
+     "label": "go"
+    },
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 1 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:V",
+     "label": "x-done"
+    },
+    {
+     "from": "store",
+     "to": "worker:w",
+     "label": "x-done"
+    },
+    {
+     "from": "worker:w",
+     "to": "api",
+     "label": "other",
+     "weak": true
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "Plain (a, b)",
+     "members": [
+      "api",
+      "store",
+      "view:V",
+      "worker:w"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "Plain · data flow",
+   "subtitle": "regions a, b   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "user",
+     "sub": "not declared",
+     "kind": "actor"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:go",
+     "label": "go()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:V",
+     "label": "V",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "worker:w",
+     "label": "w",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:other",
+     "label": "other()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "cmd:go",
+     "label": "id"
+    },
+    {
+     "from": "cmd:go",
+     "to": "log",
+     "label": "x-done"
+    },
+    {
+     "from": "log",
+     "to": "view:V",
+     "label": "x-done"
+    },
+    {
+     "from": "log",
+     "to": "worker:w",
+     "label": "x-done"
+    },
+    {
+     "from": "worker:w",
+     "to": "cmd:other",
+     "label": "issues",
+     "weak": true
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "Plain · deployment",
+   "subtitle": "regions a, b   ·   Inferred: each region runs the full stack. State \"in Boundary(key)\" on commands to see which shards feed which read models.",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "a:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "a:view:V",
+     "label": "V",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "a:worker:w",
+     "label": "w",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "b:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "b:view:V",
+     "label": "V",
+     "sub": "read model",
+     "kind": "cache"
+    },
+    {
+     "id": "b:worker:w",
+     "label": "w",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "a:api",
+     "to": "a:view:V",
+     "label": ""
+    },
+    {
+     "from": "a:api",
+     "to": "a:worker:w",
+     "label": ""
+    },
+    {
+     "from": "b:api",
+     "to": "b:view:V",
+     "label": ""
+    },
+    {
+     "from": "b:api",
+     "to": "b:worker:w",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:a",
+     "label": "a",
+     "members": [
+      "a:api",
+      "a:view:V",
+      "a:worker:w"
+     ]
+    },
+    {
+     "id": "region:b",
+     "label": "b",
+     "members": [
+      "b:api",
+      "b:view:V",
+      "b:worker:w"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "error": "NO_CONTEXTS"
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "actor:go": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: user",
+     "url": null
+    }
+   ],
+   "cmd:go": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:go",
+     "label": "data flow: go()",
+     "url": null
+    }
+   ],
+   "evt:x-done": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:V": [
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:V",
+     "label": "data flow: V",
+     "url": null
+    }
+   ],
+   "pol:w": [
+    {
+     "diagram": "containers",
+     "node": "worker:w",
+     "label": "containers: w",
+     "url": null
+    }
+   ],
+   "cmd:other": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:other",
+     "label": "data flow: other()",
+     "url": null
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Plain (a, b)",
+     "url": null
+    }
+   ],
+   "actor:user": [
+    {
+     "diagram": "containers",
+     "node": "actor:user",
+     "label": "containers: user",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: user",
+     "url": null
+    }
+   ],
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:V": [
+    {
+     "diagram": "dataflow",
+     "node": "view:V",
+     "label": "data flow: V",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:V",
+     "label": "event model: V(id)",
+     "url": null
+    }
+   ],
+   "worker:w": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:w",
+     "label": "data flow: w",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:w",
+     "label": "event model: w",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: Plain",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: user",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:go": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:go",
+     "label": "event model: go(id)",
+     "url": null
+    }
+   ],
+   "view:V": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:V",
+     "label": "event model: V(id)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    }
+   ],
+   "worker:w": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:w",
+     "label": "event model: w",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:w",
+     "label": "containers: w",
+     "url": null
+    }
+   ],
+   "cmd:other": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:other",
+     "label": "event model: other()",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "a:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "a:view:V": [
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    }
+   ],
+   "a:worker:w": [
+    {
+     "diagram": "containers",
+     "node": "worker:w",
+     "label": "containers: w",
+     "url": null
+    }
+   ],
+   "b:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "b:view:V": [
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    }
+   ],
+   "b:worker:w": [
+    {
+     "diagram": "containers",
+     "node": "worker:w",
+     "label": "containers: w",
+     "url": null
+    }
+   ],
+   "region:a": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Plain (a, b)",
+     "url": null
+    }
+   ],
+   "region:b": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Plain (a, b)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:go": [
+    [
+     4,
+     5
+    ]
+   ],
+   "view:V": [
+    [
+     6,
+     6
+    ]
+   ],
+   "pol:w": [
+    [
+     7,
+     7
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:V": [
+    [
+     6,
+     6
+    ]
+   ],
+   "worker:w": [
+    [
+     7,
+     7
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:go": [
+    [
+     4,
+     5
+    ]
+   ],
+   "view:V": [
+    [
+     6,
+     6
+    ]
+   ],
+   "worker:w": [
+    [
+     7,
+     7
+    ]
+   ]
+  },
+  "deployment": {
+   "a:view:V": [
+    [
+     6,
+     6
+    ]
+   ],
+   "b:view:V": [
+    [
+     6,
+     6
+    ]
+   ],
+   "a:worker:w": [
+    [
+     7,
+     7
+    ]
+   ],
+   "b:worker:w": [
+    [
+     7,
+     7
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}
