@@ -78,8 +78,8 @@
    * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
    * - Complexity: O(L + z) where L = length of the caret line, z = selection length (derived by reading the code)
    * - Cyclomatic Complexity (CC): 16 measured; target <= 8, over budget
-   * - Branch Coverage: 85% measured; target >= 90%
-   * - CRAP Score: 16.9 measured; threshold <= 10, over budget
+   * - Branch Coverage: 86% measured; target >= 90%
+   * - CRAP Score: 16.6 measured; threshold <= 10, over budget
    * - Caching: none
    */
   function onType(text, s, e, ch) {
@@ -107,8 +107,8 @@
    * - Tier: P0 (edit loop: parse + check + board < 50 ms at 30 kB)
    * - Complexity: O(L) where L = length of the caret line (derived by reading the code)
    * - Cyclomatic Complexity (CC): 6 measured; target <= 8
-   * - Branch Coverage: 80% measured; target >= 90%
-   * - CRAP Score: 6.3 measured; threshold <= 10
+   * - Branch Coverage: 83% measured; target >= 90%
+   * - CRAP Score: 6.2 measured; threshold <= 10
    * - Caching: none
    */
   function onBackspace(text, s, e) {
