@@ -1,0 +1,968 @@
+{
+ "model": {
+  "system": {
+   "name": "Stray",
+   "externals": [],
+   "slo": [],
+   "regions": [
+    "a"
+   ],
+   "dataClassification": [],
+   "constraints": [],
+   "attrs": {},
+   "line": 1
+  },
+  "contexts": [],
+  "actors": [],
+  "boundaries": [],
+  "views": [
+   {
+    "name": "V",
+    "params": [
+     "id"
+    ],
+    "paramDefs": [
+     {
+      "name": "id",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "x-done",
+      "wildcard": false,
+      "args": "id"
+     }
+    ],
+    "shape": [
+     {
+      "name": "id"
+     }
+    ],
+    "annotations": {
+     "cache": {
+      "key": "v"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 6,
+    "endLine": 6
+   }
+  ],
+  "commands": [
+   {
+    "actor": "user",
+    "name": "go",
+    "params": [
+     "id"
+    ],
+    "paramDefs": [
+     {
+      "name": "id",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "Ghost",
+     "args": "id"
+    },
+    "on": [],
+    "from": [],
+    "branches": [
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "x-done",
+        "fields": [
+         {
+          "name": "id"
+         }
+        ],
+        "payload": "id"
+       }
+      ],
+      "reject": null,
+      "line": 5
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 4,
+    "endLine": 5,
+    "triggers": [],
+    "source": null
+   }
+  ],
+  "policies": [],
+  "events": [
+   {
+    "name": "x-done",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "go",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "V"
+     }
+    ],
+    "fields": [
+     {
+      "name": "id"
+     }
+    ],
+    "declared": null
+   }
+  ],
+  "declarations": []
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "error",
+    "rule": "unknown-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> go\" is in boundary \"Ghost\", which is not declared",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "error",
+    "rule": "unknown-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> go\" is in boundary \"Ghost\", which is not declared",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "2 of 2 commands and read models have no scenario, starting with \"go\"",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "error",
+    "rule": "unknown-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> go\" is in boundary \"Ghost\", which is not declared",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "2 of 2 commands and read models have no scenario, starting with \"go\"",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "info",
+    "rule": "command-inputs",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> go\" lists no facts it needs (fine for a command that creates something)",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#command-inputs"
+   },
+   {
+    "severity": "info",
+    "rule": "unknown-actor",
+    "category": "references",
+    "profile": "core",
+    "message": "\"user\" in \"go\" is neither a declared actor nor a system external",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-actor"
+   },
+   {
+    "severity": "error",
+    "rule": "unknown-boundary",
+    "category": "boundary",
+    "profile": "core",
+    "message": "Command \"user -> go\" is in boundary \"Ghost\", which is not declared",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unknown-boundary"
+   },
+   {
+    "severity": "info",
+    "rule": "boundaries",
+    "category": "boundary",
+    "profile": "core",
+    "message": "No boundary declared; commands have no stated consistency scope",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#boundaries"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "2 of 2 commands and read models have no scenario, starting with \"go\"",
+    "line": 4,
+    "endLine": 5,
+    "subject": {
+     "kind": "command",
+     "name": "go",
+     "line": 4,
+     "endLine": 5
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "Stray",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:go",
+     "lane": "actor",
+     "label": "user",
+     "col": 0,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       4,
+       4
+      ]
+     ]
+    },
+    {
+     "id": "cmd:go",
+     "lane": "command",
+     "label": "go(id)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       4,
+       5
+      ]
+     ],
+     "notes": [],
+     "fullNotes": [],
+     "checks": []
+    },
+    {
+     "id": "evt:x-done",
+     "lane": "event",
+     "label": "x-done",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:go"
+    },
+    {
+     "id": "view:V",
+     "lane": "command",
+     "label": "V(id)",
+     "col": 1,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       6,
+       6
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:go",
+     "to": "cmd:go",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:go",
+     "to": "evt:x-done",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:x-done",
+     "to": "view:V",
+     "kind": "projects",
+     "label": ""
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "V",
+     "nodes": [
+      "view:V",
+      "evt:x-done"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "go",
+     "nodes": [
+      "actor:go",
+      "cmd:go",
+      "evt:x-done"
+     ]
+    }
+   ],
+   "groups": [
+    {
+     "id": "bnd:Ghost",
+     "label": "Ghost(id)",
+     "kind": "boundary",
+     "members": [
+      "cmd:go",
+      "evt:x-done"
+     ]
+    }
+   ],
+   "cols": 2
+  },
+  "context": {
+   "title": "Stray · system context",
+   "subtitle": "regions a",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "Stray",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "actor:user",
+     "label": "user",
+     "sub": "not declared",
+     "kind": "actor"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "sys",
+     "label": "go"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "Stray · containers",
+   "subtitle": "regions a",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "user",
+     "sub": "not declared",
+     "kind": "actor"
+    },
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "1 command",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "append only",
+     "kind": "store"
+    },
+    {
+     "id": "view:V",
+     "label": "V",
+     "sub": "read model, cache ttl ?",
+     "kind": "cache"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "api",
+     "label": "go"
+    },
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 1 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:V",
+     "label": "x-done"
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "Stray (a)",
+     "members": [
+      "api",
+      "store",
+      "view:V"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "Stray · data flow",
+   "subtitle": "regions a   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "user",
+     "sub": "not declared",
+     "kind": "actor"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:go",
+     "label": "go()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:V",
+     "label": "V",
+     "sub": "data store, read model",
+     "kind": "view"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "cmd:go",
+     "label": "id"
+    },
+    {
+     "from": "cmd:go",
+     "to": "log",
+     "label": "x-done"
+    },
+    {
+     "from": "log",
+     "to": "view:V",
+     "label": "x-done"
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "Stray · deployment",
+   "subtitle": "regions a   ·   Inferred: each region runs the full stack unless a boundary says @cost(regions=n).",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "a:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "a:view:V",
+     "label": "V",
+     "sub": "cache ttl ?",
+     "kind": "cache"
+    }
+   ],
+   "edges": [
+    {
+     "from": "a:api",
+     "to": "a:view:V",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:a",
+     "label": "a",
+     "members": [
+      "a:api",
+      "a:view:V"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "error": "NO_CONTEXTS"
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "actor:go": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: user",
+     "url": null
+    }
+   ],
+   "cmd:go": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:go",
+     "label": "data flow: go()",
+     "url": null
+    }
+   ],
+   "evt:x-done": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:V": [
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:V",
+     "label": "data flow: V",
+     "url": null
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Stray (a)",
+     "url": null
+    }
+   ],
+   "actor:user": [
+    {
+     "diagram": "containers",
+     "node": "actor:user",
+     "label": "containers: user",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: user",
+     "url": null
+    }
+   ],
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:V": [
+    {
+     "diagram": "dataflow",
+     "node": "view:V",
+     "label": "data flow: V",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:V",
+     "label": "event model: V(id)",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: Stray",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: user",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:go": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:go",
+     "label": "event model: go(id)",
+     "url": null
+    }
+   ],
+   "view:V": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:V",
+     "label": "event model: V(id)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "a:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "a:view:V": [
+    {
+     "diagram": "containers",
+     "node": "view:V",
+     "label": "containers: V",
+     "url": null
+    }
+   ],
+   "region:a": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: Stray (a)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:go": [
+    [
+     4,
+     5
+    ]
+   ],
+   "view:V": [
+    [
+     6,
+     6
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:V": [
+    [
+     6,
+     6
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:go": [
+    [
+     4,
+     5
+    ]
+   ],
+   "view:V": [
+    [
+     6,
+     6
+    ]
+   ]
+  },
+  "deployment": {
+   "a:view:V": [
+    [
+     6,
+     6
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}
