@@ -1,0 +1,62 @@
+[
+ {
+  "text": "context A {\n  context B {\n  }\n}",
+  "error": "A context cannot contain another context (line 2)",
+  "line": 2
+ },
+ {
+  "text": "context A {\n  system S {\n  }\n}",
+  "error": "The system block goes at the top level, outside any context (line 2)",
+  "line": 2
+ },
+ {
+  "text": "policy P = user -> go(id)\n  -[default]-> [x-done { id }]",
+  "error": "policy P = needs an event, timer or from [ReadModel] trigger with a rule (line 1)",
+  "line": 1
+ },
+ {
+  "text": "policy P = x-done { id } -> w -> go(id)\npolicy P = y-done { id } -> w -> go(id)",
+  "error": "policy P is named twice; policy names are unique across the model (line 2)",
+  "line": 2
+ },
+ {
+  "text": "policy P = x-done { id } -> w -> go(id)\nuser -> P(id)\n  -[default]-> [y-done { id }]",
+  "error": "Policy \"P\" has the same name as a command on line 2; give the policy another name (line 1)",
+  "line": 1
+ },
+ {
+  "text": "event a-b\nevent a-b",
+  "error": "event a-b is declared twice (first on line 1); an event is declared once across the model (line 2)",
+  "line": 2
+ },
+ {
+  "text": "scenario \"alone\" {\n  Given nothing\n}",
+  "error": "A scenario goes right after the command or read model it checks (line 1)",
+  "line": 1
+ },
+ {
+  "text": "foo bar",
+  "error": "Unexpected \"foo\". A statement starts with system, context, actor, boundary, view or readmodel, \"actor -> command(...)\", \"event { ... }\", \"from [ReadModel] -> worker -> command()\", \"every 5 minutes\", \"policy Name = ...\", or \"event name { fields }\" (line 1)",
+  "line": 1
+ },
+ {
+  "text": "from x",
+  "error": "An automation reads read models: write from [ReadModel] -> worker -> command(), or event from [ReadModel] -> worker -> command() (line 1)",
+  "line": 1
+ },
+ {
+  "text": "x-done --[a]-> w -> go()",
+  "error": "A guard opens and closes with the same arrow: --[guard]--> or -[guard]-> (this one opened with \"--[\") (line 1)",
+  "line": 1
+ },
+ {
+  "text": "every 5 fortnights -> w -> go()",
+  "error": "Unexpected \"every\". A statement starts with system, context, actor, boundary, view or readmodel, \"actor -> command(...)\", \"event { ... }\", \"from [ReadModel] -> worker -> command()\", \"every 5 minutes\", \"policy Name = ...\", or \"event name { fields }\" (line 1)",
+  "line": 1
+ },
+ {
+  "text": "user -> go(id\n",
+  "error": "Unclosed \"(\", found \"(id\" (line 1)",
+  "line": 1
+ }
+]

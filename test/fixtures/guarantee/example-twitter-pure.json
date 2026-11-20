@@ -1,0 +1,4477 @@
+{
+ "model": {
+  "system": {
+   "name": "TwitterAPI",
+   "externals": [
+    {
+     "name": "stripe",
+     "role": "payments"
+    },
+    {
+     "name": "sentry",
+     "role": "monitoring"
+    },
+    {
+     "name": "cloudfront",
+     "role": "cdn"
+    }
+   ],
+   "slo": [
+    "99.95% uptime",
+    "p99 < 100ms"
+   ],
+   "regions": [
+    "us-primary",
+    "eu-secondary",
+    "ap-southeast"
+   ],
+   "dataClassification": [
+    "public",
+    "pii"
+   ],
+   "constraints": [],
+   "attrs": {},
+   "line": 1
+  },
+  "contexts": [],
+  "actors": [
+   {
+    "name": "User",
+    "attributes": {
+     "auth": "session",
+     "tier": "free|pro|enterprise"
+    },
+    "line": 8
+   },
+   {
+    "name": "Admin",
+    "attributes": {
+     "auth": "oauth",
+     "mfa": "required"
+    },
+    "line": 9
+   },
+   {
+    "name": "Visitor",
+    "attributes": {
+     "auth": "none"
+    },
+    "line": 10
+   }
+  ],
+  "boundaries": [
+   {
+    "name": "TweetFeed",
+    "params": [
+     "tweetId"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "tweetId"
+     }
+    },
+    "line": 12
+   },
+   {
+    "name": "UserTimeline",
+    "params": [
+     "userId"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "userId"
+     }
+    },
+    "line": 13
+   },
+   {
+    "name": "UserFollows",
+    "params": [
+     "userId"
+    ],
+    "annotations": {
+     "partition": {
+      "shardKey": "userId"
+     }
+    },
+    "line": 14
+   }
+  ],
+  "views": [
+   {
+    "name": "UserTimeline",
+    "params": [
+     "userId"
+    ],
+    "paramDefs": [
+     {
+      "name": "userId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "user-followed",
+      "wildcard": true,
+      "args": "userId, targetUserId"
+     },
+     {
+      "name": "tweet-created",
+      "wildcard": true,
+      "args": "targetUserId"
+     },
+     {
+      "name": "tweet-retweeted",
+      "wildcard": true,
+      "args": "targetUserId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "tweetId"
+     },
+     {
+      "name": "userId"
+     },
+     {
+      "name": "content"
+     },
+     {
+      "name": "media"
+     },
+     {
+      "name": "createdAt"
+     },
+     {
+      "name": "likes",
+      "expr": "count(tweet-liked*(tweetId))"
+     },
+     {
+      "name": "retweets",
+      "expr": "count(tweet-retweeted*(tweetId))"
+     }
+    ],
+    "annotations": {
+     "bergcache": {
+      "key": "timeline:{userId}",
+      "ttl": "5m"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 16,
+    "endLine": 24
+   },
+   {
+    "name": "TweetDetails",
+    "params": [
+     "tweetId"
+    ],
+    "paramDefs": [
+     {
+      "name": "tweetId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "tweet-created",
+      "wildcard": false,
+      "args": "tweetId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "content"
+     },
+     {
+      "name": "media"
+     },
+     {
+      "name": "createdAt"
+     },
+     {
+      "name": "likes"
+     },
+     {
+      "name": "retweets"
+     }
+    ],
+    "annotations": {
+     "bergcache": {
+      "key": "tweet:{tweetId}",
+      "ttl": "1h"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 26,
+    "endLine": 28
+   },
+   {
+    "name": "UserProfile",
+    "params": [
+     "userId"
+    ],
+    "paramDefs": [
+     {
+      "name": "userId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "sources": [
+     {
+      "name": "user-created",
+      "wildcard": false,
+      "args": "userId"
+     },
+     {
+      "name": "user-updated",
+      "wildcard": true,
+      "args": "userId"
+     }
+    ],
+    "shape": [
+     {
+      "name": "name"
+     },
+     {
+      "name": "handle"
+     },
+     {
+      "name": "bio"
+     },
+     {
+      "name": "followers"
+     },
+     {
+      "name": "following"
+     }
+    ],
+    "annotations": {
+     "bergcache": {
+      "key": "profile:{userId}",
+      "ttl": "24h"
+     }
+    },
+    "notes": [],
+    "triggers": [],
+    "query": null,
+    "scenarios": [],
+    "line": 30,
+    "endLine": 32
+   }
+  ],
+  "commands": [
+   {
+    "actor": "user",
+    "name": "postTweet",
+    "params": [
+     "content",
+     "media?"
+    ],
+    "paramDefs": [
+     {
+      "name": "content",
+      "optional": false,
+      "type": null
+     },
+     {
+      "name": "media",
+      "optional": true,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "UserTimeline",
+     "args": "userId"
+    },
+    "on": [
+     {
+      "name": "user-authenticated",
+      "wildcard": false,
+      "args": "userId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "content.length > 280",
+      "default": false,
+      "emits": [
+       {
+        "event": "tweet-rejected",
+        "fields": []
+       }
+      ],
+      "reject": null,
+      "line": 36
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "tweet-created",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "content"
+         },
+         {
+          "name": "media"
+         },
+         {
+          "name": "createdAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "userId, content, media, createdAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 37
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 34,
+    "endLine": 39,
+    "triggers": [],
+    "source": null
+   },
+   {
+    "actor": "user",
+    "name": "followUser",
+    "params": [
+     "targetUserId"
+    ],
+    "paramDefs": [
+     {
+      "name": "targetUserId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "UserFollows",
+     "args": "userId"
+    },
+    "on": [
+     {
+      "name": "user-authenticated",
+      "wildcard": false,
+      "args": "userId"
+     },
+     {
+      "name": "user-exists",
+      "wildcard": false,
+      "args": "targetUserId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "alreadyFollowing",
+      "default": false,
+      "emits": [
+       {
+        "event": "follow-rejected",
+        "fields": []
+       }
+      ],
+      "reject": null,
+      "line": 43
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "user-followed",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "targetUserId"
+         },
+         {
+          "name": "followedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "userId, targetUserId, followedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 44
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 41,
+    "endLine": 46,
+    "triggers": [],
+    "source": null
+   },
+   {
+    "actor": "user",
+    "name": "likeTweet",
+    "params": [
+     "tweetId"
+    ],
+    "paramDefs": [
+     {
+      "name": "tweetId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "TweetFeed",
+     "args": "tweetId"
+    },
+    "on": [
+     {
+      "name": "user-authenticated",
+      "wildcard": false,
+      "args": "userId"
+     },
+     {
+      "name": "tweet-exists",
+      "wildcard": false,
+      "args": "tweetId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "alreadyLiked",
+      "default": false,
+      "emits": [
+       {
+        "event": "like-rejected",
+        "fields": []
+       }
+      ],
+      "reject": null,
+      "line": 50
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "tweet-liked",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "tweetId"
+         },
+         {
+          "name": "likedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "userId, tweetId, likedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 51
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 48,
+    "endLine": 53,
+    "triggers": [],
+    "source": null
+   },
+   {
+    "actor": "user",
+    "name": "retweet",
+    "params": [
+     "tweetId"
+    ],
+    "paramDefs": [
+     {
+      "name": "tweetId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "TweetFeed",
+     "args": "tweetId"
+    },
+    "on": [
+     {
+      "name": "user-authenticated",
+      "wildcard": false,
+      "args": "userId"
+     },
+     {
+      "name": "tweet-exists",
+      "wildcard": false,
+      "args": "tweetId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "alreadyRetweeted",
+      "default": false,
+      "emits": [
+       {
+        "event": "retweet-rejected",
+        "fields": []
+       }
+      ],
+      "reject": null,
+      "line": 57
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "tweet-retweeted",
+        "fields": [
+         {
+          "name": "userId"
+         },
+         {
+          "name": "tweetId"
+         },
+         {
+          "name": "retweetedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "userId, tweetId, retweetedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 58
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 55,
+    "endLine": 60,
+    "triggers": [],
+    "source": null
+   },
+   {
+    "actor": "user",
+    "name": "deleteTweet",
+    "params": [
+     "tweetId"
+    ],
+    "paramDefs": [
+     {
+      "name": "tweetId",
+      "optional": false,
+      "type": null
+     }
+    ],
+    "boundary": {
+     "name": "TweetFeed",
+     "args": "tweetId"
+    },
+    "on": [
+     {
+      "name": "user-authenticated",
+      "wildcard": false,
+      "args": "userId"
+     },
+     {
+      "name": "tweet-created",
+      "wildcard": false,
+      "args": "tweetId, userId"
+     }
+    ],
+    "from": [],
+    "branches": [
+     {
+      "guard": "!isOwner",
+      "default": false,
+      "emits": [
+       {
+        "event": "delete-rejected",
+        "fields": []
+       }
+      ],
+      "reject": null,
+      "line": 64
+     },
+     {
+      "guard": null,
+      "default": true,
+      "emits": [
+       {
+        "event": "tweet-deleted",
+        "fields": [
+         {
+          "name": "tweetId"
+         },
+         {
+          "name": "deletedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "tweetId, deletedAt: clock.wall()"
+       }
+      ],
+      "reject": null,
+      "line": 65
+     }
+    ],
+    "annotations": {},
+    "notes": [],
+    "scenarios": [],
+    "line": 62,
+    "endLine": 67,
+    "triggers": [],
+    "source": null
+   }
+  ],
+  "policies": [
+   {
+    "name": null,
+    "trigger": {
+     "event": "tweet-created",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "content"
+      },
+      {
+       "name": "hashtags"
+      }
+     ],
+     "payload": "content, hashtags"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": "count(tweet-created*(hashtag, window: 1h)) > 10000",
+      "worker": "trending-analyzer",
+      "command": null,
+      "emits": [
+       {
+        "event": "trend-detected",
+        "fields": [
+         {
+          "name": "hashtag"
+         },
+         {
+          "name": "volume"
+         },
+         {
+          "name": "window",
+          "expr": "\"1h\""
+         },
+         {
+          "name": "detectedAt",
+          "expr": "clock.wall()"
+         }
+        ],
+        "payload": "hashtag, volume, window: \"1h\", detectedAt: clock.wall()"
+       }
+      ],
+      "line": 70
+     }
+    ],
+    "line": 69,
+    "endLine": 72
+   },
+   {
+    "name": null,
+    "trigger": {
+     "event": "tweet-liked",
+     "readModels": false,
+     "fields": [
+      {
+       "name": "userId"
+      },
+      {
+       "name": "tweetId"
+      }
+     ],
+     "payload": "userId, tweetId"
+    },
+    "annotations": {},
+    "notes": [],
+    "from": [],
+    "rules": [
+     {
+      "guard": null,
+      "worker": "notification-worker",
+      "command": {
+       "name": "sendLikeNotification",
+       "args": "tweetId, userId"
+      },
+      "emits": [],
+      "line": 75
+     }
+    ],
+    "line": 74,
+    "endLine": 75
+   }
+  ],
+  "events": [
+   {
+    "name": "user-authenticated",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "postTweet"
+     },
+     {
+      "kind": "command",
+      "name": "followUser"
+     },
+     {
+      "kind": "command",
+      "name": "likeTweet"
+     },
+     {
+      "kind": "command",
+      "name": "retweet"
+     },
+     {
+      "kind": "command",
+      "name": "deleteTweet"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tweet-rejected",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "postTweet",
+      "branch": "content.length > 280"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tweet-created",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "postTweet",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "deleteTweet"
+     },
+     {
+      "kind": "view",
+      "name": "UserTimeline"
+     },
+     {
+      "kind": "view",
+      "name": "TweetDetails"
+     },
+     {
+      "kind": "policy",
+      "name": "tweet-created"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "content"
+     },
+     {
+      "name": "media"
+     },
+     {
+      "name": "createdAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "user-exists",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "followUser"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "follow-rejected",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "followUser",
+      "branch": "alreadyFollowing"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "user-followed",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "followUser",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "UserTimeline"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "targetUserId"
+     },
+     {
+      "name": "followedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "tweet-exists",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "command",
+      "name": "likeTweet"
+     },
+     {
+      "kind": "command",
+      "name": "retweet"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "like-rejected",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "likeTweet",
+      "branch": "alreadyLiked"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tweet-liked",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "likeTweet",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "policy",
+      "name": "tweet-liked"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "tweetId"
+     },
+     {
+      "name": "likedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "retweet-rejected",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "retweet",
+      "branch": "alreadyRetweeted"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tweet-retweeted",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "retweet",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "UserTimeline"
+     }
+    ],
+    "fields": [
+     {
+      "name": "userId"
+     },
+     {
+      "name": "tweetId"
+     },
+     {
+      "name": "retweetedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "delete-rejected",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "deleteTweet",
+      "branch": "!isOwner"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "tweet-deleted",
+    "emittedBy": [
+     {
+      "kind": "command",
+      "name": "deleteTweet",
+      "branch": "default"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "tweetId"
+     },
+     {
+      "name": "deletedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   },
+   {
+    "name": "user-created",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "UserProfile"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "user-updated",
+    "emittedBy": [],
+    "consumedBy": [
+     {
+      "kind": "view",
+      "name": "UserProfile"
+     }
+    ],
+    "fields": [],
+    "declared": null
+   },
+   {
+    "name": "trend-detected",
+    "emittedBy": [
+     {
+      "kind": "policy",
+      "name": "tweet-created",
+      "worker": "trending-analyzer"
+     }
+    ],
+    "consumedBy": [],
+    "fields": [
+     {
+      "name": "hashtag"
+     },
+     {
+      "name": "volume"
+     },
+     {
+      "name": "window",
+      "expr": "\"1h\""
+     },
+     {
+      "name": "detectedAt",
+      "expr": "clock.wall()"
+     }
+    ],
+    "declared": null
+   }
+  ],
+  "declarations": []
+ },
+ "check": {
+  "core": [
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> postTweet\" emits \"tweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 36,
+    "endLine": 36,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> followUser\" emits \"follow-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 43,
+    "endLine": 43,
+    "subject": {
+     "kind": "command",
+     "name": "followUser",
+     "line": 41,
+     "endLine": 46
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> likeTweet\" emits \"like-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "command",
+     "name": "likeTweet",
+     "line": 48,
+     "endLine": 53
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> retweet\" emits \"retweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 57,
+    "endLine": 57,
+    "subject": {
+     "kind": "command",
+     "name": "retweet",
+     "line": 55,
+     "endLine": 60
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> deleteTweet\" emits \"delete-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 64,
+    "endLine": 64,
+    "subject": {
+     "kind": "command",
+     "name": "deleteTweet",
+     "line": 62,
+     "endLine": 67
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"tweet-liked\" has an unguarded rule",
+    "line": 75,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-authenticated, user-exists, tweet-exists, user-created, user-updated. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   }
+  ],
+  "workshop": [
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> postTweet\" emits \"tweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 36,
+    "endLine": 36,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> followUser\" emits \"follow-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 43,
+    "endLine": 43,
+    "subject": {
+     "kind": "command",
+     "name": "followUser",
+     "line": 41,
+     "endLine": 46
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> likeTweet\" emits \"like-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "command",
+     "name": "likeTweet",
+     "line": 48,
+     "endLine": 53
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> retweet\" emits \"retweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 57,
+    "endLine": 57,
+    "subject": {
+     "kind": "command",
+     "name": "retweet",
+     "line": 55,
+     "endLine": 60
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> deleteTweet\" emits \"delete-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 64,
+    "endLine": 64,
+    "subject": {
+     "kind": "command",
+     "name": "deleteTweet",
+     "line": 62,
+     "endLine": 67
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"tweet-liked\" has an unguarded rule",
+    "line": 75,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-authenticated, user-exists, tweet-exists, user-created, user-updated. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "info",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"TweetDetails\" shows \"likes\", \"retweets\", which no event it projects from carries. Add them to an event, or compute them (name: expression)",
+    "line": 26,
+    "endLine": 28,
+    "subject": {
+     "kind": "view",
+     "name": "TweetDetails",
+     "line": 26,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "8 of 8 commands and read models have no scenario, starting with \"postTweet\"",
+    "line": 34,
+    "endLine": 39,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"tweet-created\" starts straight from the event. Write a read model such as PendingTrendingAnalyzer(...) fed by tweet-created, and start from it: \"tweet-created from [PendingTrendingAnalyzer] -> ...\" or \"from [PendingTrendingAnalyzer] -> ...\"",
+    "line": 69,
+    "endLine": 72,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-created",
+     "line": 69,
+     "endLine": 72
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"tweet-liked\" starts straight from the event. Write a read model such as PendingNotificationWorker(...) fed by tweet-liked, and start from it: \"tweet-liked from [PendingNotificationWorker] -> ...\" or \"from [PendingNotificationWorker] -> ...\"",
+    "line": 74,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "eventmodeling": [
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> postTweet\" emits \"tweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 36,
+    "endLine": 36,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> followUser\" emits \"follow-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 43,
+    "endLine": 43,
+    "subject": {
+     "kind": "command",
+     "name": "followUser",
+     "line": 41,
+     "endLine": 46
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> likeTweet\" emits \"like-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "command",
+     "name": "likeTweet",
+     "line": 48,
+     "endLine": 53
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> retweet\" emits \"retweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 57,
+    "endLine": 57,
+    "subject": {
+     "kind": "command",
+     "name": "retweet",
+     "line": 55,
+     "endLine": 60
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> deleteTweet\" emits \"delete-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 64,
+    "endLine": 64,
+    "subject": {
+     "kind": "command",
+     "name": "deleteTweet",
+     "line": 62,
+     "endLine": 67
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"tweet-liked\" has an unguarded rule",
+    "line": 75,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-authenticated, user-exists, tweet-exists, user-created, user-updated. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"TweetDetails\" shows \"likes\", \"retweets\", which no event it projects from carries. Add them to an event, or compute them (name: expression)",
+    "line": 26,
+    "endLine": 28,
+    "subject": {
+     "kind": "view",
+     "name": "TweetDetails",
+     "line": 26,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "8 of 8 commands and read models have no scenario, starting with \"postTweet\"",
+    "line": 34,
+    "endLine": 39,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"tweet-created\" starts straight from the event. Write a read model such as PendingTrendingAnalyzer(...) fed by tweet-created, and start from it: \"tweet-created from [PendingTrendingAnalyzer] -> ...\" or \"from [PendingTrendingAnalyzer] -> ...\"",
+    "line": 69,
+    "endLine": 72,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-created",
+     "line": 69,
+     "endLine": 72
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "info",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"tweet-liked\" starts straight from the event. Write a read model such as PendingNotificationWorker(...) fed by tweet-liked, and start from it: \"tweet-liked from [PendingNotificationWorker] -> ...\" or \"from [PendingNotificationWorker] -> ...\"",
+    "line": 74,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ],
+  "slicerm": [
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> postTweet\" emits \"tweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 36,
+    "endLine": 36,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> followUser\" emits \"follow-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 43,
+    "endLine": 43,
+    "subject": {
+     "kind": "command",
+     "name": "followUser",
+     "line": 41,
+     "endLine": 46
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> likeTweet\" emits \"like-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 50,
+    "endLine": 50,
+    "subject": {
+     "kind": "command",
+     "name": "likeTweet",
+     "line": 48,
+     "endLine": 53
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> retweet\" emits \"retweet-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 57,
+    "endLine": 57,
+    "subject": {
+     "kind": "command",
+     "name": "retweet",
+     "line": 55,
+     "endLine": 60
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "rejection-as-event",
+    "category": "structure",
+    "profile": "core",
+    "message": "Command \"user -> deleteTweet\" emits \"delete-rejected\". If nothing is recorded, write --[...]--> reject CODE instead",
+    "line": 64,
+    "endLine": 64,
+    "subject": {
+     "kind": "command",
+     "name": "deleteTweet",
+     "line": 62,
+     "endLine": 67
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#rejection-as-event"
+   },
+   {
+    "severity": "info",
+    "rule": "policy-guard",
+    "category": "structure",
+    "profile": "core",
+    "message": "Policy on \"tweet-liked\" has an unguarded rule",
+    "line": 75,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#policy-guard"
+   },
+   {
+    "severity": "info",
+    "rule": "assumed-events",
+    "category": "references",
+    "profile": "core",
+    "message": "No command or policy emits: user-authenticated, user-exists, tweet-exists, user-created, user-updated. The model assumes these facts.",
+    "line": "",
+    "endLine": null,
+    "subject": null,
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#assumed-events"
+   },
+   {
+    "severity": "warn",
+    "rule": "unsourced-view-field",
+    "category": "fields",
+    "profile": "eventmodeling",
+    "message": "Read model \"TweetDetails\" shows \"likes\", \"retweets\", which no event it projects from carries. Add them to an event, or compute them (name: expression)",
+    "line": 26,
+    "endLine": 28,
+    "subject": {
+     "kind": "view",
+     "name": "TweetDetails",
+     "line": 26,
+     "endLine": 28
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#unsourced-view-field"
+   },
+   {
+    "severity": "info",
+    "rule": "slice-no-scenario",
+    "category": "scenarios",
+    "profile": "eventmodeling",
+    "message": "8 of 8 commands and read models have no scenario, starting with \"postTweet\"",
+    "line": 34,
+    "endLine": 39,
+    "subject": {
+     "kind": "command",
+     "name": "postTweet",
+     "line": 34,
+     "endLine": 39
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#slice-no-scenario"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"tweet-created\" starts straight from the event. Write a read model such as PendingTrendingAnalyzer(...) fed by tweet-created, and start from it: \"tweet-created from [PendingTrendingAnalyzer] -> ...\" or \"from [PendingTrendingAnalyzer] -> ...\"",
+    "line": 69,
+    "endLine": 72,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-created",
+     "line": 69,
+     "endLine": 72
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   },
+   {
+    "severity": "warn",
+    "rule": "automation-reads-event",
+    "category": "slices",
+    "profile": "eventmodeling",
+    "message": "Automation on \"tweet-liked\" starts straight from the event. Write a read model such as PendingNotificationWorker(...) fed by tweet-liked, and start from it: \"tweet-liked from [PendingNotificationWorker] -> ...\" or \"from [PendingNotificationWorker] -> ...\"",
+    "line": 74,
+    "endLine": 75,
+    "subject": {
+     "kind": "policy",
+     "name": "tweet-liked",
+     "line": 74,
+     "endLine": 75
+    },
+    "slice": null,
+    "docs": "https://bytesbybrandon.github.io/eventline/docs/rules/#automation-reads-event"
+   }
+  ]
+ },
+ "diagrams": {
+  "eventmodel": {
+   "title": "TwitterAPI",
+   "lanes": [
+    "actor",
+    "command",
+    "event"
+   ],
+   "nodes": [
+    {
+     "id": "actor:postTweet",
+     "lane": "actor",
+     "label": "User",
+     "col": 0,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       34,
+       34
+      ]
+     ]
+    },
+    {
+     "id": "cmd:postTweet",
+     "lane": "command",
+     "label": "postTweet(content, media?)",
+     "col": 0,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       34,
+       39
+      ]
+     ],
+     "notes": [
+      "checks user-authenticated (assumed)"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-authenticated (assumed)"
+     ]
+    },
+    {
+     "id": "actor:followUser",
+     "lane": "actor",
+     "label": "User",
+     "col": 4,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       41,
+       41
+      ]
+     ]
+    },
+    {
+     "id": "cmd:followUser",
+     "lane": "command",
+     "label": "followUser(targetUserId)",
+     "col": 4,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       41,
+       46
+      ]
+     ],
+     "notes": [
+      "checks user-authenticated (assumed), user-exists (assumed)"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-authenticated (assumed)",
+      "user-exists (assumed)"
+     ]
+    },
+    {
+     "id": "actor:likeTweet",
+     "lane": "actor",
+     "label": "User",
+     "col": 5,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       48,
+       48
+      ]
+     ]
+    },
+    {
+     "id": "cmd:likeTweet",
+     "lane": "command",
+     "label": "likeTweet(tweetId)",
+     "col": 5,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       48,
+       53
+      ]
+     ],
+     "notes": [
+      "checks user-authenticated (assumed), tweet-exists (assumed)"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-authenticated (assumed)",
+      "tweet-exists (assumed)"
+     ]
+    },
+    {
+     "id": "actor:retweet",
+     "lane": "actor",
+     "label": "User",
+     "col": 9,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       55,
+       55
+      ]
+     ]
+    },
+    {
+     "id": "cmd:retweet",
+     "lane": "command",
+     "label": "retweet(tweetId)",
+     "col": 9,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       55,
+       60
+      ]
+     ],
+     "notes": [
+      "checks user-authenticated (assumed), tweet-exists (assumed)"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-authenticated (assumed)",
+      "tweet-exists (assumed)"
+     ]
+    },
+    {
+     "id": "actor:deleteTweet",
+     "lane": "actor",
+     "label": "User",
+     "col": 11,
+     "row": 0,
+     "kind": "actor",
+     "ranges": [
+      [
+       62,
+       62
+      ]
+     ]
+    },
+    {
+     "id": "cmd:deleteTweet",
+     "lane": "command",
+     "label": "deleteTweet(tweetId)",
+     "col": 11,
+     "row": 0,
+     "kind": "command",
+     "sub": "state change",
+     "slice": "state change",
+     "planned": false,
+     "ranges": [
+      [
+       62,
+       67
+      ]
+     ],
+     "notes": [
+      "checks user-authenticated (assumed), tweet-created"
+     ],
+     "fullNotes": [],
+     "checks": [
+      "user-authenticated (assumed)",
+      "tweet-created"
+     ]
+    },
+    {
+     "id": "evt:tweet-rejected",
+     "lane": "event",
+     "label": "tweet-rejected",
+     "col": 0,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if content.length > 280",
+     "owner": "cmd:postTweet"
+    },
+    {
+     "id": "evt:tweet-created",
+     "lane": "event",
+     "label": "tweet-created",
+     "col": 0,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:postTweet"
+    },
+    {
+     "id": "evt:follow-rejected",
+     "lane": "event",
+     "label": "follow-rejected",
+     "col": 4,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if alreadyFollowing",
+     "owner": "cmd:followUser"
+    },
+    {
+     "id": "evt:user-followed",
+     "lane": "event",
+     "label": "user-followed",
+     "col": 4,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:followUser"
+    },
+    {
+     "id": "evt:like-rejected",
+     "lane": "event",
+     "label": "like-rejected",
+     "col": 5,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if alreadyLiked",
+     "owner": "cmd:likeTweet"
+    },
+    {
+     "id": "evt:tweet-liked",
+     "lane": "event",
+     "label": "tweet-liked",
+     "col": 5,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:likeTweet"
+    },
+    {
+     "id": "evt:retweet-rejected",
+     "lane": "event",
+     "label": "retweet-rejected",
+     "col": 9,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if alreadyRetweeted",
+     "owner": "cmd:retweet"
+    },
+    {
+     "id": "evt:tweet-retweeted",
+     "lane": "event",
+     "label": "tweet-retweeted",
+     "col": 9,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:retweet"
+    },
+    {
+     "id": "evt:delete-rejected",
+     "lane": "event",
+     "label": "delete-rejected",
+     "col": 11,
+     "row": 0,
+     "kind": "event",
+     "indent": 26,
+     "sub": "if !isOwner",
+     "owner": "cmd:deleteTweet"
+    },
+    {
+     "id": "evt:tweet-deleted",
+     "lane": "event",
+     "label": "tweet-deleted",
+     "col": 11,
+     "row": 1,
+     "kind": "event",
+     "indent": 26,
+     "sub": "",
+     "owner": "cmd:deleteTweet"
+    },
+    {
+     "id": "view:UserTimeline",
+     "lane": "command",
+     "label": "UserTimeline(userId)",
+     "col": 10,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       16,
+       24
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "view:TweetDetails",
+     "lane": "command",
+     "label": "TweetDetails(tweetId)",
+     "col": 2,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       26,
+       28
+      ]
+     ],
+     "fullNotes": [],
+     "notes": []
+    },
+    {
+     "id": "view:UserProfile",
+     "lane": "command",
+     "label": "UserProfile(userId)",
+     "col": 12,
+     "row": 0,
+     "kind": "view",
+     "sub": "state view",
+     "slice": "state view",
+     "planned": false,
+     "ranges": [
+      [
+       30,
+       32
+      ]
+     ],
+     "fullNotes": [],
+     "notes": [
+      "from user-created, user-updated"
+     ]
+    },
+    {
+     "id": "implied:tweet-created",
+     "lane": "command",
+     "label": "tweet-created",
+     "col": 1,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       69,
+       72
+      ]
+     ]
+    },
+    {
+     "id": "pol:trending-analyzer",
+     "lane": "actor",
+     "label": "trending-analyzer",
+     "col": 2,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       69,
+       72
+      ]
+     ]
+    },
+    {
+     "id": "evt:trend-detected",
+     "lane": "event",
+     "label": "trend-detected",
+     "col": 3,
+     "row": 0,
+     "kind": "event"
+    },
+    {
+     "id": "implied:tweet-liked",
+     "lane": "command",
+     "label": "tweet-liked",
+     "col": 6,
+     "row": 0,
+     "kind": "view",
+     "implied": true,
+     "sub": "implied read model",
+     "ranges": [
+      [
+       74,
+       75
+      ]
+     ]
+    },
+    {
+     "id": "pol:notification-worker",
+     "lane": "actor",
+     "label": "notification-worker",
+     "col": 7,
+     "row": 0,
+     "kind": "policy",
+     "sub": "automation",
+     "slice": "automation",
+     "planned": false,
+     "fullNotes": [],
+     "notes": [],
+     "ranges": [
+      [
+       74,
+       75
+      ]
+     ]
+    },
+    {
+     "id": "cmd:sendLikeNotification",
+     "lane": "command",
+     "label": "sendLikeNotification()",
+     "col": 8,
+     "row": 0,
+     "kind": "command",
+     "declared": false,
+     "sub": "not modeled"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:postTweet",
+     "to": "cmd:postTweet",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "actor:followUser",
+     "to": "cmd:followUser",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "actor:likeTweet",
+     "to": "cmd:likeTweet",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "actor:retweet",
+     "to": "cmd:retweet",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "actor:deleteTweet",
+     "to": "cmd:deleteTweet",
+     "kind": "triggers",
+     "label": ""
+    },
+    {
+     "from": "cmd:postTweet",
+     "to": "evt:tweet-rejected",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:postTweet",
+     "to": "evt:tweet-created",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:followUser",
+     "to": "evt:follow-rejected",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:followUser",
+     "to": "evt:user-followed",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:likeTweet",
+     "to": "evt:like-rejected",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:likeTweet",
+     "to": "evt:tweet-liked",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:retweet",
+     "to": "evt:retweet-rejected",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:retweet",
+     "to": "evt:tweet-retweeted",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:deleteTweet",
+     "to": "evt:delete-rejected",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "cmd:deleteTweet",
+     "to": "evt:tweet-deleted",
+     "kind": "tree",
+     "label": ""
+    },
+    {
+     "from": "evt:user-followed",
+     "to": "view:UserTimeline",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:tweet-created",
+     "to": "view:UserTimeline",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:tweet-retweeted",
+     "to": "view:UserTimeline",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:tweet-created",
+     "to": "view:TweetDetails",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "evt:tweet-created",
+     "to": "implied:tweet-created",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:tweet-created",
+     "to": "pol:trending-analyzer",
+     "kind": "reads",
+     "label": "count(tweet-created*(ha…"
+    },
+    {
+     "from": "pol:trending-analyzer",
+     "to": "evt:trend-detected",
+     "kind": "emits",
+     "label": ""
+    },
+    {
+     "from": "evt:tweet-liked",
+     "to": "implied:tweet-liked",
+     "kind": "projects",
+     "label": ""
+    },
+    {
+     "from": "implied:tweet-liked",
+     "to": "pol:notification-worker",
+     "kind": "reads",
+     "label": ""
+    },
+    {
+     "from": "pol:notification-worker",
+     "to": "cmd:sendLikeNotification",
+     "kind": "invokes",
+     "label": "tweetId, userId"
+    }
+   ],
+   "slices": [
+    {
+     "type": "state view",
+     "name": "UserTimeline",
+     "nodes": [
+      "view:UserTimeline",
+      "evt:user-followed",
+      "evt:tweet-created",
+      "evt:tweet-retweeted"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "TweetDetails",
+     "nodes": [
+      "view:TweetDetails",
+      "evt:tweet-created"
+     ]
+    },
+    {
+     "type": "state view",
+     "name": "UserProfile",
+     "nodes": [
+      "view:UserProfile"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "trending-analyzer",
+     "nodes": [
+      "evt:tweet-created",
+      "implied:tweet-created",
+      "pol:trending-analyzer",
+      "evt:trend-detected"
+     ]
+    },
+    {
+     "type": "automation",
+     "name": "notification-worker",
+     "nodes": [
+      "evt:tweet-liked",
+      "implied:tweet-liked",
+      "pol:notification-worker",
+      "cmd:sendLikeNotification"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "postTweet",
+     "nodes": [
+      "actor:postTweet",
+      "cmd:postTweet",
+      "evt:tweet-rejected",
+      "evt:tweet-created"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "followUser",
+     "nodes": [
+      "actor:followUser",
+      "cmd:followUser",
+      "evt:follow-rejected",
+      "evt:user-followed"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "likeTweet",
+     "nodes": [
+      "actor:likeTweet",
+      "cmd:likeTweet",
+      "evt:like-rejected",
+      "evt:tweet-liked"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "retweet",
+     "nodes": [
+      "actor:retweet",
+      "cmd:retweet",
+      "evt:retweet-rejected",
+      "evt:tweet-retweeted"
+     ]
+    },
+    {
+     "type": "state change",
+     "name": "deleteTweet",
+     "nodes": [
+      "actor:deleteTweet",
+      "cmd:deleteTweet",
+      "evt:delete-rejected",
+      "evt:tweet-deleted"
+     ]
+    }
+   ],
+   "groups": [
+    {
+     "id": "bnd:UserTimeline",
+     "label": "UserTimeline(userId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:postTweet",
+      "evt:tweet-rejected",
+      "evt:tweet-created"
+     ],
+     "sub": "shard by userId"
+    },
+    {
+     "id": "bnd:UserFollows",
+     "label": "UserFollows(userId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:followUser",
+      "evt:follow-rejected",
+      "evt:user-followed"
+     ],
+     "sub": "shard by userId"
+    },
+    {
+     "id": "bnd:TweetFeed",
+     "label": "TweetFeed(tweetId)",
+     "kind": "boundary",
+     "members": [
+      "cmd:likeTweet",
+      "evt:like-rejected",
+      "evt:tweet-liked",
+      "cmd:retweet",
+      "evt:retweet-rejected",
+      "evt:tweet-retweeted",
+      "cmd:deleteTweet",
+      "evt:delete-rejected",
+      "evt:tweet-deleted"
+     ],
+     "sub": "shard by tweetId"
+    }
+   ],
+   "cols": 13
+  },
+  "context": {
+   "title": "TwitterAPI · system context",
+   "subtitle": "slo 99.95% uptime, p99 < 100ms   ·   regions us-primary, eu-secondary, ap-southeast   ·   data public, pii",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "sys",
+     "label": "TwitterAPI",
+     "sub": "software system",
+     "kind": "system"
+    },
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:visitor",
+     "label": "Visitor",
+     "sub": "auth none",
+     "kind": "actor"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payments",
+     "kind": "external"
+    },
+    {
+     "id": "ext:sentry",
+     "label": "sentry",
+     "sub": "monitoring",
+     "kind": "external"
+    },
+    {
+     "id": "ext:cloudfront",
+     "label": "cloudfront",
+     "sub": "cdn",
+     "kind": "external"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "sys",
+     "label": "postTweet, followUser, likeTweet +2"
+    },
+    {
+     "from": "actor:admin",
+     "to": "sys",
+     "label": "no commands"
+    },
+    {
+     "from": "actor:visitor",
+     "to": "sys",
+     "label": "no commands"
+    },
+    {
+     "from": "sys",
+     "to": "ext:stripe",
+     "label": "depends on"
+    },
+    {
+     "from": "sys",
+     "to": "ext:sentry",
+     "label": "depends on"
+    },
+    {
+     "from": "sys",
+     "to": "ext:cloudfront",
+     "label": "depends on"
+    }
+   ],
+   "groups": []
+  },
+  "containers": {
+   "title": "TwitterAPI · containers",
+   "subtitle": "slo 99.95% uptime, p99 < 100ms   ·   regions us-primary, eu-secondary, ap-southeast   ·   data public, pii",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:admin",
+     "label": "Admin",
+     "sub": "auth oauth",
+     "kind": "actor"
+    },
+    {
+     "id": "actor:visitor",
+     "label": "Visitor",
+     "sub": "auth none",
+     "kind": "actor"
+    },
+    {
+     "id": "api",
+     "label": "Command API",
+     "sub": "5 commands",
+     "kind": "process"
+    },
+    {
+     "id": "store",
+     "label": "Event store",
+     "sub": "partitioned by tweetId, userId",
+     "kind": "store"
+    },
+    {
+     "id": "view:UserTimeline",
+     "label": "UserTimeline",
+     "sub": "read model, cache ttl 5m",
+     "kind": "cache"
+    },
+    {
+     "id": "view:TweetDetails",
+     "label": "TweetDetails",
+     "sub": "read model, cache ttl 1h",
+     "kind": "cache"
+    },
+    {
+     "id": "view:UserProfile",
+     "label": "UserProfile",
+     "sub": "read model, cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "worker:trending-analyzer",
+     "label": "trending-analyzer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:notification-worker",
+     "label": "notification-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ext:stripe",
+     "label": "stripe",
+     "sub": "payments · system dependency",
+     "kind": "external",
+     "side": "right"
+    },
+    {
+     "id": "ext:sentry",
+     "label": "sentry",
+     "sub": "monitoring · system dependency",
+     "kind": "external",
+     "side": "right"
+    },
+    {
+     "id": "ext:cloudfront",
+     "label": "cloudfront",
+     "sub": "cdn · system dependency",
+     "kind": "external",
+     "side": "right"
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "api",
+     "label": "postTweet, followUser, likeTweet +2"
+    },
+    {
+     "from": "api",
+     "to": "store",
+     "label": "append 10 event types"
+    },
+    {
+     "from": "store",
+     "to": "view:UserTimeline",
+     "label": "user-followed, tweet-created +1"
+    },
+    {
+     "from": "store",
+     "to": "view:TweetDetails",
+     "label": "tweet-created"
+    },
+    {
+     "from": "store",
+     "to": "view:UserProfile",
+     "label": "user-created, user-updated"
+    },
+    {
+     "from": "store",
+     "to": "worker:trending-analyzer",
+     "label": "tweet-created"
+    },
+    {
+     "from": "worker:trending-analyzer",
+     "to": "store",
+     "label": "trend-detected",
+     "weak": true
+    },
+    {
+     "from": "store",
+     "to": "worker:notification-worker",
+     "label": "tweet-liked"
+    },
+    {
+     "from": "worker:notification-worker",
+     "to": "api",
+     "label": "sendLikeNotification",
+     "weak": true
+    }
+   ],
+   "groups": [
+    {
+     "id": "sys",
+     "label": "TwitterAPI (us-primary, eu-secondary, ap-southeast)",
+     "members": [
+      "api",
+      "store",
+      "view:UserTimeline",
+      "view:TweetDetails",
+      "view:UserProfile",
+      "worker:trending-analyzer",
+      "worker:notification-worker"
+     ]
+    }
+   ]
+  },
+  "dataflow": {
+   "title": "TwitterAPI · data flow",
+   "subtitle": "slo 99.95% uptime, p99 < 100ms   ·   regions us-primary, eu-secondary, ap-southeast   ·   data public, pii   ·   dashed = a command reads existing facts or a read model",
+   "direction": "LR",
+   "nodes": [
+    {
+     "id": "actor:user",
+     "label": "User",
+     "sub": "auth session",
+     "kind": "actor"
+    },
+    {
+     "id": "log",
+     "label": "Event log",
+     "sub": "data store, append only",
+     "kind": "store"
+    },
+    {
+     "id": "cmd:postTweet",
+     "label": "postTweet()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:followUser",
+     "label": "followUser()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:likeTweet",
+     "label": "likeTweet()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:retweet",
+     "label": "retweet()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "cmd:deleteTweet",
+     "label": "deleteTweet()",
+     "sub": "command",
+     "kind": "process"
+    },
+    {
+     "id": "view:UserTimeline",
+     "label": "UserTimeline",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:TweetDetails",
+     "label": "TweetDetails",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "view:UserProfile",
+     "label": "UserProfile",
+     "sub": "data store, read model",
+     "kind": "view"
+    },
+    {
+     "id": "worker:trending-analyzer",
+     "label": "trending-analyzer",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "worker:notification-worker",
+     "label": "notification-worker",
+     "sub": "process, async",
+     "kind": "worker"
+    },
+    {
+     "id": "cmd:sendLikeNotification",
+     "label": "sendLikeNotification()",
+     "sub": "command, not modeled",
+     "kind": "process",
+     "declared": false
+    }
+   ],
+   "edges": [
+    {
+     "from": "actor:user",
+     "to": "cmd:postTweet",
+     "label": "content, media?"
+    },
+    {
+     "from": "cmd:postTweet",
+     "to": "log",
+     "label": "tweet-rejected, tweet-created"
+    },
+    {
+     "from": "log",
+     "to": "cmd:postTweet",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "actor:user",
+     "to": "cmd:followUser",
+     "label": "targetUserId"
+    },
+    {
+     "from": "cmd:followUser",
+     "to": "log",
+     "label": "follow-rejected, user-followed"
+    },
+    {
+     "from": "log",
+     "to": "cmd:followUser",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "actor:user",
+     "to": "cmd:likeTweet",
+     "label": "tweetId"
+    },
+    {
+     "from": "cmd:likeTweet",
+     "to": "log",
+     "label": "like-rejected, tweet-liked"
+    },
+    {
+     "from": "log",
+     "to": "cmd:likeTweet",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "actor:user",
+     "to": "cmd:retweet",
+     "label": "tweetId"
+    },
+    {
+     "from": "cmd:retweet",
+     "to": "log",
+     "label": "retweet-rejected, tweet-retweeted"
+    },
+    {
+     "from": "log",
+     "to": "cmd:retweet",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "actor:user",
+     "to": "cmd:deleteTweet",
+     "label": "tweetId"
+    },
+    {
+     "from": "cmd:deleteTweet",
+     "to": "log",
+     "label": "delete-rejected, tweet-deleted"
+    },
+    {
+     "from": "log",
+     "to": "cmd:deleteTweet",
+     "label": "",
+     "style": "dashed",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "view:UserTimeline",
+     "label": "user-followed, tweet-created +1"
+    },
+    {
+     "from": "log",
+     "to": "view:TweetDetails",
+     "label": "tweet-created"
+    },
+    {
+     "from": "log",
+     "to": "view:UserProfile",
+     "label": "user-created, user-updated"
+    },
+    {
+     "from": "log",
+     "to": "worker:trending-analyzer",
+     "label": "tweet-created"
+    },
+    {
+     "from": "worker:trending-analyzer",
+     "to": "log",
+     "label": "trend-detected",
+     "weak": true
+    },
+    {
+     "from": "log",
+     "to": "worker:notification-worker",
+     "label": "tweet-liked"
+    },
+    {
+     "from": "worker:notification-worker",
+     "to": "cmd:sendLikeNotification",
+     "label": "issues",
+     "weak": true
+    }
+   ],
+   "groups": []
+  },
+  "deployment": {
+   "title": "TwitterAPI · deployment",
+   "subtitle": "slo 99.95% uptime, p99 < 100ms   ·   regions us-primary, eu-secondary, ap-southeast   ·   data public, pii   ·   Inferred: each region runs the full stack unless a boundary says @cost(regions=n).",
+   "direction": "LR",
+   "stack": true,
+   "nodes": [
+    {
+     "id": "us-primary:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "us-primary:shard:TweetFeed",
+     "label": "TweetFeed shards",
+     "sub": "by tweetId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us-primary:shard:UserTimeline",
+     "label": "UserTimeline shards",
+     "sub": "by userId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us-primary:shard:UserFollows",
+     "label": "UserFollows shards",
+     "sub": "by userId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "us-primary:view:UserTimeline",
+     "label": "UserTimeline",
+     "sub": "cache ttl 5m",
+     "kind": "cache"
+    },
+    {
+     "id": "us-primary:view:TweetDetails",
+     "label": "TweetDetails",
+     "sub": "cache ttl 1h",
+     "kind": "cache"
+    },
+    {
+     "id": "us-primary:view:UserProfile",
+     "label": "UserProfile",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "us-primary:worker:trending-analyzer",
+     "label": "trending-analyzer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "us-primary:worker:notification-worker",
+     "label": "notification-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu-secondary:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "eu-secondary:shard:TweetFeed",
+     "label": "TweetFeed shards",
+     "sub": "by tweetId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu-secondary:shard:UserTimeline",
+     "label": "UserTimeline shards",
+     "sub": "by userId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu-secondary:shard:UserFollows",
+     "label": "UserFollows shards",
+     "sub": "by userId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "eu-secondary:view:UserTimeline",
+     "label": "UserTimeline",
+     "sub": "cache ttl 5m",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-secondary:view:TweetDetails",
+     "label": "TweetDetails",
+     "sub": "cache ttl 1h",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-secondary:view:UserProfile",
+     "label": "UserProfile",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "eu-secondary:worker:trending-analyzer",
+     "label": "trending-analyzer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "eu-secondary:worker:notification-worker",
+     "label": "notification-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap-southeast:api",
+     "label": "Command API",
+     "sub": "stateless",
+     "kind": "process"
+    },
+    {
+     "id": "ap-southeast:shard:TweetFeed",
+     "label": "TweetFeed shards",
+     "sub": "by tweetId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "ap-southeast:shard:UserTimeline",
+     "label": "UserTimeline shards",
+     "sub": "by userId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "ap-southeast:shard:UserFollows",
+     "label": "UserFollows shards",
+     "sub": "by userId · in 3 regions",
+     "kind": "store"
+    },
+    {
+     "id": "ap-southeast:view:UserTimeline",
+     "label": "UserTimeline",
+     "sub": "cache ttl 5m",
+     "kind": "cache"
+    },
+    {
+     "id": "ap-southeast:view:TweetDetails",
+     "label": "TweetDetails",
+     "sub": "cache ttl 1h",
+     "kind": "cache"
+    },
+    {
+     "id": "ap-southeast:view:UserProfile",
+     "label": "UserProfile",
+     "sub": "cache ttl 24h",
+     "kind": "cache"
+    },
+    {
+     "id": "ap-southeast:worker:trending-analyzer",
+     "label": "trending-analyzer",
+     "sub": "async worker",
+     "kind": "worker"
+    },
+    {
+     "id": "ap-southeast:worker:notification-worker",
+     "label": "notification-worker",
+     "sub": "async worker",
+     "kind": "worker"
+    }
+   ],
+   "edges": [
+    {
+     "from": "us-primary:api",
+     "to": "us-primary:shard:TweetFeed",
+     "label": "likeTweet, retweet +1"
+    },
+    {
+     "from": "us-primary:api",
+     "to": "us-primary:shard:UserTimeline",
+     "label": "postTweet"
+    },
+    {
+     "from": "us-primary:api",
+     "to": "us-primary:shard:UserFollows",
+     "label": "followUser"
+    },
+    {
+     "from": "us-primary:shard:TweetFeed",
+     "to": "us-primary:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:UserTimeline",
+     "to": "us-primary:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:UserFollows",
+     "to": "us-primary:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:UserTimeline",
+     "to": "us-primary:view:TweetDetails",
+     "label": ""
+    },
+    {
+     "from": "us-primary:api",
+     "to": "us-primary:view:UserProfile",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:UserTimeline",
+     "to": "us-primary:worker:trending-analyzer",
+     "label": ""
+    },
+    {
+     "from": "us-primary:shard:TweetFeed",
+     "to": "us-primary:worker:notification-worker",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:api",
+     "to": "eu-secondary:shard:TweetFeed",
+     "label": "likeTweet, retweet +1"
+    },
+    {
+     "from": "eu-secondary:api",
+     "to": "eu-secondary:shard:UserTimeline",
+     "label": "postTweet"
+    },
+    {
+     "from": "eu-secondary:api",
+     "to": "eu-secondary:shard:UserFollows",
+     "label": "followUser"
+    },
+    {
+     "from": "eu-secondary:shard:TweetFeed",
+     "to": "eu-secondary:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:UserTimeline",
+     "to": "eu-secondary:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:UserFollows",
+     "to": "eu-secondary:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:UserTimeline",
+     "to": "eu-secondary:view:TweetDetails",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:api",
+     "to": "eu-secondary:view:UserProfile",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:UserTimeline",
+     "to": "eu-secondary:worker:trending-analyzer",
+     "label": ""
+    },
+    {
+     "from": "eu-secondary:shard:TweetFeed",
+     "to": "eu-secondary:worker:notification-worker",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:api",
+     "to": "ap-southeast:shard:TweetFeed",
+     "label": "likeTweet, retweet +1"
+    },
+    {
+     "from": "ap-southeast:api",
+     "to": "ap-southeast:shard:UserTimeline",
+     "label": "postTweet"
+    },
+    {
+     "from": "ap-southeast:api",
+     "to": "ap-southeast:shard:UserFollows",
+     "label": "followUser"
+    },
+    {
+     "from": "ap-southeast:shard:TweetFeed",
+     "to": "ap-southeast:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:shard:UserTimeline",
+     "to": "ap-southeast:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:shard:UserFollows",
+     "to": "ap-southeast:view:UserTimeline",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:shard:UserTimeline",
+     "to": "ap-southeast:view:TweetDetails",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:api",
+     "to": "ap-southeast:view:UserProfile",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:shard:UserTimeline",
+     "to": "ap-southeast:worker:trending-analyzer",
+     "label": ""
+    },
+    {
+     "from": "ap-southeast:shard:TweetFeed",
+     "to": "ap-southeast:worker:notification-worker",
+     "label": ""
+    }
+   ],
+   "groups": [
+    {
+     "id": "region:us-primary",
+     "label": "us-primary",
+     "members": [
+      "us-primary:api",
+      "us-primary:shard:TweetFeed",
+      "us-primary:shard:UserTimeline",
+      "us-primary:shard:UserFollows",
+      "us-primary:view:UserTimeline",
+      "us-primary:view:TweetDetails",
+      "us-primary:view:UserProfile",
+      "us-primary:worker:trending-analyzer",
+      "us-primary:worker:notification-worker"
+     ]
+    },
+    {
+     "id": "region:eu-secondary",
+     "label": "eu-secondary",
+     "members": [
+      "eu-secondary:api",
+      "eu-secondary:shard:TweetFeed",
+      "eu-secondary:shard:UserTimeline",
+      "eu-secondary:shard:UserFollows",
+      "eu-secondary:view:UserTimeline",
+      "eu-secondary:view:TweetDetails",
+      "eu-secondary:view:UserProfile",
+      "eu-secondary:worker:trending-analyzer",
+      "eu-secondary:worker:notification-worker"
+     ]
+    },
+    {
+     "id": "region:ap-southeast",
+     "label": "ap-southeast",
+     "members": [
+      "ap-southeast:api",
+      "ap-southeast:shard:TweetFeed",
+      "ap-southeast:shard:UserTimeline",
+      "ap-southeast:shard:UserFollows",
+      "ap-southeast:view:UserTimeline",
+      "ap-southeast:view:TweetDetails",
+      "ap-southeast:view:UserProfile",
+      "ap-southeast:worker:trending-analyzer",
+      "ap-southeast:worker:notification-worker"
+     ]
+    }
+   ]
+  },
+  "contextmap": {
+   "error": "NO_CONTEXTS"
+  }
+ },
+ "links": {
+  "eventmodel": {
+   "actor:postTweet": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:postTweet": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:postTweet",
+     "label": "data flow: postTweet()",
+     "url": null
+    }
+   ],
+   "actor:followUser": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:followUser": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:followUser",
+     "label": "data flow: followUser()",
+     "url": null
+    }
+   ],
+   "actor:likeTweet": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:likeTweet": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:likeTweet",
+     "label": "data flow: likeTweet()",
+     "url": null
+    }
+   ],
+   "actor:retweet": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:retweet": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:retweet",
+     "label": "data flow: retweet()",
+     "url": null
+    }
+   ],
+   "actor:deleteTweet": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "cmd:deleteTweet": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:deleteTweet",
+     "label": "data flow: deleteTweet()",
+     "url": null
+    }
+   ],
+   "evt:tweet-rejected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:tweet-created": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:follow-rejected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:user-followed": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:like-rejected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:tweet-liked": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:retweet-rejected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:tweet-retweeted": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:delete-rejected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "evt:tweet-deleted": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "view:UserTimeline": [
+    {
+     "diagram": "containers",
+     "node": "view:UserTimeline",
+     "label": "containers: UserTimeline",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:UserTimeline",
+     "label": "data flow: UserTimeline",
+     "url": null
+    }
+   ],
+   "view:TweetDetails": [
+    {
+     "diagram": "containers",
+     "node": "view:TweetDetails",
+     "label": "containers: TweetDetails",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:TweetDetails",
+     "label": "data flow: TweetDetails",
+     "url": null
+    }
+   ],
+   "view:UserProfile": [
+    {
+     "diagram": "containers",
+     "node": "view:UserProfile",
+     "label": "containers: UserProfile",
+     "url": null
+    },
+    {
+     "diagram": "dataflow",
+     "node": "view:UserProfile",
+     "label": "data flow: UserProfile",
+     "url": null
+    }
+   ],
+   "pol:trending-analyzer": [
+    {
+     "diagram": "containers",
+     "node": "worker:trending-analyzer",
+     "label": "containers: trending-analyzer",
+     "url": null
+    }
+   ],
+   "evt:trend-detected": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "pol:notification-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:notification-worker",
+     "label": "containers: notification-worker",
+     "url": null
+    }
+   ],
+   "cmd:sendLikeNotification": [
+    {
+     "diagram": "dataflow",
+     "node": "cmd:sendLikeNotification",
+     "label": "data flow: sendLikeNotification()",
+     "url": null
+    }
+   ],
+   "bnd:UserTimeline": [
+    {
+     "diagram": "deployment",
+     "node": "us-primary:shard:UserTimeline",
+     "label": "deployment: UserTimeline shards",
+     "url": null
+    }
+   ],
+   "bnd:UserFollows": [
+    {
+     "diagram": "deployment",
+     "node": "us-primary:shard:UserFollows",
+     "label": "deployment: UserFollows shards",
+     "url": null
+    }
+   ],
+   "bnd:TweetFeed": [
+    {
+     "diagram": "deployment",
+     "node": "us-primary:shard:TweetFeed",
+     "label": "deployment: TweetFeed shards",
+     "url": null
+    }
+   ]
+  },
+  "context": {
+   "sys": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: TwitterAPI (us-primary, eu-secondary, ap-southeast)",
+     "url": null
+    }
+   ],
+   "actor:user": [
+    {
+     "diagram": "containers",
+     "node": "actor:user",
+     "label": "containers: User",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "containers",
+     "node": "actor:admin",
+     "label": "containers: Admin",
+     "url": null
+    }
+   ],
+   "actor:visitor": [
+    {
+     "diagram": "containers",
+     "node": "actor:visitor",
+     "label": "containers: Visitor",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "containers",
+     "node": "ext:stripe",
+     "label": "containers: stripe",
+     "url": null
+    }
+   ],
+   "ext:sentry": [
+    {
+     "diagram": "containers",
+     "node": "ext:sentry",
+     "label": "containers: sentry",
+     "url": null
+    }
+   ],
+   "ext:cloudfront": [
+    {
+     "diagram": "containers",
+     "node": "ext:cloudfront",
+     "label": "containers: cloudfront",
+     "url": null
+    }
+   ]
+  },
+  "containers": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "actor:admin": [
+    {
+     "diagram": "context",
+     "node": "actor:admin",
+     "label": "system context: Admin",
+     "url": null
+    }
+   ],
+   "actor:visitor": [
+    {
+     "diagram": "context",
+     "node": "actor:visitor",
+     "label": "system context: Visitor",
+     "url": null
+    }
+   ],
+   "api": [
+    {
+     "diagram": "eventmodel",
+     "node": null,
+     "label": "event model",
+     "url": null
+    }
+   ],
+   "store": [
+    {
+     "diagram": "dataflow",
+     "node": "log",
+     "label": "data flow: Event log",
+     "url": null
+    }
+   ],
+   "view:UserTimeline": [
+    {
+     "diagram": "dataflow",
+     "node": "view:UserTimeline",
+     "label": "data flow: UserTimeline",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:UserTimeline",
+     "label": "event model: UserTimeline(userId)",
+     "url": null
+    }
+   ],
+   "view:TweetDetails": [
+    {
+     "diagram": "dataflow",
+     "node": "view:TweetDetails",
+     "label": "data flow: TweetDetails",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:TweetDetails",
+     "label": "event model: TweetDetails(tweetId)",
+     "url": null
+    }
+   ],
+   "view:UserProfile": [
+    {
+     "diagram": "dataflow",
+     "node": "view:UserProfile",
+     "label": "data flow: UserProfile",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "view:UserProfile",
+     "label": "event model: UserProfile(userId)",
+     "url": null
+    }
+   ],
+   "worker:trending-analyzer": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:trending-analyzer",
+     "label": "data flow: trending-analyzer",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:trending-analyzer",
+     "label": "event model: trending-analyzer",
+     "url": null
+    }
+   ],
+   "worker:notification-worker": [
+    {
+     "diagram": "dataflow",
+     "node": "worker:notification-worker",
+     "label": "data flow: notification-worker",
+     "url": null
+    },
+    {
+     "diagram": "eventmodel",
+     "node": "pol:notification-worker",
+     "label": "event model: notification-worker",
+     "url": null
+    }
+   ],
+   "ext:stripe": [
+    {
+     "diagram": "context",
+     "node": "ext:stripe",
+     "label": "system context: stripe",
+     "url": null
+    }
+   ],
+   "ext:sentry": [
+    {
+     "diagram": "context",
+     "node": "ext:sentry",
+     "label": "system context: sentry",
+     "url": null
+    }
+   ],
+   "ext:cloudfront": [
+    {
+     "diagram": "context",
+     "node": "ext:cloudfront",
+     "label": "system context: cloudfront",
+     "url": null
+    }
+   ],
+   "sys": [
+    {
+     "diagram": "context",
+     "node": "sys",
+     "label": "system context: TwitterAPI",
+     "url": null
+    }
+   ]
+  },
+  "dataflow": {
+   "actor:user": [
+    {
+     "diagram": "context",
+     "node": "actor:user",
+     "label": "system context: User",
+     "url": null
+    }
+   ],
+   "log": [
+    {
+     "diagram": "containers",
+     "node": "store",
+     "label": "containers: Event store",
+     "url": null
+    }
+   ],
+   "cmd:postTweet": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:postTweet",
+     "label": "event model: postTweet(content, media?)",
+     "url": null
+    }
+   ],
+   "cmd:followUser": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:followUser",
+     "label": "event model: followUser(targetUserId)",
+     "url": null
+    }
+   ],
+   "cmd:likeTweet": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:likeTweet",
+     "label": "event model: likeTweet(tweetId)",
+     "url": null
+    }
+   ],
+   "cmd:retweet": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:retweet",
+     "label": "event model: retweet(tweetId)",
+     "url": null
+    }
+   ],
+   "cmd:deleteTweet": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:deleteTweet",
+     "label": "event model: deleteTweet(tweetId)",
+     "url": null
+    }
+   ],
+   "view:UserTimeline": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:UserTimeline",
+     "label": "event model: UserTimeline(userId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:UserTimeline",
+     "label": "containers: UserTimeline",
+     "url": null
+    }
+   ],
+   "view:TweetDetails": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:TweetDetails",
+     "label": "event model: TweetDetails(tweetId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:TweetDetails",
+     "label": "containers: TweetDetails",
+     "url": null
+    }
+   ],
+   "view:UserProfile": [
+    {
+     "diagram": "eventmodel",
+     "node": "view:UserProfile",
+     "label": "event model: UserProfile(userId)",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "view:UserProfile",
+     "label": "containers: UserProfile",
+     "url": null
+    }
+   ],
+   "worker:trending-analyzer": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:trending-analyzer",
+     "label": "event model: trending-analyzer",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:trending-analyzer",
+     "label": "containers: trending-analyzer",
+     "url": null
+    }
+   ],
+   "worker:notification-worker": [
+    {
+     "diagram": "eventmodel",
+     "node": "pol:notification-worker",
+     "label": "event model: notification-worker",
+     "url": null
+    },
+    {
+     "diagram": "containers",
+     "node": "worker:notification-worker",
+     "label": "containers: notification-worker",
+     "url": null
+    }
+   ],
+   "cmd:sendLikeNotification": [
+    {
+     "diagram": "eventmodel",
+     "node": "cmd:sendLikeNotification",
+     "label": "event model: sendLikeNotification()",
+     "url": null
+    }
+   ]
+  },
+  "deployment": {
+   "us-primary:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "us-primary:shard:TweetFeed": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:TweetFeed",
+     "label": "event model: TweetFeed(tweetId)",
+     "url": null
+    }
+   ],
+   "us-primary:shard:UserTimeline": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserTimeline",
+     "label": "event model: UserTimeline(userId)",
+     "url": null
+    }
+   ],
+   "us-primary:shard:UserFollows": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserFollows",
+     "label": "event model: UserFollows(userId)",
+     "url": null
+    }
+   ],
+   "us-primary:view:UserTimeline": [
+    {
+     "diagram": "containers",
+     "node": "view:UserTimeline",
+     "label": "containers: UserTimeline",
+     "url": null
+    }
+   ],
+   "us-primary:view:TweetDetails": [
+    {
+     "diagram": "containers",
+     "node": "view:TweetDetails",
+     "label": "containers: TweetDetails",
+     "url": null
+    }
+   ],
+   "us-primary:view:UserProfile": [
+    {
+     "diagram": "containers",
+     "node": "view:UserProfile",
+     "label": "containers: UserProfile",
+     "url": null
+    }
+   ],
+   "us-primary:worker:trending-analyzer": [
+    {
+     "diagram": "containers",
+     "node": "worker:trending-analyzer",
+     "label": "containers: trending-analyzer",
+     "url": null
+    }
+   ],
+   "us-primary:worker:notification-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:notification-worker",
+     "label": "containers: notification-worker",
+     "url": null
+    }
+   ],
+   "eu-secondary:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "eu-secondary:shard:TweetFeed": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:TweetFeed",
+     "label": "event model: TweetFeed(tweetId)",
+     "url": null
+    }
+   ],
+   "eu-secondary:shard:UserTimeline": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserTimeline",
+     "label": "event model: UserTimeline(userId)",
+     "url": null
+    }
+   ],
+   "eu-secondary:shard:UserFollows": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserFollows",
+     "label": "event model: UserFollows(userId)",
+     "url": null
+    }
+   ],
+   "eu-secondary:view:UserTimeline": [
+    {
+     "diagram": "containers",
+     "node": "view:UserTimeline",
+     "label": "containers: UserTimeline",
+     "url": null
+    }
+   ],
+   "eu-secondary:view:TweetDetails": [
+    {
+     "diagram": "containers",
+     "node": "view:TweetDetails",
+     "label": "containers: TweetDetails",
+     "url": null
+    }
+   ],
+   "eu-secondary:view:UserProfile": [
+    {
+     "diagram": "containers",
+     "node": "view:UserProfile",
+     "label": "containers: UserProfile",
+     "url": null
+    }
+   ],
+   "eu-secondary:worker:trending-analyzer": [
+    {
+     "diagram": "containers",
+     "node": "worker:trending-analyzer",
+     "label": "containers: trending-analyzer",
+     "url": null
+    }
+   ],
+   "eu-secondary:worker:notification-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:notification-worker",
+     "label": "containers: notification-worker",
+     "url": null
+    }
+   ],
+   "ap-southeast:api": [
+    {
+     "diagram": "containers",
+     "node": "api",
+     "label": "containers: Command API",
+     "url": null
+    }
+   ],
+   "ap-southeast:shard:TweetFeed": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:TweetFeed",
+     "label": "event model: TweetFeed(tweetId)",
+     "url": null
+    }
+   ],
+   "ap-southeast:shard:UserTimeline": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserTimeline",
+     "label": "event model: UserTimeline(userId)",
+     "url": null
+    }
+   ],
+   "ap-southeast:shard:UserFollows": [
+    {
+     "diagram": "eventmodel",
+     "node": "bnd:UserFollows",
+     "label": "event model: UserFollows(userId)",
+     "url": null
+    }
+   ],
+   "ap-southeast:view:UserTimeline": [
+    {
+     "diagram": "containers",
+     "node": "view:UserTimeline",
+     "label": "containers: UserTimeline",
+     "url": null
+    }
+   ],
+   "ap-southeast:view:TweetDetails": [
+    {
+     "diagram": "containers",
+     "node": "view:TweetDetails",
+     "label": "containers: TweetDetails",
+     "url": null
+    }
+   ],
+   "ap-southeast:view:UserProfile": [
+    {
+     "diagram": "containers",
+     "node": "view:UserProfile",
+     "label": "containers: UserProfile",
+     "url": null
+    }
+   ],
+   "ap-southeast:worker:trending-analyzer": [
+    {
+     "diagram": "containers",
+     "node": "worker:trending-analyzer",
+     "label": "containers: trending-analyzer",
+     "url": null
+    }
+   ],
+   "ap-southeast:worker:notification-worker": [
+    {
+     "diagram": "containers",
+     "node": "worker:notification-worker",
+     "label": "containers: notification-worker",
+     "url": null
+    }
+   ],
+   "region:us-primary": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: TwitterAPI (us-primary, eu-secondary, ap-southeast)",
+     "url": null
+    }
+   ],
+   "region:eu-secondary": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: TwitterAPI (us-primary, eu-secondary, ap-southeast)",
+     "url": null
+    }
+   ],
+   "region:ap-southeast": [
+    {
+     "diagram": "containers",
+     "node": "sys",
+     "label": "containers: TwitterAPI (us-primary, eu-secondary, ap-southeast)",
+     "url": null
+    }
+   ]
+  }
+ },
+ "ranges": {
+  "eventmodel": {
+   "cmd:postTweet": [
+    [
+     34,
+     39
+    ]
+   ],
+   "cmd:followUser": [
+    [
+     41,
+     46
+    ]
+   ],
+   "cmd:likeTweet": [
+    [
+     48,
+     53
+    ]
+   ],
+   "cmd:retweet": [
+    [
+     55,
+     60
+    ]
+   ],
+   "cmd:deleteTweet": [
+    [
+     62,
+     67
+    ]
+   ],
+   "view:UserTimeline": [
+    [
+     16,
+     24
+    ]
+   ],
+   "view:TweetDetails": [
+    [
+     26,
+     28
+    ]
+   ],
+   "view:UserProfile": [
+    [
+     30,
+     32
+    ]
+   ],
+   "pol:trending-analyzer": [
+    [
+     69,
+     72
+    ]
+   ],
+   "pol:notification-worker": [
+    [
+     74,
+     75
+    ]
+   ],
+   "bnd:TweetFeed": [
+    [
+     12,
+     12
+    ]
+   ],
+   "bnd:UserTimeline": [
+    [
+     13,
+     13
+    ]
+   ],
+   "bnd:UserFollows": [
+    [
+     14,
+     14
+    ]
+   ]
+  },
+  "context": {},
+  "containers": {
+   "view:UserTimeline": [
+    [
+     16,
+     24
+    ]
+   ],
+   "view:TweetDetails": [
+    [
+     26,
+     28
+    ]
+   ],
+   "view:UserProfile": [
+    [
+     30,
+     32
+    ]
+   ],
+   "worker:trending-analyzer": [
+    [
+     69,
+     72
+    ]
+   ],
+   "worker:notification-worker": [
+    [
+     74,
+     75
+    ]
+   ]
+  },
+  "dataflow": {
+   "cmd:postTweet": [
+    [
+     34,
+     39
+    ]
+   ],
+   "cmd:followUser": [
+    [
+     41,
+     46
+    ]
+   ],
+   "cmd:likeTweet": [
+    [
+     48,
+     53
+    ]
+   ],
+   "cmd:retweet": [
+    [
+     55,
+     60
+    ]
+   ],
+   "cmd:deleteTweet": [
+    [
+     62,
+     67
+    ]
+   ],
+   "view:UserTimeline": [
+    [
+     16,
+     24
+    ]
+   ],
+   "view:TweetDetails": [
+    [
+     26,
+     28
+    ]
+   ],
+   "view:UserProfile": [
+    [
+     30,
+     32
+    ]
+   ],
+   "worker:trending-analyzer": [
+    [
+     69,
+     72
+    ]
+   ],
+   "worker:notification-worker": [
+    [
+     74,
+     75
+    ]
+   ]
+  },
+  "deployment": {
+   "us-primary:view:UserTimeline": [
+    [
+     16,
+     24
+    ]
+   ],
+   "eu-secondary:view:UserTimeline": [
+    [
+     16,
+     24
+    ]
+   ],
+   "ap-southeast:view:UserTimeline": [
+    [
+     16,
+     24
+    ]
+   ],
+   "us-primary:view:TweetDetails": [
+    [
+     26,
+     28
+    ]
+   ],
+   "eu-secondary:view:TweetDetails": [
+    [
+     26,
+     28
+    ]
+   ],
+   "ap-southeast:view:TweetDetails": [
+    [
+     26,
+     28
+    ]
+   ],
+   "us-primary:view:UserProfile": [
+    [
+     30,
+     32
+    ]
+   ],
+   "eu-secondary:view:UserProfile": [
+    [
+     30,
+     32
+    ]
+   ],
+   "ap-southeast:view:UserProfile": [
+    [
+     30,
+     32
+    ]
+   ],
+   "us-primary:worker:trending-analyzer": [
+    [
+     69,
+     72
+    ]
+   ],
+   "eu-secondary:worker:trending-analyzer": [
+    [
+     69,
+     72
+    ]
+   ],
+   "ap-southeast:worker:trending-analyzer": [
+    [
+     69,
+     72
+    ]
+   ],
+   "us-primary:worker:notification-worker": [
+    [
+     74,
+     75
+    ]
+   ],
+   "eu-secondary:worker:notification-worker": [
+    [
+     74,
+     75
+    ]
+   ],
+   "ap-southeast:worker:notification-worker": [
+    [
+     74,
+     75
+    ]
+   ],
+   "us-primary:shard:TweetFeed": [
+    [
+     12,
+     12
+    ]
+   ],
+   "eu-secondary:shard:TweetFeed": [
+    [
+     12,
+     12
+    ]
+   ],
+   "ap-southeast:shard:TweetFeed": [
+    [
+     12,
+     12
+    ]
+   ],
+   "us-primary:shard:UserTimeline": [
+    [
+     13,
+     13
+    ]
+   ],
+   "eu-secondary:shard:UserTimeline": [
+    [
+     13,
+     13
+    ]
+   ],
+   "ap-southeast:shard:UserTimeline": [
+    [
+     13,
+     13
+    ]
+   ],
+   "us-primary:shard:UserFollows": [
+    [
+     14,
+     14
+    ]
+   ],
+   "eu-secondary:shard:UserFollows": [
+    [
+     14,
+     14
+    ]
+   ],
+   "ap-southeast:shard:UserFollows": [
+    [
+     14,
+     14
+    ]
+   ]
+  },
+  "contextmap": {}
+ }
+}
