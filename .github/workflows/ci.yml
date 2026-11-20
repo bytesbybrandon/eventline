@@ -1,0 +1,59 @@
+name: CI
+
+# Runs on every pull request, with no path filter, so the disclosure check can be a required check.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build the published site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs-site/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm ci
+        working-directory: docs-site
+      - run: npm run build
+        working-directory: docs-site
+      - name: Stage what GitHub Pages serves for the disclosure scan
+        # Same tree as pages.yml: the landing page and app, with the docs site under /docs/.
+        run: |
+          out=disclosure/pages
+          mkdir -p "$out"
+          cp -r site/. "$out/"
+          cp -r docs-site/dist "$out/docs"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-output
+          path: disclosure
+          if-no-files-found: error
+
+  disclosure-guard:
+    needs: build
+    uses: ByteQuilt/disclosure-check/.github/workflows/disclosure-guard.yml@main
+    with:
+      artifact-name: pages-output
+      bundles: |
+        pages
+      packages: |
+        .

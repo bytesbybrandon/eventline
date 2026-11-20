@@ -1,0 +1,105 @@
+# eventline performance standards
+
+> A model is checked and drawn while you type, so the edit loop must feel instant at the size people really write.
+
+Stack: plain CommonJS on Node 22 with one runtime dependency (`commander`), and the same `lib/` bundled for the browser as `site/eventline.js`.
+There is no server, database or cache.
+Domain: a developer tool, so the internal-tools tiers apply, with a tighter P0 because the playground and the modeling app run on every edit.
+
+## Tiers
+
+| Tier | Budget | Operations here |
+|---|---|---|
+| P0 Interactive | < 50 ms at 30 kB of DSL | `parse`, `check` and one `render` together: the playground and app edit loop |
+| P1 Responsive | < 300 ms | one CLI command end to end, Node start included (`validate`, `commands`, `deps`, `diagram`) |
+| P2 Background | < 2 s | `diagrams` (all six), `node scripts/build-site.js`, `node scripts/build-rules-doc.js` |
+| P3 Batch | < 5 min | `npm test`, the docs site build, a CI run |
+
+### Scaling targets for P0
+
+Sizes are copies of `examples/twitter-pure.dsl` (2.7 kB), made by `scripts/bench.js`.
+
+| Size | Budget for parse + check + board |
+|---|---|
+| 3 kB (one example) | < 5 ms |
+| 30 kB (10x) | < 50 ms |
+| 130 kB (50x) | < 250 ms |
+
+P0 must stay close to linear in model size: the work per edit grows with the model, never with the square of it.
+
+### Bundle budget
+
+`site/eventline.js` is loaded by the landing page and the app before anything can be checked.
+Keep it at or under 60 kB gzip.
+It may only grow when `lib/` gains a feature, and the PR says by how much.
+
+## How each budget is measured
+
+| Budget | Command | Notes |
+|---|---|---|
+| P0 and scaling | `node scripts/bench.js` | Prints parse, check, board and edit loop time at 1x, 10x and 50x, and the bundle size. The check and board columns include a parse; the loop column is the P0 number. |
+| P1 | `/usr/bin/time -f %e node bin/eventline-axi validate examples/twitter-pure.dsl` | Take the slowest of three runs. |
+| P2 | `/usr/bin/time -f %e node bin/eventline-axi diagrams examples/twitter-pure.dsl -o <dir>` | Same for the two build scripts. |
+| P3 | The duration of the CI job | No local command; read it from the workflow run. |
+
+Timings are not asserted in `npm test`, because shared CI runners make them flaky.
+Run the bench before and after a change to `lib/parser.js`, `lib/rules/` or `lib/diagram/`, and put both tables in the PR.
+
+## Complexity budget
+
+- `parse` is one pass over the text: O(n) in characters.
+- `check` and `render` index the model once (`Model.finalize()` builds the event index) and then look things up.
+  Never rescan every command or event inside a loop over commands, events or boundaries.
+- A rule or a diagram builder that needs "all X for this Y" builds a map once per call, not a filter per Y.
+- Layout may be superlinear in the nodes of one diagram, but must not be in the size of the whole model.
+
+## Change risk (CRAP)
+
+CRAP(m) = comp(m)² × (1 − cov(m))³ + comp(m), where comp is cyclomatic complexity and cov is branch coverage.
+
+| Tier | Max CC | Min branch coverage | Max CRAP |
+|---|---|---|---|
+| P0 (`lib/parser.js`, `lib/rules/`, `lib/diagram/`) | 8 | 90% | 10 |
+| P1 (`lib/commands/`, `bin/`) | 12 | 80% | 15 |
+| P2 (`scripts/`, `lib/folder.js`) | 15 | 70% | 25 |
+
+The hard ceiling is CRAP 30 everywhere, so any function with CC above 30 must be split.
+Coverage comes from `node --test --experimental-test-coverage "test/**/*.test.js"`.
+Every rule already needs a test (see [CONTRIBUTING.md](./CONTRIBUTING.md)); a new branch in a rule needs a case in that test.
+
+## Annotation format
+
+A new or changed function on a P0 or P1 path carries one doc line:
+
+```js
+/**
+ * Events each command in the boundary emits.
+ * @perf P0 · O(c) c = commands · CRAP ≤ 10 (CC 3, branch cov ≥ 90%)
+ */
+```
+
+## Red flags in review
+
+1. `model.commands.filter(...)` or `.find(...)` inside a loop over commands, events, boundaries or policies.
+2. A rule that calls a diagram builder per statement instead of once per check.
+3. A new runtime dependency, or file system access in the library path from `lib/index.js` (it breaks the browser bundle).
+4. A bundle that grows with no feature to show for it.
+5. A changed P0 function with no bench numbers in the PR.
+
+## Audit
+
+| Component | Tier | Last measured | Result | Status |
+|---|---|---|---|---|
+| `parse` | P0 | 2026-11-20 | 0.7 ms at 3 kB, 2 ms at 30 kB, 7 to 9 ms at 130 kB | Pass |
+| board (`render` eventmodel) | P0 | 2026-11-20 | 0.7 ms at 3 kB, 10 ms at 30 kB, 130 ms at 130 kB | Pass, superlinear |
+| `check` | P0 | 2026-11-20 | 1.1 ms at 3 kB, 38 to 43 ms at 30 kB, 3.7 to 3.9 s at 130 kB | Superlinear |
+| edit loop (parse, check, board on one model) | P0 | 2026-11-20 | 1 ms at 3 kB, 45 to 47 ms at 30 kB, 3.7 to 4.1 s at 130 kB | Pass at 3 kB, at the limit at 30 kB, fail at 130 kB |
+| CLI `validate` | P1 | 2026-11-20 | 40 to 70 ms | Pass |
+| CLI `diagrams` | P2 | 2026-11-20 | 50 ms | Pass |
+| CI build job (`npm test`, docs site build) | P3 | 2026-11-20 | 29 s | Pass |
+| `site/eventline.js` | Bundle | 2026-11-20 | 161.7 kB raw, 45.3 kB gzip | Pass |
+| Per-function CC and CRAP | All | Not yet measured | Branch coverage is 94.5% overall; CC per function has not been measured | Unmeasured |
+
+Ranges are three runs of `node scripts/bench.js` on Node 22 under WSL2; the CI number is the job duration on a GitHub runner.
+The `check` gap is known: a CPU profile at 25x puts most of the time in `eventsOf` and `emitsOf` in `lib/diagram/system.js`, which `check` reaches through the link rules and which filter every command once per boundary.
+Fix that before raising any P0 budget.
