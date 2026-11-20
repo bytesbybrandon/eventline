@@ -15,7 +15,7 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const FAIL = new Set(['serious', 'critical']);
 // Known findings in third-party markup, waived node by node and still printed. Keep each reason to one line.
 const WAIVED = [
-  // Starlight's search button: name "Search", visible hint "Ctrl K" (also in aria-keyshortcuts). Same in Starlight 0.43.1.
+  // Starlight's search button: name "Search", but its visible text sits in an aria-hidden span and a Ctrl K hint. Same in Starlight 0.43.1.
   { rule: 'label-content-name-mismatch', target: 'button[data-open-modal=""]' },
 ];
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.woff2': 'font/woff2' };
