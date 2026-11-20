@@ -246,6 +246,17 @@ Without it, `diagrams --links` derives links between the diagrams of one model.
 
 `@hotspot("question")`: something the model does not answer yet, kept in the model instead of a side note. See [Accepting a finding, and open questions](./LANGUAGE.md#accepting-a-finding-and-open-questions).
 
+### Accepted finding
+
+`@accept(rule="many-events", reason="One fact told in two parts")` on a command, read model, policy or boundary: the team knows a rule reports something there, and why.
+The finding stays in the list with its reason, and its severity does not change.
+See [Accepting a finding, and open questions](./LANGUAGE.md#accepting-a-finding-and-open-questions).
+
+### Scenario
+
+`scenario "name" { ... }` right after a command or read model: acceptance criteria kept with the model.
+It is prose, or `given`, `when` and `then` steps that `validate` checks against the command.
+See [Scenarios](./LANGUAGE.md#scenarios).
 ### Profile
 
 A named set of validation rules: `core` (always on), `workshop` (the guidelines, all as hints), `eventmodeling` (the Event Modeling guidelines) and `slicerm` (stricter, for tools where a slice is one unit of delivery).
