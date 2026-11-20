@@ -65,6 +65,7 @@ CRAP(m) = comp(m)² × (1 − cov(m))³ + comp(m), where comp is cyclomatic comp
 | P2 (`scripts/`, `lib/folder.js`) | 15 | 70% | 25 |
 
 The hard ceiling is CRAP 30 everywhere, so any function with CC above 30 must be split.
+CI enforces the CC part for `lib/`: the build job runs `node scripts/measure.js lib --max-cc 30 --no-coverage` and fails above it.
 Measure CC, coverage and CRAP per function with `node scripts/measure.js`.
 Every rule already needs a test (see [CONTRIBUTING.md](./CONTRIBUTING.md)); a new branch in a rule needs a case in that test.
 
@@ -111,7 +112,7 @@ CC comes from ESLint's `complexity` rule and branch coverage from V8 block cover
 | CLI `diagrams` | P2 | 2026-11-20 | 50 ms | Pass |
 | CI build job (`npm test`, docs site build) | P3 | 2026-11-20 | 29 s | Pass |
 | `site/eventline.js` | Bundle | 2026-11-20 | 161.7 kB raw, 45.3 kB gzip | Pass |
-| Per-function CC and CRAP | All | 2026-11-20 | `node scripts/measure.js`: 647 functions in `lib/` and `scripts/`, 124 over their tier's limits, 5 above CC 30 | Fail: the refactor plan is PR #45 |
+| Per-function CC and CRAP | All | 2026-11-20 | `node scripts/measure.js`: 757 functions in `lib/` and `scripts/`, 119 over their tier's limits, none above CC 30 (highest 29, `renderBoard`) | Pass at the hard ceiling; tier limits still exceeded |
 
 Ranges are three runs of `node scripts/bench.js` on Node 22 under WSL2; the CI number is the job duration on a GitHub runner.
 `check` builds a diagram only for an `@link` that names it.
