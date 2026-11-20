@@ -61,8 +61,8 @@ So `linkIssues` is nearly all of `check`, and `deployment` is nearly all of `lin
 
 | Target | Today (measured) | After (target) |
 |---|---|---|
-| `check` in `lib/rules/core.js` | CC 65, cov 96%, CRAP 65.4, O(c² + L) | coordinator CC 1, 9 pieces CC 8 or less, CRAP 10 or less, O(model) |
-| `parseOne` in `lib/parser.js` | CC 41, cov 98%, CRAP 41.0, O(n + d²) per parse | dispatcher CC 3, 7 pieces CC 6 or less, O(n) |
+| `check` in `lib/rules/core.js` | CC 65, cov 96%, CRAP 65.4, O(c² + L) | coordinator CC 1, 17 pieces CC 8 or less, CRAP 10 or less, O(model) |
+| `parseOne` in `lib/parser.js` | CC 41, cov 98%, CRAP 41.0, O(n + d²) per parse | dispatcher CC 3, pieces CC 5 or less, O(n) |
 | `derive` in `lib/diagram/links.js` | CC 35, cov 93%, CRAP 35.5 | dispatcher CC 2, 6 pieces CC 7 or less |
 | `buildBoard` in `lib/diagram/board.js` | CC 35, cov 98%, CRAP 35.0, O(E² + …) | coordinator CC 2, phases CC 8 or less, edges O(E) |
 | policy-rule callback in `buildBoard` | CC 31, cov 98%, CRAP 31.0 | callback CC 3, 6 helpers CC 5 or less |
@@ -190,24 +190,31 @@ Main risk: none beyond prefix precedence.
 Each rule group becomes a pure decider returning findings; `coreIssues` concatenates them in today's order.
 A finding is built by `finding(severity, rule, message, line)`, which replaces the `add` closure.
 
-| Piece | Lines today | CC target |
+CC values below were measured by ESLint on scratch sketches of each piece (not on committed code), so they are targets for the real PR.
+
+| Piece | Lines today | CC (sketch) |
 |---|---|---|
 | `coreIssues` (coordinator) | 27 to 124 | 1 |
-| `namingIssues` | 49 to 55 | 7 |
-| `commandIssues` (loop, calls the five below in order) | 57 to 85 | 3 |
-| `inputIssues` (command-inputs, no-events, default-rejects, rejection-as-event, missing-default) | 59 to 68 | 8 |
+| `eventStyle` | 49 | 3 |
+| `namingIssues` | 50 to 55 | 6 |
+| `commandIssues` (loop; calls the pieces below in this order) | 57 to 85 | 2 |
+| `inputIssues` (command-inputs, no-events) | 59 to 60 | 4 |
+| `branchIssues` (default-rejects, rejection-as-event, missing-default) | 61 to 68 | 7 |
 | `factIssues` (on-facts, from-facts, freshness) | 69 to 75 | 6 |
-| `placementIssues` (unknown-actor, boundary, source-system, optional-on) | 76 to 82 | 8 |
-| `reachIssues` (triggers, scenarios, command-trigger) | 80, 83, 84 | 4 |
-| `triggerIssues` and `routeIssue` (split of `checkTrigger`, CC 9) | 33 to 38 | 4 and 5 |
-| `scenarioIssues` | 39 to 47 | 5 |
-| `viewIssues` | 87 to 96 | 8 |
-| `policyIssues` | 98 to 106 | 7 |
-| `contextIssues` | 108 to 117 | 7 |
+| `placementIssues` (unknown-actor, unknown-boundary, command-boundary) | 76 to 79 | 5 |
+| `triggerIssues` and `routeIssue` (split of `checkTrigger`, CC 9 today) | 33 to 38, called at 80 | 5 and 5 |
+| `sourceIssues` (source-system, optional-on) | 81 to 82 | 4 |
+| `scenarioIssues` | 39 to 47, called at 83 | 5 |
+| `triggerHint` (command-trigger) | 84 | 4 |
+| `viewIssues` (view-sources, triggers, scenarios, view-from-view) | 87 to 96 | 5 |
+| `queryIssues` (query-returns, projection-trigger) | 90 to 91 | 6 |
+| `policyName` | 99 | 3 |
+| `policyIssues` | 100 to 106 | 6 |
+| `contextIssues` | 108 to 117 | 8 |
 | `modelIssues` (assumed events, boundaries, links) | 119 to 123 | 3 |
 
-The finding order inside one command is today's: inputs, then facts, then placement, then reach.
-If a piece cannot keep that order without crossing groups, the group boundary moves, not the order.
+Each piece covers a contiguous run of today's lines, so concatenating them in line order keeps the finding order.
+If a real piece goes over 8, it splits again along line boundaries, never by reordering findings.
 
 Big-O: `missing-default` scans every command per command (O(c²)).
 Build one set of `actor>name` keys that have a default branch, once: O(c·β).
@@ -226,15 +233,19 @@ Main risk: finding order within one command.
 `FORMS` is an array of `{ match(word, rest, sc), parse(sc, model, ctx, line, m) }` tried in today's order; the first match wins.
 Order is behavior (for example `event name {` before `event -> worker`, and `readmodel from [` before `view`), and the PR 1 parser goldens pin it.
 
-| Piece | CC target |
+| Piece | CC (sketch where noted, else target) |
 |---|---|
-| `parseOne` (try each form, else the "Unexpected" error) | 3 |
+| `parseOne` (try each form, else the "Unexpected" error) | 3 (sketch) |
 | `parseContextForm` and `parseSystemForm` (nesting errors) | 2 each |
 | `parseNamedPolicy` | 4 |
 | `parseEventDeclaration` | 4 |
 | keyword forms (scenario, actor, boundary, view or readmodel) | 1 to 4 each |
 | `parseTimer` (every, cron) | 2 each |
-| `parseFlow` (`->`, `{`, guard, `@`, `from [`) | 6 |
+| `parseArrow` (`actor -> command(...)` or `event -> worker`) | 3 (sketch) |
+| `startsEventPolicy` (`{`, guard, `@`, `event from [`) | 5 |
+| `parseFromAutomation` (bare `from [ReadModel]`, with its own ParseError) | 2 (sketch) |
+
+A single `parseFlow` covering `->`, `{`, guard and `@` measured CC 8 on a sketch, at the limit, so it is split as above.
 
 Big-O: the twice-declared check runs `declarations.find` per declaration (O(d²) per parse).
 Keep a parse-local `Map` of declared names on the scanner, so the model shape and JSON output do not change: O(n) per parse.
@@ -294,7 +305,7 @@ flowchart LR
   P1[PR 1 guarantee tests] --> P2[PR 2 lazy link inventory]
   P2 --> P3[PR 3 deployment index]
   P1 --> P4[PR 4 derive]
-  P3 --> P4
+  P2 --> P4
   P1 --> P5[PR 5 check]
   P1 --> P6[PR 6 parseOne]
   P4 --> P7[PR 7 buildBoard]
@@ -303,8 +314,9 @@ flowchart LR
 ```
 
 PR 2 and PR 3 go first after the tests because they are the user-visible win.
-PR 4 follows PR 3 because both edit `lib/diagram/links.js` and its inventory.
-PR 5 and PR 6 touch different files and can run in parallel after PR 1.
+PR 4 follows PR 2 because both edit `lib/diagram/links.js` and its inventory.
+PR 5 and PR 6 touch different source files and can be worked in parallel after PR 1.
+Both commit the rebuilt `site/eventline.js`, so the second to merge rebases and reruns `node scripts/build-site.js`.
 PR 7 goes last.
 
 ## Expected results after PR 3
@@ -315,12 +327,13 @@ PR 7 goes last.
 | 50x | about 3 | under 20 | about 160 |
 
 These are targets from the scratch run, not measurements; PR 2 and PR 3 replace them with bench tables.
+They are `check` alone on a parsed model; the bench check column includes a parse, so it will read about 8 ms higher at 50x.
 At 50x the loop is then dominated by the board (about 150 ms), inside the 250 ms budget.
 
 ## Estimates
 
 Agent wall-clock to PR-ready, including bench runs, budget blocks, `build-site.js` and `npm test`.
-These are judgment-based: there are no matched historical samples for refactors in this repo.
+These are judgment-based; the `estimate` skill and its historical data were not consulted.
 PRs #42 to #44 show 1.5 to 3 minutes from open to merge, which sets the owner latency below.
 
 | PR | p50 | p90 | Main risk |
@@ -342,9 +355,12 @@ Work waits on Brandon 8 or 9 times; batching PR 5 and PR 6 reviews cuts that to 
 
 ## Open questions for Brandon
 
-1. PR 2 changes `check()` so it no longer surfaces diagram builder crashes when a model has no `@link`. Accept?
-2. With an `@link` to the event model board, `check` and `render` each build the board, about 275 ms at 135 kB. Accept that for now, or add a per-model board cache (a `WeakMap` keyed by the model) as a follow-up PR?
-3. The per-function coverage attribution from PR #42 is not committed. Commit it as `scripts/measure.js` (P2, `npx` only, no dependency) so every PR here measures the same way, or keep it out of the repo?
+1. PR 2 changes `check()` so it no longer surfaces diagram builder crashes when a model has no `@link`.
+   Accept?
+2. With an `@link` to the event model board, `check` and `render` each build the board, about 275 ms at 135 kB.
+   Accept that for now, or add a per-model board cache (a `WeakMap` keyed by the model) as a follow-up PR?
+3. The per-function coverage attribution from PR #42 is not committed.
+   Commit it as `scripts/measure.js` (P2, `npx` only, no dependency) so every PR here measures the same way, or keep it out of the repo?
 4. Should a test fail when a function in `lib/` exceeds CC 30, so the ceiling cannot come back?
 
 ## Out of scope
