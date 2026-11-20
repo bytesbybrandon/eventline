@@ -91,3 +91,17 @@ test('links: @link on a named policy replaces its derived links', () => {
   const map = linkMap(parse('user -> go(id)\n  --[default]--> [x-done { id }]\npolicy Fan = x-done { id } @link(url="https://x.example/fan")\n  --[a]--> w1 -> one(id)'));
   assert.deepEqual(map.eventmodel['policy:Fan'].map((l) => l.url), ['https://x.example/fan']);
 });
+
+test('a diagram builder bug surfaces when links need that diagram, and check skips diagrams no @link names', () => {
+  const { BUILDERS } = require('../lib/diagram/system');
+  const real = BUILDERS.context;
+  BUILDERS.context = () => { throw new Error('builder bug'); };
+  try {
+    const model = parse(example('twitter-pure'));
+    assert.throws(() => linkMap(model), /builder bug/);
+    assert.doesNotThrow(() => check(model));
+    assert.throws(() => check(parse('user -> go(id) @link(to="context")\n  -[default]-> [x-done { id }]')), /builder bug/);
+  } finally {
+    BUILDERS.context = real;
+  }
+});

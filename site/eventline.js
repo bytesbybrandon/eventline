@@ -1094,16 +1094,21 @@ const Model = __r(2);
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const SKIPPED = new Set(['NO_REGIONS', 'NO_CONTEXTS']);
 
-/* Every box and group id of every diagram that can be drawn for this model. */
+function entryOf(model, kind) {
+  try {
+    const g = kind === 'eventmodel' ? buildBoard(model) : BUILDERS[kind](model);
+    return { labels: new Map([...g.nodes, ...(g.groups || [])].map((n) => [n.id, n.label])), kinds: new Map(g.nodes.map((n) => [n.id, n.kind])) };
+  } catch (err) {
+    if (!SKIPPED.has(err.code)) throw err;
+    return null;
+  }
+}
+
 function inventory(model) {
   const out = {};
   for (const kind of KINDS) {
-    try {
-      const g = kind === 'eventmodel' ? buildBoard(model) : BUILDERS[kind](model);
-      out[kind] = { labels: new Map([...g.nodes, ...(g.groups || [])].map((n) => [n.id, n.label])), kinds: new Map(g.nodes.map((n) => [n.id, n.kind])) };
-    } catch (err) {
-      if (!SKIPPED.has(err.code)) throw err;
-    }
+    const entry = entryOf(model, kind);
+    if (entry) out[kind] = entry;
   }
   return out;
 }
@@ -1247,20 +1252,37 @@ function sourceRanges(model, kind) {
   return out;
 }
 
-/* Problems with the @link annotations a model carries: what check() reports. */
+/* Every element that carries @link, as check() names it; no diagram is built. */
+const linkables = (model) => [
+  ...model.commands.map((c) => ({ what: `command ${c.name}`, line: c.line, links: linksOf(c.annotations) })),
+  ...model.views.map((v) => ({ what: `read model ${v.name}`, line: v.line, links: linksOf(v.annotations) })),
+  ...model.policies.map((p) => ({ what: `policy ${p.name || Model.policyLabel(p)}`, line: p.line, links: linksOf(p.annotations) })),
+  ...model.boundaries.map((b) => ({ what: `boundary ${b.name}`, line: b.line, links: linksOf(b.annotations) })),
+].filter((el) => el.links.length);
+
+const urlProblem = (url) => (/^(https?:|\/|\.\.?\/|#)/.test(url) ? null : ['link-url', ` with url "${url}". Use an http(s) address or a path.`]);
+
+function linkProblem(t, entry) {
+  if (t.url) return urlProblem(t.url);
+  if (!t.diagram) return ['link-target', ' with neither to="..." nor url="...".'];
+  if (!KINDS.includes(t.diagram)) return ['link-target', ` to "${t.diagram}", which is not a diagram. Choose one of: ${KINDS.join(', ')}.`];
+  const e = entry(t.diagram);
+  if (!e) return ['link-target', ` to the ${NAMES[t.diagram]}, which this model cannot draw yet.`];
+  if (t.node && !e.labels.has(t.node)) return ['link-target', ` to "${t.node}", which is not a box on the ${NAMES[t.diagram]}.`];
+  return null;
+}
+
 function linkIssues(model) {
-  const inv = inventory(model);
+  const entries = new Map();
+  const entry = (kind) => {
+    if (!entries.has(kind)) entries.set(kind, entryOf(model, kind));
+    return entries.get(kind);
+  };
   const issues = [];
-  for (const el of elements(model, inv)) {
+  for (const el of linkables(model)) {
     for (const l of el.links) {
-      const t = targetOf(l);
-      const where = `${el.what} has an @link`;
-      if (t.url) {
-        if (!/^(https?:|\/|\.\.?\/|#)/.test(t.url)) issues.push({ severity: 'warn', rule: 'link-url', message: `${where} with url "${t.url}". Use an http(s) address or a path.`, line: el.line });
-      } else if (!t.diagram) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} with neither to="..." nor url="...".`, line: el.line });
-      else if (!KINDS.includes(t.diagram)) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} to "${t.diagram}", which is not a diagram. Choose one of: ${KINDS.join(', ')}.`, line: el.line });
-      else if (!inv[t.diagram]) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} to the ${NAMES[t.diagram]}, which this model cannot draw yet.`, line: el.line });
-      else if (t.node && !inv[t.diagram].labels.has(t.node)) issues.push({ severity: 'warn', rule: 'link-target', message: `${where} to "${t.node}", which is not a box on the ${NAMES[t.diagram]}.`, line: el.line });
+      const problem = linkProblem(targetOf(l), entry);
+      if (problem) issues.push({ severity: 'warn', rule: problem[0], message: `${el.what} has an @link${problem[1]}`, line: el.line });
     }
   }
   return issues;
