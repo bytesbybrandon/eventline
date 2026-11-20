@@ -324,3 +324,11 @@ test('svg: a declared event nothing records is filled, with a dashed outline', (
   const recorded = svg.slice(svg.indexOf('data-id="evt:item-added"'));
   assert.doesNotMatch(recorded.slice(0, recorded.indexOf('</g>')), /stroke-dasharray/);
 });
+
+test('layering skips a self-loop and an edge to an unknown node, so neither places a node nor reads as feedback', () => {
+  const { layering } = require('../lib/diagram/layout');
+  const r = layering(['a', 'b'], [{ from: 'a', to: 'a' }, { from: 'a', to: 'z' }, { from: 'a', to: 'b' }]);
+  assert.deepEqual([...r.col], [['a', 0], ['b', 1]]);
+  assert.deepEqual([...r.back], []);
+  assert.deepEqual(r.preds.get('a'), []);
+});
