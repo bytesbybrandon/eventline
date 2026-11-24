@@ -36,6 +36,9 @@ The phase 2 constraints carry over unchanged:
 | Uncovered blocks inside one function | `NODE_V8_COVERAGE=<dir> node --test test/**/*.test.js`, then the zero-count ranges inside the function's lines |
 | Time | `node scripts/bench.js`, three runs, quoted as a range |
 
+The "after" CC values in this plan were estimated by reading the code, not measured on sketches as in phase 2.
+If a real piece lands over 8, it splits again along line boundaries before the PR opens.
+
 A function is **over** when its CRAP is strictly above its tier limit (P0 10, P1 15, P2 25).
 CRAP is CC² × (1 − cov)³ + CC, so at 100% coverage CRAP equals CC and only a split brings it down.
 
@@ -43,7 +46,7 @@ CRAP is CC² × (1 − cov)³ + CC, so at 100% coverage CRAP equals CC and only 
 
 `node scripts/measure.js` (`lib` and `scripts`) lists 119 functions over some tier limit (CC, coverage or CRAP).
 Of those, **22 are over the CRAP limit**, all P0; no P1 or P2 function is over.
-The brief's "about 36" came from PR #44's 41-row table; phase 2 (PRs #46 to #60) fixed the other 19, and `lib/commands/` now has none left.
+The phase 2 plan's "other 36 functions over their CRAP threshold" came from PR #44's 41-row table; phase 2 (PRs #46 to #60) fixed 19 of the 41, and `lib/commands/` now has none left.
 
 | # | Function | File | CC | Branch cov | CRAP |
 |---|---|---|---|---|---|
@@ -77,9 +80,9 @@ At the limit and out of scope (CRAP exactly 10.0 at P0, or 15.0 at P1): `layerin
 ### Browser code
 
 `onKey` in `site/app/editor.js:146` is CC 22 at 100% coverage, so CRAP 22.
-`scripts/measure.js` puts every `site/` file at P2 (limit 25), where it passes; PR #44 and the brief hold it to P0 (limit 10).
+`scripts/measure.js` puts every `site/` file at P2 (limit 25), where it passes; PR #44's table holds browser code to P0 (limit 10).
 See Open question 1.
-If `site/` is P0, 13 more browser functions are over 10 (`drawBoard` 22, the `app.js` wrapper 19, `onType` 16.6, `mount` 16, `nodeAtCaret` 16, `paintTimer` 14, `help` 13, `showReview` 13, `show` 13, `hlLine` 13, `focusIssue` 12, `applyHash` 12, `matchBracket` 11), and the ones in `site/playground.js` and `site/app/app.js` have no measured coverage, because their tests run them through `node:vm`.
+If `site/` is P0, 13 more browser functions are over 10 (`drawBoard` 22, the `app.js` wrapper 19, `onType` 16.6, `mount` 16, `nodeAtCaret` 16, `paintTimer` 14, `help` 13, `showReview` 13, `show` 13, `hlLine` 13, `focusIssue` 12, `applyHash` 12, `matchBracket` 11), and the ones in `site/playground.js` and `site/app/app.js` have no measured coverage: `test/playground.test.js` runs the playground through `node:vm`, and no test loads `app.js`.
 
 ### Measurement gaps found
 
@@ -152,32 +155,34 @@ Both draw a dashed box around a group's members; that bounding box is the one sh
 | `nodeText(n, g, t, accent)` (label and sub) | 51 to 52 | 4 |
 | `BODIES`: one function per kind (`event`, `command`/`process`, `view`/`store`/`cache`, `policy`/`worker`, `timer`, `external`, `system`), `actor` as default | 54 to 84 | 1 or 2 each |
 | `renderBoard` | 165 to 265 | 2 |
+| `boardEdges(board, geo, t)` (the edge loop and its `bump` counter) | 217 to 238 | 3 |
 | `boardGeometry(board)` (column widths, lane tops, box geometry, width, height) | 166 to 193 | 7 |
 | `laneBands(...)` | 197 to 201 | 2 |
 | `bounds(boxes, padX, padTop, padBottom)` (shared with `renderGraph`) | 207 to 210, 384 to 387 | 1 |
 | `boardGroups(...)` | 203 to 215 | 4 |
-| `boardEdge(e, a, b, back, t)` with `treeEdge` and `readsEdge` | 219 to 238 | 4, 1, 2 |
+| `boardEdge(e, a, b, back, bump, t)` with `treeEdge` and `readsEdge` | 222 to 236 | 3, 1, 2 |
 | `boardNode(n, g, opts, t)` (tooltip, ranges, notes) | 239 to 245 | 6 |
 | `legend(board, t, x, y)` with a `LEGEND` table of sample nodes | 247 to 259 | 3 |
 | `boardDesc(board)` (counts and plurals) | 261 to 263 | 2 |
 | `renderGraph` | 344 to 409 | 3 |
 | `stackLayout(graph)` and `flatLayout(graph)` | 356 to 373 | 3 and 1 |
 | `graphGroups(...)` | 381 to 392 | 3 |
-| `graphEdges(...)` | 394 to 399 | 4 |
+| `graphEdges(...)` (the edge loop and its `bump` counter) | 394 to 399 | 4 |
 | `graphSize(...)` | 406 to 407 | 3 |
 
-**Coverage gaps to close with tests** (uncovered blocks today):
-- unknown theme falls back to light (`renderBoard` and `renderGraph`);
-- a group with no drawn member, and a group with a `sub` (board);
-- a node with `fullNotes` (board tooltip);
-- a back edge of kind `given` (board, dashed);
-- an edge whose end is not drawn (`renderGraph` line 396): reachable from `containers` when a worker reads a read model nobody declares, so it gets a test, not a removal;
-- `renderGraph` with no subtitle and with no groups.
+**Coverage gaps** (uncovered blocks today), each checked against what the builders produce:
+- unknown theme falls back to light (`renderBoard` and `renderGraph`): reachable through `render(model, kind, 'svg', 'sepia')`; test.
+- a board group with a `sub`: reachable, `boundaryGroups` sets it from `shardNote` for a partitioned boundary; test.
+- a node with `fullNotes`: reachable, `buildBoard` sets it from `@note` on a command, read model or policy; test.
+- `e.kind === 'given'` (line 235): no builder makes a `given` edge, and `reads` edges take the branch above, so the style is always solid; remove.
+- a board group with no drawn member (line 205): every group holds its own command box; test or remove, and the PR says which.
+- an edge whose end is not drawn (`renderGraph` line 396): reachable; `twitter-pure.dsl` plus `from [Ghost] -> sweeper -> sweep()` renders `containers` as svg, mermaid and dot without error and drops the edge from `view:Ghost` (checked 2026-11-24); test.
+- `renderGraph` with no subtitle and with no groups: test or remove.
 
 **Guards:** PR 0 render goldens, `test/site.test.js` (homepage board equals `render`), `test/diagram.test.js` ("every kind and format renders").
 **Risk:** medium; string concatenation order is the output, and the goldens catch any slip.
 **Estimate:** p50 60 min, p90 120 min.
-Main risk: the `bump` counter for back edges is shared across edges, so `boardEdge` and `graphEdges` must keep it in the caller's loop.
+Main risk: the `bump` counter for back edges grows across edges, so it lives in `boardEdges` and `graphEdges`, never in the per-edge piece.
 
 ## PR 2: Split the text exports and `render`
 
@@ -306,7 +311,7 @@ Main risk: cursor position after an unclosed string or a comment.
 Every policy trigger is built in `lib/parser.js` with `fields: []` (`eventPolicy`, `timer`, `parseFromAutomation`); the PR quotes the three.
 `shape.get(f.name) || []` stays: a `from` list may name an event, which has no shape.
 
-**Coverage gaps to close with tests:** a command fact with an alias; a policy whose `from` source is unknown; two missing fields ("them"); a hotspot with a bad status and one with `concerns` on a question; scenario steps on a read model.
+**Coverage gaps to close with tests:** a command fact with an alias; a policy that reads a declared read model through an alias (the `from` loop at line 198); a policy whose `from` source is unknown; two missing fields ("them"); a hotspot with a bad status and one with `concerns` on a question; scenario steps on a read model.
 
 **Big-O fixed here:** the `check` callback filters every command per scenario.
 Build a map from actor and command name to its emitted events and rejections once per call: O(c·β + s) instead of O(s·c·β).
@@ -353,18 +358,17 @@ Main risk: `finalize` field-length tie-breaks, where the first event to carry th
 
 | Piece | Lines today | CC (target) |
 |---|---|---|
-| `onKey` | 146 to 162 | 6 |
+| `onKey` (IME guard, Ctrl+Space, then one of the two below) | 146 to 162 | 5 |
 | `isCtrlSpace(ev)` | 148 | 4 |
-| `listKey(ev)` (the key while a completion list is open: down, up, accept, close, or nothing) | 150 to 153 | 6 |
-| `plainKey(ev)` (Tab or Enter with no modifier) | 152 | 5 |
-
-`listKey` returns what to do; `onKey` does it, so the decision is testable without a DOM.
+| `onListKey(ev)` (a completion list is open: down, up, accept, close) | 149 to 155 | 7 |
+| `plainKey(ev)` (no Shift, Ctrl, Alt or Meta) | 152 | 4 |
+| `onEditorKey(ev)` (no list: Shift, Esc then Tab, then `help`) | 156 to 161 | 6 |
 `app-editor.test.js` already covers `onKey` at 100% (PR #46) and must stay at 90% or more.
 
 **Guards:** `test/app-editor.test.js`, `test/app-editing.test.js`, the a11y check in CI.
 **Risk:** low.
 **Estimate:** p50 25 min, p90 50 min.
-Main risk: Esc then Tab timing (`escAt`), which stays in `onKey` untouched.
+Main risk: Esc then Tab timing (`escAt`), which moves into `onEditorKey` unchanged.
 
 ## PR 8: Strip budget blocks from served files, and measure `.mjs`
 
@@ -400,7 +404,9 @@ Main risk: links from `AGENTS.md` to files outside `docs/`.
 
 **Files:** `.documentation/project.json` (and `.documentation/operation.json` if the runtime writes it).
 
-- [ ] **Step 1:** Run docs-steward in maintain mode through its runtime, not by hand: `reactive-skills-axi bootloader docs-steward --json` (runtime 0.22.0, checked 2026-11-24), then `reactive-skills-axi invoke docs-steward --job phase3-docs` with project root set to the repo, and `emit` each signal the runtime asks for.
+- [ ] **Step 1:** Run docs-steward through its runtime, not by hand.
+  `rtk reactive-skills-axi bootloader docs-steward --json` answered on 2026-11-24 (runtime 0.22.0).
+  Then, per the skill's README, `rtk reactive-skills-axi invoke <absolute docs-steward skill folder> --job phase3-docs`, choose maintain mode and the repo root when the runtime asks, and `emit` each signal it asks for.
 - [ ] **Step 2:** Stop at its APPROVE gate and hand the revision-bound file plan to Brandon; nothing is written before he approves.
 - [ ] **Step 3:** After approval, commit only what the runtime wrote, and open the PR.
 
@@ -469,7 +475,7 @@ Work waits on Brandon about 13 times; merging PRs 4 to 9 as one review batch cut
 
 ## Open questions for Brandon
 
-1. **Tier of `site/`.** `scripts/measure.js` puts `site/` at P2 (limit 25), so `onKey` passes today; PR #44 and this brief hold it to P0 (limit 10).
+1. **Tier of `site/`.** `scripts/measure.js` puts `site/` at P2 (limit 25), so `onKey` passes today; PR #44's table holds it to P0 (limit 10).
    Recommendation: P0 for `site/app/` and `site/playground.js`, since they run on every keystroke, set in PR 7.
    That makes 13 more browser functions over the limit; recommendation: a phase 4 plan for them, because `site/playground.js` and `site/app/app.js` first need coverage that survives `node:vm`.
 2. **Render goldens as hashes.** Hashes keep the fixture small but hide the diff until the test dumps it; full text is reviewable in the PR but adds about 400 files.
@@ -481,6 +487,8 @@ Work waits on Brandon about 13 times; merging PRs 4 to 9 as one review batch cut
    Recommendation: strip in the copy step.
 5. **A CRAP gate.** Once PRs 1 to 7 land, add a `--max-crap` check to CI next to the CC 30 guard, failing any function over its tier limit.
    Not in this plan unless approved; it would be PR 11.
+6. **Open issues on the same files.** #63 (branch guards), #64 (refusal guards in board exports) and #67 (boundary labels) change `board.js`, `export.js` or `svg.js` output, which PRs 0 to 2 and 6 pin and split.
+   Recommendation: land this phase's PRs on those files first, so each issue fix is a small diff against pinned output; an issue fix that lands first regenerates the PR 0 goldens and says why.
 
 ## Out of scope
 
